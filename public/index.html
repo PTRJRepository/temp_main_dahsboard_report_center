@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Gateway Management</title>
+    <link rel="stylesheet" href="/_static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Rebinmas API Gateway Management</h1>
+                <p>Manage routing Publik semua service lokal PT Rebinmas Jaya </p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" id="addRouteBtn">
+                    <span>➕</span> Add New Route
+                </button>
+                <button class="btn btn-secondary" id="refreshBtn">
+                    <span>🔄</span> Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="stat-label">Total Routes</div>
+                <div class="stat-value" id="totalRoutes">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Active Routes</div>
+                <div class="stat-value" id="activeRoutes">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Gateway Port</div>
+                <div class="stat-value">3001</div>
+            </div>
+        </div>
+
+        <!-- Routes Grid -->
+        <div class="routes-grid" id="routesGrid">
+            <!-- Routes will be dynamically inserted here -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-icon">📭</div>
+            <h3>No Routes Configured</h3>
+            <p>Add your first route to start routing traffic</p>
+            <button class="btn btn-primary" onclick="openAddModal()">
+                ➕ Add First Route
+            </button>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal" id="routeModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New Route</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="routeForm">
+                <input type="hidden" id="routeId">
+
+                <div class="form-group">
+                    <label for="routePath">Path *</label>
+                    <input type="text" id="routePath" placeholder="/api/produk" required pattern="^/.*"
+                        title="Path must start with /">
+                    <small>Path untuk routing (must start with /)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="routeTarget">Target URL *</label>
+                    <input type="text" id="routeTarget" placeholder="http://localhost:5001" required
+                        pattern="^https?://.*" title="Must be a valid URL starting with http:// or https://">
+                    <small>URL service lokal (e.g., http://localhost:5001)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="routeDescription">Description</label>
+                    <input type="text" id="routeDescription" placeholder="Service Produk">
+                    <small>Optional: Deskripsi untuk route ini</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="routeEnabled" checked>
+                        <span>Enable this route</span>
+                    </label>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span id="submitBtnText">Add Route</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="deleteModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Confirm Delete</h2>
+                <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this route?</p>
+                <div class="delete-info">
+                    <strong id="deleteRoutePath"></strong>
+                    <span id="deleteRouteTarget"></span>
+                </div>
+                <p class="success-text">✅ Changes applied instantly with hot-reload</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">
+                    Cancel
+                </button>
+                <button class="btn btn-danger" onclick="confirmDelete()">
+                    Delete Route
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <span id="toastMessage"></span>
+    </div>
+
+    <script src="/_static/js/app.js"></script>
+</body>
+
+</html>

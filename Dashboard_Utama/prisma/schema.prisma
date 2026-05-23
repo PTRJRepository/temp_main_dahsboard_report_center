@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String?
+  role          String    @default("KERANI") // Enum: ADMIN, KERANI, AKUNTING, HRD, PAJAK, VISITOR
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accessControls AccessControl[]
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String?  // Name of the Lucide icon
+  routeUrl    String   // Internal Next.js route (e.g., '/monitoring/harvest') or external if needed
+  
+  // Proxy Configuration
+  path        String?  // e.g., '/absen'
+  targetUrl   String?  // e.g., 'http://localhost:5176'
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  accessControls AccessControl[]
+}
+
+model AccessControl {
+  id        String   @id @default(cuid())
+  role      String?  // Build relation based on Role (optional)
+  userId    String?  // Build relation based on specific User (optional)
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+  
+  // Ensure unique rules to prevent duplicates
+  @@unique([role, serviceId]) 
+  @@unique([userId, serviceId])
+}

@@ -1,0 +1,2893 @@
+{
+  "report_name": "monthly_stock_details",
+  "source_file": "Monthly_Stock_Details_Pabrik.pdf",
+  "metadata": {
+    "report_id": "RPTIN1000006",
+    "report_title": "MONTHLY STOCK ACCOUNT MOVEMENT LISTING",
+    "company": "PT. REBINMAS JAYA OIL MILL",
+    "printed_by": "Atha Rizki Pangestu",
+    "print_date": "22 May 2026 8:51:48AM",
+    "location_code": "PTRJ",
+    "accounting_period": "1/2027 (Apr 2026)",
+    "acc_month": 1,
+    "acc_year": 2027,
+    "analysis_group": "Product Type Code",
+    "product_type_code": "",
+    "account_code": "",
+    "no_of_decimal": 2,
+    "suppress_zero_balance": "No",
+    "include_workshop_item": "Yes"
+  },
+  "columns": [
+    "opening",
+    "received",
+    "return_advice",
+    "transferred",
+    "adjustment",
+    "ledger",
+    "issued_station",
+    "issued_vehicle",
+    "issued_total",
+    "return",
+    "goods_receive",
+    "goods_return",
+    "dispatch_adv",
+    "closing"
+  ],
+  "items": [
+    {
+      "no": 1,
+      "product_type_code": "ALLMAT",
+      "description": "ALL MATERS",
+      "amounts_rp": {
+        "opening": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "0.00",
+          "value": "0.00"
+        }
+      }
+    },
+    {
+      "no": 2,
+      "product_type_code": "BEAR",
+      "description": "BEARINGS",
+      "amounts_rp": {
+        "opening": {
+          "text": "1,217,038,101.18",
+          "value": "1217038101.18"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "58,123,926.21",
+          "value": "58123926.21"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "58,123,926.21",
+          "value": "58123926.21"
+        },
+        "return": {
+          "text": "2,550,000.00",
+          "value": "2550000.00"
+        },
+        "goods_receive": {
+          "text": "73,390,000.00",
+          "value": "73390000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "1,234,854,174.97",
+          "value": "1234854174.97"
+        }
+      }
+    },
+    {
+      "no": 3,
+      "product_type_code": "BENSIN",
+      "description": "PETROL",
+      "amounts_rp": {
+        "opening": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "0.00",
+          "value": "0.00"
+        }
+      }
+    },
+    {
+      "no": 4,
+      "product_type_code": "BLSTA",
+      "description": "BOILER STATION",
+      "amounts_rp": {
+        "opening": {
+          "text": "775,380,852.09",
+          "value": "775380852.09"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "11,472,218.36",
+          "value": "11472218.36"
+        },
+        "issued_station": {
+          "text": "13,234,567.96",
+          "value": "13234567.96"
+        },
+        "issued_vehicle": {
+          "text": "147,207,032.11",
+          "value": "147207032.11"
+        },
+        "issued_total": {
+          "text": "171,913,818.43",
+          "value": "171913818.43"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "603,467,033.66",
+          "value": "603467033.66"
+        }
+      }
+    },
+    {
+      "no": 5,
+      "product_type_code": "BOILWTR",
+      "description": "BOILER WATER TREATMENT",
+      "amounts_rp": {
+        "opening": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "0.00",
+          "value": "0.00"
+        }
+      }
+    },
+    {
+      "no": 6,
+      "product_type_code": "BOUT",
+      "description": "BOLTS & NUTS",
+      "amounts_rp": {
+        "opening": {
+          "text": "196,686,094.19",
+          "value": "196686094.19"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "22,780,395.85",
+          "value": "22780395.85"
+        },
+        "issued_vehicle": {
+          "text": "51,062.17",
+          "value": "51062.17"
+        },
+        "issued_total": {
+          "text": "22,831,458.02",
+          "value": "22831458.02"
+        },
+        "return": {
+          "text": "74,000.00",
+          "value": "74000.00"
+        },
+        "goods_receive": {
+          "text": "39,454,600.00",
+          "value": "39454600.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "213,383,236.17",
+          "value": "213383236.17"
+        }
+      }
+    },
+    {
+      "no": 7,
+      "product_type_code": "BULGAR",
+      "description": "BULBS & LIGHTING ACCESSORIES",
+      "amounts_rp": {
+        "opening": {
+          "text": "2,991,227.27",
+          "value": "2991227.27"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "23,100.00",
+          "value": "23100.00"
+        },
+        "issued_total": {
+          "text": "23,100.00",
+          "value": "23100.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "2,968,127.27",
+          "value": "2968127.27"
+        }
+      }
+    },
+    {
+      "no": 8,
+      "product_type_code": "CABAR",
+      "description": "CABLES & ACCESSORIES",
+      "amounts_rp": {
+        "opening": {
+          "text": "28,200,147.25",
+          "value": "28200147.25"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "28,200,147.25",
+          "value": "28200147.25"
+        }
+      }
+    },
+    {
+      "no": 9,
+      "product_type_code": "CHEM-O",
+      "description": "CHEMICAL OTHERS",
+      "amounts_rp": {
+        "opening": {
+          "text": "515,702,382.30",
+          "value": "515702382.30"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "1,875,000.00",
+          "value": "1875000.00"
+        },
+        "issued_station": {
+          "text": "157,627,406.19",
+          "value": "157627406.19"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "159,502,406.19",
+          "value": "159502406.19"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "3,750,000.00",
+          "value": "3750000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "359,949,976.11",
+          "value": "359949976.11"
+        }
+      }
+    },
+    {
+      "no": 10,
+      "product_type_code": "CONEL",
+      "description": "CONVEYOR / ELEVATOR",
+      "amounts_rp": {
+        "opening": {
+          "text": "2,324,088,896.18",
+          "value": "2324088896.18"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "635,492.70",
+          "value": "635492.70"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "635,492.70",
+          "value": "635492.70"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "2,323,453,403.48",
+          "value": "2323453403.48"
+        }
+      }
+    },
+    {
+      "no": 11,
+      "product_type_code": "CONSUM",
+      "description": "W/S CONSUMABLES",
+      "amounts_rp": {
+        "opening": {
+          "text": "19,185,821.65",
+          "value": "19185821.65"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "19,185,821.65",
+          "value": "19185821.65"
+        }
+      }
+    },
+    {
+      "no": 12,
+      "product_type_code": "DC",
+      "description": "DIRECT CHARGES",
+      "amounts_rp": {
+        "opening": {
+          "text": "1,193,400.00",
+          "value": "1193400.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "1,193,400.00",
+          "value": "1193400.00"
+        }
+      }
+    },
+    {
+      "no": 13,
+      "product_type_code": "DEPERI",
+      "description": "DEPERICARPER",
+      "amounts_rp": {
+        "opening": {
+          "text": "370,951,735.80",
+          "value": "370951735.80"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "5,125,000.00",
+          "value": "5125000.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "5,125,000.00",
+          "value": "5125000.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "20,500,000.00",
+          "value": "20500000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "386,326,735.80",
+          "value": "386326735.80"
+        }
+      }
+    },
+    {
+      "no": 14,
+      "product_type_code": "DIGES",
+      "description": "DIGESTION",
+      "amounts_rp": {
+        "opening": {
+          "text": "329,060,174.03",
+          "value": "329060174.03"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "329,060,174.03",
+          "value": "329060174.03"
+        }
+      }
+    },
+    {
+      "no": 15,
+      "product_type_code": "ELDES",
+      "description": "ELECTRODES",
+      "amounts_rp": {
+        "opening": {
+          "text": "225,579,472.57",
+          "value": "225579472.57"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "39,337,207.13",
+          "value": "39337207.13"
+        },
+        "issued_vehicle": {
+          "text": "10,000.00",
+          "value": "10000.00"
+        },
+        "issued_total": {
+          "text": "39,347,207.13",
+          "value": "39347207.13"
+        },
+        "return": {
+          "text": "510,000.00",
+          "value": "510000.00"
+        },
+        "goods_receive": {
+          "text": "25,980,000.00",
+          "value": "25980000.00"
+        },
+        "goods_return": {
+          "text": "2,040,000.00",
+          "value": "2040000.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "210,682,265.44",
+          "value": "210682265.44"
+        }
+      }
+    },
+    {
+      "no": 16,
+      "product_type_code": "ELEC-O",
+      "description": "ELECTRICAL OTHERS",
+      "amounts_rp": {
+        "opening": {
+          "text": "6,767,806,204.04",
+          "value": "6767806204.04"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "35,056,345.29",
+          "value": "35056345.29"
+        },
+        "issued_vehicle": {
+          "text": "4,759,500.00",
+          "value": "4759500.00"
+        },
+        "issued_total": {
+          "text": "39,815,845.29",
+          "value": "39815845.29"
+        },
+        "return": {
+          "text": "72,685.80",
+          "value": "72685.80"
+        },
+        "goods_receive": {
+          "text": "681,303,500.00",
+          "value": "681303500.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "7,409,366,544.55",
+          "value": "7409366544.55"
+        }
+      }
+    },
+    {
+      "no": 17,
+      "product_type_code": "ELEC-SPR",
+      "description": "ELECTROMOTORS SPARE",
+      "amounts_rp": {
+        "opening": {
+          "text": "7,157,215,742.60",
+          "value": "7157215742.60"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "172,373,782.08",
+          "value": "172373782.08"
+        },
+        "issued_vehicle": {
+          "text": "816,438.89",
+          "value": "816438.89"
+        },
+        "issued_total": {
+          "text": "173,190,220.97",
+          "value": "173190220.97"
+        },
+        "return": {
+          "text": "43,869,317.80",
+          "value": "43869317.80"
+        },
+        "goods_receive": {
+          "text": "228,085,000.00",
+          "value": "228085000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "7,255,979,839.43",
+          "value": "7255979839.43"
+        }
+      }
+    },
+    {
+      "no": 18,
+      "product_type_code": "ELFIT",
+      "description": "ELECTRICAL FITTNG",
+      "amounts_rp": {
+        "opening": {
+          "text": "123,112,035.88",
+          "value": "123112035.88"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "10,369,999.98",
+          "value": "10369999.98"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "10,369,999.98",
+          "value": "10369999.98"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "430,000.00",
+          "value": "430000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "113,172,035.90",
+          "value": "113172035.90"
+        }
+      }
+    },
+    {
+      "no": 19,
+      "product_type_code": "FXCOUP",
+      "description": "FLEXIBLE COUPLING",
+      "amounts_rp": {
+        "opening": {
+          "text": "26,951,085.46",
+          "value": "26951085.46"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "26,951,085.46",
+          "value": "26951085.46"
+        }
+      }
+    },
+    {
+      "no": 20,
+      "product_type_code": "GASPACK",
+      "description": "GASKETS / PACKING",
+      "amounts_rp": {
+        "opening": {
+          "text": "211,479,846.36",
+          "value": "211479846.36"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "211,479,846.36",
+          "value": "211479846.36"
+        }
+      }
+    },
+    {
+      "no": 21,
+      "product_type_code": "GEN-O",
+      "description": "GENERAL ENGINEERING HARDWARE OTHERS",
+      "amounts_rp": {
+        "opening": {
+          "text": "5,658,076,647.13",
+          "value": "5658076647.13"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "21,600,000.00",
+          "value": "21600000.00"
+        },
+        "issued_station": {
+          "text": "265,514,877.99",
+          "value": "265514877.99"
+        },
+        "issued_vehicle": {
+          "text": "206,768.98",
+          "value": "206768.98"
+        },
+        "issued_total": {
+          "text": "287,321,646.97",
+          "value": "287321646.97"
+        },
+        "return": {
+          "text": "5,086,312.08",
+          "value": "5086312.08"
+        },
+        "goods_receive": {
+          "text": "96,918,000.00",
+          "value": "96918000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "5,472,759,312.24",
+          "value": "5472759312.24"
+        }
+      }
+    },
+    {
+      "no": 22,
+      "product_type_code": "GRS",
+      "description": "GREASE",
+      "amounts_rp": {
+        "opening": {
+          "text": "158,485,814.36",
+          "value": "158485814.36"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "19,273,558.33",
+          "value": "19273558.33"
+        },
+        "issued_vehicle": {
+          "text": "11,492,830.75",
+          "value": "11492830.75"
+        },
+        "issued_total": {
+          "text": "30,766,389.08",
+          "value": "30766389.08"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "77,500,009.70",
+          "value": "77500009.70"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "205,219,434.98",
+          "value": "205219434.98"
+        }
+      }
+    },
+    {
+      "no": 23,
+      "product_type_code": "INCEBH",
+      "description": "INCENARATOR/EMPTY BUNCH HOPPER",
+      "amounts_rp": {
+        "opening": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "0.00",
+          "value": "0.00"
+        }
+      }
+    },
+    {
+      "no": 24,
+      "product_type_code": "LUBR",
+      "description": "LUBRICANT",
+      "amounts_rp": {
+        "opening": {
+          "text": "35,584,562.04",
+          "value": "35584562.04"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "1,015,000.00",
+          "value": "1015000.00"
+        },
+        "issued_vehicle": {
+          "text": "1,141,382.49",
+          "value": "1141382.49"
+        },
+        "issued_total": {
+          "text": "2,156,382.49",
+          "value": "2156382.49"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "15,775,002.44",
+          "value": "15775002.44"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "49,203,181.99",
+          "value": "49203181.99"
+        }
+      }
+    },
+    {
+      "no": 25,
+      "product_type_code": "MOTAR",
+      "description": "MOTORS & ACCESSORIES",
+      "amounts_rp": {
+        "opening": {
+          "text": "281,700,806.50",
+          "value": "281700806.50"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "5,548,038.30",
+          "value": "5548038.30"
+        },
+        "issued_vehicle": {
+          "text": "1,365,000.00",
+          "value": "1365000.00"
+        },
+        "issued_total": {
+          "text": "6,913,038.30",
+          "value": "6913038.30"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "274,787,768.20",
+          "value": "274787768.20"
+        }
+      }
+    },
+    {
+      "no": 26,
+      "product_type_code": "NELREC",
+      "description": "KERNEL RECOVERY PLANT",
+      "amounts_rp": {
+        "opening": {
+          "text": "74,963,000.00",
+          "value": "74963000.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "74,963,000.00",
+          "value": "74963000.00"
+        }
+      }
+    },
+    {
+      "no": 27,
+      "product_type_code": "OROMIES",
+      "description": "OIL ROOM MACHINERIES",
+      "amounts_rp": {
+        "opening": {
+          "text": "128,495,034.87",
+          "value": "128495034.87"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "8,363,408.00",
+          "value": "8363408.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "8,363,408.00",
+          "value": "8363408.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "2,200,000.00",
+          "value": "2200000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "122,331,626.87",
+          "value": "122331626.87"
+        }
+      }
+    },
+    {
+      "no": 28,
+      "product_type_code": "OSRING",
+      "description": "OIL SEAL, O-RINGS",
+      "amounts_rp": {
+        "opening": {
+          "text": "210,090,689.50",
+          "value": "210090689.50"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "22,543,847.90",
+          "value": "22543847.90"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "22,543,847.90",
+          "value": "22543847.90"
+        },
+        "return": {
+          "text": "537,923.08",
+          "value": "537923.08"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "188,084,764.68",
+          "value": "188084764.68"
+        }
+      }
+    },
+    {
+      "no": 29,
+      "product_type_code": "PITING",
+      "description": "PIPES & FITTING",
+      "amounts_rp": {
+        "opening": {
+          "text": "2,935,953,035.49",
+          "value": "2935953035.49"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "10,682,602.85",
+          "value": "10682602.85"
+        },
+        "issued_vehicle": {
+          "text": "10,000.00",
+          "value": "10000.00"
+        },
+        "issued_total": {
+          "text": "10,692,602.85",
+          "value": "10692602.85"
+        },
+        "return": {
+          "text": "5,000.00",
+          "value": "5000.00"
+        },
+        "goods_receive": {
+          "text": "66,512,000.00",
+          "value": "66512000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "2,991,777,432.64",
+          "value": "2991777432.64"
+        }
+      }
+    },
+    {
+      "no": 30,
+      "product_type_code": "PNEU",
+      "description": "PNEUMATIC/HYDRAULIC FITTINGS",
+      "amounts_rp": {
+        "opening": {
+          "text": "129,438,270.00",
+          "value": "129438270.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "129,438,270.00",
+          "value": "129438270.00"
+        }
+      }
+    },
+    {
+      "no": 31,
+      "product_type_code": "PRESS",
+      "description": "PRESSING",
+      "amounts_rp": {
+        "opening": {
+          "text": "2,170,699,493.79",
+          "value": "2170699493.79"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "16,475,568.76",
+          "value": "16475568.76"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "16,475,568.76",
+          "value": "16475568.76"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "2,154,223,925.03",
+          "value": "2154223925.03"
+        }
+      }
+    },
+    {
+      "no": 32,
+      "product_type_code": "PULE",
+      "description": "PULLEYS",
+      "amounts_rp": {
+        "opening": {
+          "text": "93,317,199.99",
+          "value": "93317199.99"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "93,317,199.99",
+          "value": "93317199.99"
+        }
+      }
+    },
+    {
+      "no": 33,
+      "product_type_code": "PUMSP",
+      "description": "PUMP SPARES",
+      "amounts_rp": {
+        "opening": {
+          "text": "2,347,238,170.06",
+          "value": "2347238170.06"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "14,000,000.00",
+          "value": "14000000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "2,361,238,170.06",
+          "value": "2361238170.06"
+        }
+      }
+    },
+    {
+      "no": 34,
+      "product_type_code": "PWSTA",
+      "description": "POWER STATION",
+      "amounts_rp": {
+        "opening": {
+          "text": "48,769,389.30",
+          "value": "48769389.30"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "18,750,000.00",
+          "value": "18750000.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "18,750,000.00",
+          "value": "18750000.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "30,019,389.30",
+          "value": "30019389.30"
+        }
+      }
+    },
+    {
+      "no": 35,
+      "product_type_code": "STERIL",
+      "description": "STERILISATION",
+      "amounts_rp": {
+        "opening": {
+          "text": "15,558,570.65",
+          "value": "15558570.65"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "1,499,999.85",
+          "value": "1499999.85"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "1,499,999.85",
+          "value": "1499999.85"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "14,058,570.80",
+          "value": "14058570.80"
+        }
+      }
+    },
+    {
+      "no": 36,
+      "product_type_code": "STMAT",
+      "description": "STEEL MATERIALS",
+      "amounts_rp": {
+        "opening": {
+          "text": "159,151,213.98",
+          "value": "159151213.98"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "5,700,000.00",
+          "value": "5700000.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "5,700,000.00",
+          "value": "5700000.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "153,451,213.98",
+          "value": "153451213.98"
+        }
+      }
+    },
+    {
+      "no": 37,
+      "product_type_code": "STN-PBS",
+      "description": "PREBREAKER",
+      "amounts_rp": {
+        "opening": {
+          "text": "327,472,566.00",
+          "value": "327472566.00"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "327,472,566.00",
+          "value": "327472566.00"
+        }
+      }
+    },
+    {
+      "no": 38,
+      "product_type_code": "SUND",
+      "description": "SUNDRY STORES",
+      "amounts_rp": {
+        "opening": {
+          "text": "1,558,498,598.78",
+          "value": "1558498598.78"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "207,432,359.67",
+          "value": "207432359.67"
+        },
+        "issued_station": {
+          "text": "374,641,855.66",
+          "value": "374641855.66"
+        },
+        "issued_vehicle": {
+          "text": "5,323,298.61",
+          "value": "5323298.61"
+        },
+        "issued_total": {
+          "text": "587,397,513.94",
+          "value": "587397513.94"
+        },
+        "return": {
+          "text": "40,000.00",
+          "value": "40000.00"
+        },
+        "goods_receive": {
+          "text": "557,938,000.00",
+          "value": "557938000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "1,529,079,084.84",
+          "value": "1529079084.84"
+        }
+      }
+    },
+    {
+      "no": 39,
+      "product_type_code": "TRANCAIN",
+      "description": "TRANSMISSION CHAIN/SPROCKET",
+      "amounts_rp": {
+        "opening": {
+          "text": "1,686,392,978.10",
+          "value": "1686392978.10"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "97,368,992.04",
+          "value": "97368992.04"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "97,368,992.04",
+          "value": "97368992.04"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "12,125,000.00",
+          "value": "12125000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "1,601,148,986.06",
+          "value": "1601148986.06"
+        }
+      }
+    },
+    {
+      "no": 40,
+      "product_type_code": "VALPIT",
+      "description": "VALVES / FITTING",
+      "amounts_rp": {
+        "opening": {
+          "text": "632,231,404.12",
+          "value": "632231404.12"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "37,930,608.56",
+          "value": "37930608.56"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "37,930,608.56",
+          "value": "37930608.56"
+        },
+        "return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_receive": {
+          "text": "86,875,000.00",
+          "value": "86875000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "681,175,795.56",
+          "value": "681175795.56"
+        }
+      }
+    },
+    {
+      "no": 41,
+      "product_type_code": "VEEBEL",
+      "description": "VEE BELTS",
+      "amounts_rp": {
+        "opening": {
+          "text": "192,039,485.47",
+          "value": "192039485.47"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "7,624,849.48",
+          "value": "7624849.48"
+        },
+        "issued_vehicle": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_total": {
+          "text": "7,624,849.48",
+          "value": "7624849.48"
+        },
+        "return": {
+          "text": "781,803.92",
+          "value": "781803.92"
+        },
+        "goods_receive": {
+          "text": "19,858,000.00",
+          "value": "19858000.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "205,054,439.91",
+          "value": "205054439.91"
+        }
+      }
+    },
+    {
+      "no": 42,
+      "product_type_code": "VSPARE",
+      "description": "VEHICLES SPARES",
+      "amounts_rp": {
+        "opening": {
+          "text": "1,625,842,332.16",
+          "value": "1625842332.16"
+        },
+        "received": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "return_advice": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "transferred": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "adjustment": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "ledger": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_station": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "issued_vehicle": {
+          "text": "17,863,376.00",
+          "value": "17863376.00"
+        },
+        "issued_total": {
+          "text": "17,863,376.00",
+          "value": "17863376.00"
+        },
+        "return": {
+          "text": "530,000.00",
+          "value": "530000.00"
+        },
+        "goods_receive": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "goods_return": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "dispatch_adv": {
+          "text": "0.00",
+          "value": "0.00"
+        },
+        "closing": {
+          "text": "1,608,508,956.16",
+          "value": "1608508956.16"
+        }
+      }
+    }
+  ],
+  "totals": {
+    "location_total": {
+      "opening": {
+        "text": "40,762,622,481.14",
+        "value": "40762622481.14"
+      },
+      "received": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "return_advice": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "transferred": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "adjustment": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "ledger": {
+        "text": "242,379,578.03",
+        "value": "242379578.03"
+      },
+      "issued_station": {
+        "text": "1,407,597,331.11",
+        "value": "1407597331.11"
+      },
+      "issued_vehicle": {
+        "text": "190,269,790.00",
+        "value": "190269790.00"
+      },
+      "issued_total": {
+        "text": "1,840,246,699.14",
+        "value": "1840246699.14"
+      },
+      "return": {
+        "text": "54,057,042.68",
+        "value": "54057042.68"
+      },
+      "goods_receive": {
+        "text": "2,022,594,112.14",
+        "value": "2022594112.14"
+      },
+      "goods_return": {
+        "text": "2,040,000.00",
+        "value": "2040000.00"
+      },
+      "dispatch_adv": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "closing": {
+        "text": "40,996,986,936.82",
+        "value": "40996986936.82"
+      }
+    },
+    "grand_total": {
+      "opening": {
+        "text": "40,762,622,481.14",
+        "value": "40762622481.14"
+      },
+      "received": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "return_advice": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "transferred": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "adjustment": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "ledger": {
+        "text": "242,379,578.03",
+        "value": "242379578.03"
+      },
+      "issued_station": {
+        "text": "1,407,597,331.11",
+        "value": "1407597331.11"
+      },
+      "issued_vehicle": {
+        "text": "190,269,790.00",
+        "value": "190269790.00"
+      },
+      "issued_total": {
+        "text": "1,840,246,699.14",
+        "value": "1840246699.14"
+      },
+      "return": {
+        "text": "54,057,042.68",
+        "value": "54057042.68"
+      },
+      "goods_receive": {
+        "text": "2,022,594,112.14",
+        "value": "2022594112.14"
+      },
+      "goods_return": {
+        "text": "2,040,000.00",
+        "value": "2040000.00"
+      },
+      "dispatch_adv": {
+        "text": "0.00",
+        "value": "0.00"
+      },
+      "closing": {
+        "text": "40,996,986,936.82",
+        "value": "40996986936.82"
+      }
+    }
+  },
+  "validation": {
+    "item_count": 42,
+    "all_location_totals_match_item_sums": true,
+    "fields": [
+      {
+        "field": "opening",
+        "calculated_sum": "40762622481.14",
+        "report_location_total": "40762622481.14",
+        "match": true
+      },
+      {
+        "field": "received",
+        "calculated_sum": "0.00",
+        "report_location_total": "0.00",
+        "match": true
+      },
+      {
+        "field": "return_advice",
+        "calculated_sum": "0.00",
+        "report_location_total": "0.00",
+        "match": true
+      },
+      {
+        "field": "transferred",
+        "calculated_sum": "0.00",
+        "report_location_total": "0.00",
+        "match": true
+      },
+      {
+        "field": "adjustment",
+        "calculated_sum": "0.00",
+        "report_location_total": "0.00",
+        "match": true
+      },
+      {
+        "field": "ledger",
+        "calculated_sum": "242379578.03",
+        "report_location_total": "242379578.03",
+        "match": true
+      },
+      {
+        "field": "issued_station",
+        "calculated_sum": "1407597331.11",
+        "report_location_total": "1407597331.11",
+        "match": true
+      },
+      {
+        "field": "issued_vehicle",
+        "calculated_sum": "190269790.00",
+        "report_location_total": "190269790.00",
+        "match": true
+      },
+      {
+        "field": "issued_total",
+        "calculated_sum": "1840246699.14",
+        "report_location_total": "1840246699.14",
+        "match": true
+      },
+      {
+        "field": "return",
+        "calculated_sum": "54057042.68",
+        "report_location_total": "54057042.68",
+        "match": true
+      },
+      {
+        "field": "goods_receive",
+        "calculated_sum": "2022594112.14",
+        "report_location_total": "2022594112.14",
+        "match": true
+      },
+      {
+        "field": "goods_return",
+        "calculated_sum": "2040000.00",
+        "report_location_total": "2040000.00",
+        "match": true
+      },
+      {
+        "field": "dispatch_adv",
+        "calculated_sum": "0.00",
+        "report_location_total": "0.00",
+        "match": true
+      },
+      {
+        "field": "closing",
+        "calculated_sum": "40996986936.82",
+        "report_location_total": "40996986936.82",
+        "match": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,320 @@
+{
+  "metadata": {
+    "generated": "2026-05-16T11:40:00Z",
+    "estate_server": "SERVER_PROFILE_1",
+    "mill_server": "SERVER_PROFILE_3",
+    "database": "db_ptrj_mill",
+    "store": "MCP"
+  },
+  "tables": {
+    "IN_ITEMCODE": {
+      "rows": 12058,
+      "server": "SERVER_PROFILE_3",
+      "primary_key": "ItemCode (char 20)",
+      "description": "Item master catalog + current on-hand/cost state. No LocCode. 49 columns.",
+      "columns": [
+        {"ordinal": 1,  "name": "ItemCode",           "type": "char",        "width": 20,   "nullable": false, "description": "PK. Unique item identifier."},
+        {"ordinal": 2,  "name": "Description",        "type": "nchar",       "width": 128,  "nullable": true,  "description": "Item name (space-padded)."},
+        {"ordinal": 3,  "name": "Bin",                "type": "char",        "width": 20,   "nullable": true,  "description": "Storage/bin location."},
+        {"ordinal": 4,  "name": "ItemType",          "type": "char",        "width": 8,    "nullable": false, "description": "Item classification. Values: '1'=Service, '2'=Stock, '4'=Workshop, '6'=?, '10'=Fuel/Commodity, '7','8','9'=rare."},
+        {"ordinal": 5,  "name": "ProdTypeCode",     "type": "char",        "width": 8,    "nullable": true,  "description": "Product type. e.g. DC(3832), GEN-O(1500), SUND(1378), ELEC-O(1023), VSPARE(874)."},
+        {"ordinal": 6,  "name": "ProdCatCode",       "type": "char",        "width": 8,    "nullable": true,  "description": "Product category."},
+        {"ordinal": 7,  "name": "FuelTypeInd",       "type": "char",        "width": 1,    "nullable": false, "description": "'0'=not fuel, '1'=fuel item."},
+        {"ordinal": 8,  "name": "ProdBrandCode",     "type": "char",        "width": 8,    "nullable": true,  "description": "Product brand."},
+        {"ordinal": 9,  "name": "ProdModelCode",     "type": "char",        "width": 8,    "nullable": true,  "description": "Product model."},
+        {"ordinal": 10, "name": "ProdMatCode",        "type": "char",        "width": 8,    "nullable": true,  "description": "Material type."},
+        {"ordinal": 11, "name": "StockAnalysisCode", "type": "char",        "width": 8,    "nullable": true,  "description": "Stock analysis group."},
+        {"ordinal": 12, "name": "ExpenseCode",        "type": "char",        "width": 8,    "nullable": true,  "description": "Expense classification code."},
+        {"ordinal": 13, "name": "ActCode",            "type": "char",        "width": 32,   "nullable": true,  "description": "GL account code."},
+        {"ordinal": 14, "name": "UOMCode",            "type": "char",        "width": 8,    "nullable": true,  "description": "Unit of measure. e.g. PCS, KG, MT, LT, UNIT."},
+        {"ordinal": 15, "name": "PurchaseUOM",        "type": "char",        "width": 8,    "nullable": true,  "description": "Purchase unit (usually same as UOMCode)."},
+        {"ordinal": 16, "name": "FuelMeterReading",   "type": "decimal(18,6)", "nullable": true, "description": "Fuel meter reading at last transaction."},
+        {"ordinal": 17, "name": "ReOrderLevel",        "type": "decimal(18,6)", "nullable": true, "description": "Minimum stock level before reorder."},
+        {"ordinal": 18, "name": "QtyOnHand",           "type": "decimal(18,6)", "nullable": true, "description": "Current stock quantity on hand."},
+        {"ordinal": 19, "name": "QtyOnHold",           "type": "decimal(18,6)", "nullable": true, "description": "Quantity on hold/reserved."},
+        {"ordinal": 20, "name": "QtyOnOrder",          "type": "decimal(18,6)", "nullable": true, "description": "Quantity on order (not yet received)."},
+        {"ordinal": 21, "name": "QtyReOrder",          "type": "decimal(18,6)", "nullable": true, "description": "Reorder quantity."},
+        {"ordinal": 22, "name": "InitialCost",         "type": "decimal(18,6)", "nullable": true, "description": "Opening/initial cost."},
+        {"ordinal": 23, "name": "HighCost",            "type": "decimal(18,6)", "nullable": true, "description": "Highest recorded cost."},
+        {"ordinal": 24, "name": "LowCost",             "type": "decimal(18,6)", "nullable": true, "description": "Lowest recorded cost."},
+        {"ordinal": 25, "name": "AverageCost",         "type": "decimal(18,6)", "nullable": true, "description": "Average weighted cost."},
+        {"ordinal": 26, "name": "LatestCost",           "type": "decimal(18,6)", "nullable": true, "description": "Most recent purchase cost."},
+        {"ordinal": 27, "name": "DiffAverageCost",     "type": "decimal(18,6)", "nullable": true, "description": "LatestCost - AverageCost."},
+        {"ordinal": 28, "name": "ClosingBal",           "type": "decimal(18,6)", "nullable": true, "description": "Month-end closing balance (synced from month-end)."},
+        {"ordinal": 29, "name": "ClosingAvrgCost",     "type": "decimal(18,6)", "nullable": true, "description": "Month-end average cost."},
+        {"ordinal": 30, "name": "ClosingDiffAvrgCost", "type": "decimal(18,6)", "nullable": true, "description": "Month-end cost diff."},
+        {"ordinal": 31, "name": "PurchaseAccNo",        "type": "char",        "width": 32,   "nullable": true,  "description": "GL purchase account number."},
+        {"ordinal": 32, "name": "IssueAccNo",           "type": "char",        "width": 32,   "nullable": true,  "description": "GL issue account number."},
+        {"ordinal": 33, "name": "UsePrice",             "type": "char",        "width": 2,    "nullable": true,  "description": "Pricing method indicator."},
+        {"ordinal": 34, "name": "SellFixedPrice",       "type": "decimal(18,6)", "nullable": true, "description": "Fixed selling price."},
+        {"ordinal": 35, "name": "SellLatestCost",       "type": "decimal(18,6)", "nullable": true, "description": "Selling price = latest cost."},
+        {"ordinal": 36, "name": "SellAverageCost",      "type": "decimal(18,6)", "nullable": true, "description": "Selling price = average cost."},
+        {"ordinal": 37, "name": "Remark",               "type": "nchar",       "width": 128,  "nullable": true,  "description": "Notes/remarks."},
+        {"ordinal": 38, "name": "Status",                "type": "char",        "width": 2,    "nullable": true,  "description": "'1 '=active(12000 rows), '2 '=inactive(58 rows). Always RTRIM()."},
+        {"ordinal": 39, "name": "LastOrderDate",        "type": "datetime",    "nullable": true, "description": "Date of last PO. '1900-01-01'=never."},
+        {"ordinal": 40, "name": "LastIssueDate",         "type": "datetime",    "nullable": true, "description": "Date of last stock issue. '1900-01-01'=never."},
+        {"ordinal": 41, "name": "CreateDate",            "type": "datetime",    "nullable": true, "description": "Record creation timestamp (UTC)."},
+        {"ordinal": 42, "name": "UpdateDate",            "type": "datetime",    "nullable": true, "description": "Last modification timestamp (UTC)."},
+        {"ordinal": 43, "name": "UpdateID",              "type": "char",        "width": 20,   "nullable": true,  "description": "User ID who last updated. e.g. adm039."},
+        {"ordinal": 44, "name": "SMInd",                 "type": "bit",         "nullable": true, "description": "Stock management indicator (0/1)."},
+        {"ordinal": 45, "name": "ExDateReq",             "type": "tinyint",     "nullable": true, "description": "Expiry date required flag (0=no, 1=yes)."},
+        {"ordinal": 46, "name": "TaxCode",               "type": "varchar",     "width": 8,    "nullable": true,  "description": "Tax code."},
+        {"ordinal": 47, "name": "SuppTaxCode",          "type": "varchar",     "width": 8,    "nullable": true,  "description": "Supplementary tax code."},
+        {"ordinal": 48, "name": "DefaultTaxCode2",       "type": "nvarchar",    "width": 50,   "nullable": false, "description": "Default tax code 2."},
+        {"ordinal": 49, "name": "DefaultSuppTaxCode2",  "type": "nvarchar",    "width": 50,   "nullable": false, "description": "Default supplementary tax code 2."}
+      ],
+      "itemtype_distribution": [
+        {"ItemType": "4",  "count": 6195, "inferred": "Workshop / Maintenance items"},
+        {"ItemType": "2",  "count": 4320, "inferred": "Stock / General items"},
+        {"ItemType": "1",  "count": 1356, "inferred": "Service / Non-stock items"},
+        {"ItemType": "6",  "count": 137,  "inferred": "Unknown (some inactive)"},
+        {"ItemType": "10", "count": 40,   "inferred": "Fuel / Commodity codes (DIESEL, FERT, FC, OT01, CK)"},
+        {"ItemType": "7",  "count": 4,    "inferred": "Rare/Unknown"},
+        {"ItemType": "8",  "count": 4,    "inferred": "Rare/Unknown"},
+        {"ItemType": "9",  "count": 2,    "inferred": "Rare/Unknown"}
+      ],
+      "status_distribution": [
+        {"Status": "1", "count": 12000, "inferred": "Active"},
+        {"Status": "2", "count": 58,    "inferred": "Inactive"}
+      ],
+      "prodtype_top": [
+        {"ProdTypeCode": "DC",       "count": 3832, "description": "?"},
+        {"ProdTypeCode": "GEN-O",    "count": 1500, "description": "General Operational"},
+        {"ProdTypeCode": "SUND",     "count": 1378, "description": "Sundries/Consumables"},
+        {"ProdTypeCode": "ELEC-O",   "count": 1023, "description": "Electrical Operational"},
+        {"ProdTypeCode": "VSPARE",   "count": 874,  "description": "Vehicle Spare parts"},
+        {"ProdTypeCode": "ELEC-SPR", "count": 717,  "description": "Electrical Spare parts"},
+        {"ProdTypeCode": "PITING",   "count": 319,  "description": "?"},
+        {"ProdTypeCode": "BOUT",     "count": 248,  "description": "?"},
+        {"ProdTypeCode": "BEAR",     "count": 220,  "description": "Bearings"},
+        {"ProdTypeCode": "VALPIT",   "count": 202,  "description": "Valve/Pipe fittings"},
+        {"ProdTypeCode": "TRANCAIN", "count": 199,  "description": "Transmission Chain"},
+        {"ProdTypeCode": "OSRING",   "count": 171,  "description": "O-Ring/Seal"},
+        {"ProdTypeCode": "PUMSP",    "count": 126,  "description": "Pump Spare parts"},
+        {"ProdTypeCode": "GASPACK",  "count": 116,  "description": "?"},
+        {"ProdTypeCode": "PRESS",    "count": 114,  "description": "Press machine parts"},
+        {"ProdTypeCode": "GRS",      "count": 44,   "description": "Grease"},
+        {"ProdTypeCode": "STERIL",   "count": 31,   "description": "Sterilizer parts"}
+      ],
+      "itemtype_samples": {
+        "1": ["DC05060", "DC09222", "M02070", "MC01001"],
+        "2": ["DC000001", "DC000002", "D01289"],
+        "4": ["ME004015", "ME01001", "DC19715"],
+        "6": ["DC01554", "POM244", "POM302"],
+        "10": ["DIESEL", "FERT", "FC", "OT01", "CK"]
+      },
+      "recently_created_samples": [
+        {"ItemCode": "MM11197", "ItemType": "1", "CreateDate": "2026-05-16T07:48:19.000Z"},
+        {"ItemCode": "MM11196", "ItemType": "4", "CreateDate": "2026-05-16T07:47:36.000Z"},
+        {"ItemCode": "MM06139", "ItemType": "4", "CreateDate": "2026-05-16T07:44:51.000Z"},
+        {"ItemCode": "MM10043", "ItemType": "4", "CreateDate": "2026-05-16T07:43:33.000Z"},
+        {"ItemCode": "MM07419", "ItemType": "4", "CreateDate": "2026-05-16T07:37:53.000Z"}
+      ]
+    },
+
+    "IN_MTHENDITEM": {
+      "rows": 673053,
+      "server": "SERVER_PROFILE_3",
+      "primary_key": "(ItemCode, LocCode, AccYear, AccMonth) — composite",
+      "description": "Monthly inventory balance snapshot. One row per item per location per accounting month. Time-series of inventory state.",
+      "columns": [
+        {"ordinal": 1, "name": "ItemCode",    "type": "char",        "width": 20, "nullable": false, "description": "Item identifier."},
+        {"ordinal": 2, "name": "LocCode",     "type": "char",        "width": 8,  "nullable": false, "description": "Location code. All rows = 'PTRJ    '."},
+        {"ordinal": 3, "name": "AccMonth",    "type": "char",        "width": 2,  "nullable": false, "description": "Accounting month, space-padded. '1 '..'12'. Always RTRIM()."},
+        {"ordinal": 4, "name": "AccYear",     "type": "char",        "width": 4,  "nullable": false, "description": "Accounting year. '2019'..'2027'."},
+        {"ordinal": 5, "name": "Qty",          "type": "decimal(18,6)", "nullable": false, "description": "Quantity on hand at period-end."},
+        {"ordinal": 6, "name": "AverageCost",  "type": "decimal(18,6)", "nullable": false, "description": "Average cost at period-end."},
+        {"ordinal": 7, "name": "Amount",       "type": "decimal(18,6)", "nullable": false, "description": "Period-end stock value = Qty x AverageCost."}
+      ],
+      "period_coverage": {
+        "total_distinct_periods": 86,
+        "range": "2019–2027",
+        "by_year": [
+          {"AccYear": "2019", "rows": 2239},
+          {"AccYear": "2020", "rows": 61017},
+          {"AccYear": "2021", "rows": 76541},
+          {"AccYear": "2022", "rows": 86829},
+          {"AccYear": "2023", "rows": 92541},
+          {"AccYear": "2024", "rows": 100505},
+          {"AccYear": "2025", "rows": 110564},
+          {"AccYear": "2026", "rows": 131057},
+          {"AccYear": "2027", "rows": 11760}
+        ],
+        "latest_periods": [
+          {"AccYear": "2027", "AccMonth": "01", "rows": 11760},
+          {"AccYear": "2026", "AccMonth": "09", "rows": 11407},
+          {"AccYear": "2026", "AccMonth": "08", "rows": 11262},
+          {"AccYear": "2026", "AccMonth": "07", "rows": 11146}
+        ]
+      },
+      "loccode_values": ["PTRJ"],
+      "sample_rows": [
+        {"ItemCode": "D01289", "LocCode": "PTRJ", "AccYear": "2022", "AccMonth": "01", "Qty": 1, "AverageCost": 14653000, "Amount": 14653000},
+        {"ItemCode": "D01289", "LocCode": "PTRJ", "AccYear": "2026", "AccMonth": "01", "Qty": 1, "AverageCost": 14653000, "Amount": 14653000},
+        {"ItemCode": "D01289", "LocCode": "PTRJ", "AccYear": "2026", "AccMonth": "12", "Qty": 1, "AverageCost": 14653000, "Amount": 14653000}
+      ],
+      "interpretation": "Each row = end-of-month inventory balance. ~11K–12K items snapshot per month. Useful for monthly stock reporting, cost history, inventory trends."
+    },
+
+    "IN_MTHENDTRX": {
+      "rows": 82194,
+      "server": "SERVER_PROFILE_3",
+      "primary_key": "(DocId, DocLnId, AccYear, AccMonth) — composite",
+      "description": "Monthly transaction journal lines. Double-entry accounting for inventory transactions. Balances stock issues, fuel issues, and adjustments.",
+      "columns": [
+        {"ordinal": 1,  "name": "DocId",        "type": "char",     "width": 20, "nullable": false, "description": "Document header ID. e.g. SI26016305 (Stock Issue), FI26007327 (Fuel Issue), SA25000034 (Stock Adj)."},
+        {"ordinal": 2,  "name": "DocLnId",      "type": "char",     "width": 20, "nullable": false, "description": "Document line ID. e.g. SIL26032485. Format: module prefix + YR + 6-digit."},
+        {"ordinal": 3,  "name": "DocType",      "type": "char",     "width": 3,  "nullable": true,  "description": "Document type. '24'=Stock Issue, '25'=Fuel Issue, '20'=Stock Adjustment, '35','149'=rare."},
+        {"ordinal": 4,  "name": "DocDate",      "type": "datetime", "nullable": false, "description": "Transaction date."},
+        {"ordinal": 5,  "name": "LocCode",       "type": "char",     "width": 8,  "nullable": false, "description": "Location code."},
+        {"ordinal": 6,  "name": "ModuleCode",   "type": "char",     "width": 8,  "nullable": false, "description": "Module origin. All = '3' (padded to '3       ') = Inventory module."},
+        {"ordinal": 7,  "name": "AccMonth",      "type": "char",     "width": 2,  "nullable": false, "description": "Accounting month (space-padded)."},
+        {"ordinal": 8,  "name": "AccYear",       "type": "char",     "width": 4,  "nullable": false, "description": "Accounting year."},
+        {"ordinal": 9,  "name": "EmpCode",       "type": "char",     "width": 20, "nullable": false, "description": "Employee code (blank for non-labor transactions)."},
+        {"ordinal": 10, "name": "AccCode",       "type": "char",     "width": 32, "nullable": false, "description": "GL account. GA*=expense, CA*=cost/inventory, OC*=operational cost."},
+        {"ordinal": 11, "name": "BlkCode",       "type": "char",     "width": 8,  "nullable": false, "description": "Block/station cost center. OFFICE, BLR25001, GEN01001 for stock issues. Blank for fuel/adj."},
+        {"ordinal": 12, "name": "VehCode",       "type": "char",     "width": 8,  "nullable": false, "description": "Vehicle/equipment code."},
+        {"ordinal": 13, "name": "VehExpenseCode","type": "char",     "width": 8,  "nullable": false, "description": "Vehicle expense code."},
+        {"ordinal": 14, "name": "ItemCode",      "type": "char",     "width": 20, "nullable": false, "description": "Item being transacted."},
+        {"ordinal": 15, "name": "Unit",          "type": "decimal(18,6)", "nullable": false, "description": "Quantity transacted."},
+        {"ordinal": 16, "name": "Cost",          "type": "decimal(18,6)", "nullable": false, "description": "Unit cost."},
+        {"ordinal": 17, "name": "Amount",       "type": "decimal(18,6)", "nullable": false, "description": "Total amount (Unit x Cost). Can be negative (reversal entries)."},
+        {"ordinal": 18, "name": "Price",        "type": "decimal(18,6)", "nullable": true,  "description": "Selling unit price."},
+        {"ordinal": 19, "name": "PriceAmount",  "type": "decimal(18,6)", "nullable": true,  "description": "Selling total (Qty x Price)."},
+        {"ordinal": 20, "name": "Description",   "type": "nvarchar", "width": 1000,"nullable": true, "description": "Transaction description."}
+      ],
+      "doctype_distribution": [
+        {"DocType": "24", "count": 64538, "inferred": "Stock Issue (SI* DocId prefix)"},
+        {"DocType": "25", "count": 17254, "inferred": "Fuel Issue (FI* DocId prefix)"},
+        {"DocType": "20", "count": 268,   "inferred": "Stock Adjustment (SA* DocId prefix)"},
+        {"DocType": "149","count": 70,    "inferred": "Unknown/rare"},
+        {"DocType": "35", "count": 64,    "inferred": "Unknown/rare"}
+      ],
+      "doctype_samples": {
+        "24 (Stock Issue)": [
+          {"DocId": "SI26016305", "DocLnId": "SIL26032485", "Item": "MO04005", "Unit": 8,  "Amount": 64000,  "AccCode": "GA9234", "BlkCode": "OFFICE"},
+          {"DocId": "SI26016305", "DocLnId": "SIL26032486", "Item": "MO04003", "Unit": 7,  "Amount": 70000,  "AccCode": "GA9234", "BlkCode": "OFFICE"},
+          {"DocId": "SI26016305", "DocLnId": "SIL26032485", "Item": "MO04005", "Unit": 8,  "Amount": -64000, "AccCode": "CA2118", "BlkCode": ""},
+          {"DocId": "SI26016305", "DocLnId": "SIL26032486", "Item": "MO04003", "Unit": 7,  "Amount": -70000, "AccCode": "CA2118", "BlkCode": ""}
+        ],
+        "25 (Fuel Issue)": [
+          {"DocId": "FI26007327", "DocLnId": "FIL26008607", "Item": "MF01001", "Unit": 32,  "Amount": 542261.43,  "AccCode": "GA9010", "BlkCode": ""},
+          {"DocId": "FI26007328", "DocLnId": "FIL26008608", "Item": "MF01001", "Unit": 130, "Amount": 2202937.05, "AccCode": "GA9010", "BlkCode": ""},
+          {"DocId": "FI26007328", "DocLnId": "FIL26008609", "Item": "MF01001", "Unit": 142, "Amount": 2406285.09, "AccCode": "GA9010", "BlkCode": ""}
+        ],
+        "20 (Stock Adjustment)": [
+          {"DocId": "SA25000034", "Item": "MM07196", "Unit": 1, "Amount": -210503975, "AccCode": "CA2120"},
+          {"DocId": "SA25000034", "Item": "MM07273", "Unit": 1, "Amount": 210503975,  "AccCode": "CA2120"},
+          {"DocId": "SA25000034", "Item": "MM07196", "Unit": 1, "Amount": 210503975,  "AccCode": "CA2120"}
+        ]
+      },
+      "year_distribution": [
+        {"AccYear": "2027", "rows": 1336},
+        {"AccYear": "2026", "rows": 13346},
+        {"AccYear": "2025", "rows": 12372},
+        {"AccYear": "2024", "rows": 11376},
+        {"AccYear": "2023", "rows": 11006},
+        {"AccYear": "2022", "rows": 9694},
+        {"AccYear": "2021", "rows": 11046},
+        {"AccYear": "2020", "rows": 12018}
+      ],
+      "acc_code_prefixes": {
+        "GA": "Expense/Gain account (e.g. GA9234, GA9010, GA9050)",
+        "CA": "Cost/Inventory account (e.g. CA2118, CA2120, CA2121)",
+        "OC": "Operational cost (e.g. OC7318, OC7190)",
+        "EM": "Employee-related"
+      },
+      "blkcode_values_observed": ["OFFICE", "BLR25001", "GEN01001", ""],
+      "interpretation": "Double-entry journal system. Every stock issue creates balanced pairs: debit (expense, BlkCode=OFFICE) + credit (inventory, BlkCode=''). Fuel issues: single GA9010 debit lines with no block allocation."
+    },
+
+    "IN_ITEM_ACC": {
+      "rows": 244,
+      "server": "SERVER_PROFILE_3",
+      "primary_key": "ID (bigint auto-increment)",
+      "description": "Item master audit / cost allocation table. Links to IN_ITEMCODE via TrxID=ItemCode. All allocation columns empty — table appears planned but not actively populated.",
+      "columns": [
+        {"ordinal": 1,  "name": "ID",          "type": "bigint",     "nullable": false, "description": "Auto-increment PK."},
+        {"ordinal": 2,  "name": "TrxID",       "type": "varchar",    "width": 20, "nullable": true,  "description": "FK = ItemCode from IN_ITEMCODE. 244 entries link to DC*/POM* items."},
+        {"ordinal": 3,  "name": "AccCode",     "type": "varchar",    "width": 20, "nullable": true,  "description": "GL account code. ALL EMPTY in current data."},
+        {"ordinal": 4,  "name": "BlkCode",     "type": "varchar",    "width": 20, "nullable": true,  "description": "Block/station code. ALL EMPTY."},
+        {"ordinal": 5,  "name": "SubBlkCode",  "type": "varchar",    "width": 20, "nullable": true,  "description": "Sub-block code. ALL EMPTY."},
+        {"ordinal": 6,  "name": "VehCode",     "type": "varchar",    "width": 20, "nullable": true,  "description": "Vehicle code. ALL EMPTY."},
+        {"ordinal": 7,  "name": "ExpCode",     "type": "varchar",    "width": 20, "nullable": true,  "description": "Expense code. ALL EMPTY."},
+        {"ordinal": 8,  "name": "VehExpCode",  "type": "varchar",    "width": 20, "nullable": true,  "description": "Vehicle expense code."},
+        {"ordinal": 9,  "name": "SuppCode",    "type": "varchar",    "width": 20, "nullable": true,  "description": "Supplier code."},
+        {"ordinal": 10, "name": "BillCode",    "type": "varchar",    "width": 20, "nullable": true,  "description": "Bill/invoice reference."},
+        {"ordinal": 11, "name": "ItemCode",    "type": "varchar",    "width": 20, "nullable": true,  "description": "Item code. Empty in current data."},
+        {"ordinal": 12, "name": "EmpCode",     "type": "varchar",    "width": 20, "nullable": true,  "description": "Employee code."},
+        {"ordinal": 13, "name": "AssCode",     "type": "varchar",    "width": 20, "nullable": true,  "description": "Asset code."},
+        {"ordinal": 14, "name": "DeptCode",    "type": "varchar",    "width": 20, "nullable": true,  "description": "Department code."},
+        {"ordinal": 15, "name": "WsJobCode",   "type": "varchar",    "width": 20, "nullable": true,  "description": "Workshop job code."},
+        {"ordinal": 16, "name": "BudgetID",    "type": "varchar",    "width": 20, "nullable": true,  "description": "Budget reference ID."},
+        {"ordinal": 17, "name": "TaskCode",    "type": "varchar",    "width": 20, "nullable": true,  "description": "Task code."},
+        {"ordinal": 18, "name": "ContractID",  "type": "varchar",    "width": 20, "nullable": true,  "description": "Contract ID."},
+        {"ordinal": 19, "name": "MsgID",       "type": "varchar",    "width": 20, "nullable": true,  "description": "Message/internal reference."},
+        {"ordinal": 20, "name": "DocID",        "type": "varchar",    "width": 20, "nullable": true,  "description": "Document ID."},
+        {"ordinal": 21, "name": "Dim19",        "type": "varchar",    "width": 20, "nullable": true,  "description": "Custom dimension 19 = Location code. ALL rows = 'PTRJ'."},
+        {"ordinal": 22, "name": "Dim20",        "type": "varchar",    "width": 20, "nullable": true,  "description": "Custom dimension 20. ALL EMPTY."},
+        {"ordinal": 23, "name": "TempID",       "type": "int",         "nullable": true, "description": "Temporary/hold ID. ALL = 0."}
+      ],
+      "row_distribution": {
+        "IDs_1_158": {
+          "description": "DC-prefix items (DC00001 through DC00158)",
+          "count": 158,
+          "trxid_pattern": "DC00001, DC00002, ... DC00158",
+          "note": "Initial DC item catalog batch setup records. All fields empty except Dim19='PTRJ'."
+        },
+        "IDs_159_244": {
+          "description": "POM-prefix items (Palm Oil Mill station items)",
+          "count": 86,
+          "trxid_pattern": "POM244, POMBU241-255, POMCO133-139, POMEP244, POMFF290, POMLE165-166, POMMP113, POMMV111-112, POMOE134-139, POMPE153, POMPM297A-343, POMRB109-110",
+          "note": "Mill station items. All fields empty except Dim19='PTRJ'."
+        }
+      },
+      "pom_item_station_categories": {
+        "POMBU": "POM Boiler Unit (POMBU241-255: 15 items)",
+        "POMCO": "POM Condensate Outlet (POMCO133-139: 7 items)",
+        "POMEP": "POM Engine/EP (POMEP244: 1 item)",
+        "POMFF": "POM Fuel Filter (POMFF290: 1 item)",
+        "POMLE": "POM Loading Elevator (POMLE165-166: 2 items)",
+        "POMMP": "POM Main Press/MP (POMMP113: 1 item)",
+        "POMMV": "POM Motor/Valve (POMMV111-112: 2 items)",
+        "POMOE": "POM Oil Exhaust (POMOE134-139: 6 items)",
+        "POMPE": "POM Press Engine (POMPE153: 1 item)",
+        "POMPM": "POM Press Machine (POMPM297A-343: 47 items — largest group)",
+        "POMRB": "POM Reject/Biomass (POMRB109-110: 2 items)",
+        "POM244, POM302": "Individual station items"
+      },
+      "interpretation": "Sparse audit/cost allocation table. Only 244/12058 items have ACC entries. All cost allocation fields (AccCode, BlkCode, etc.) are empty — indicates item-level cost center allocation is not yet actively used. TrxID = ItemCode pattern matches IN_ITEMCODE linking."
+    }
+  },
+
+  "relationships": {
+    "IN_ITEMCODE_relationships": [
+      {"source": "IN_ITEMCODE.ItemCode", "target": "IN_MTHENDITEM.ItemCode", "type": "1:N", "note": "Monthly balance snapshot per item"},
+      {"source": "IN_ITEMCODE.ItemCode", "target": "IN_MTHENDTRX.ItemCode",  "type": "1:N", "note": "Transaction journal per item"},
+      {"source": "IN_ITEMCODE.ItemCode", "target": "IN_ITEM_ACC.TrxID",      "type": "1:N", "note": "Audit entries (244 rows only)"},
+      {"source": "IN_ITEMCODE.ItemCode", "target": "IN_ITEM.ItemCode",       "type": "1:N", "note": "IN_ITEM adds LocCode dimension to IN_ITEMCODE"},
+      {"source": "IN_ITEMCODE.ItemCode", "target": "IN_PRLN.ItemCode",        "type": "1:N", "note": "Purchase requisition lines"},
+      {"source": "IN_ITEMCODE.ItemCode", "target": "IN_STOCKISSUELN.ItemCode","type": "1:N", "note": "Stock issue lines"}
+    ]
+  },
+
+  "important_notes": [
+    "All char(N) fields are right-padded with spaces. Always RTRIM() when displaying or comparing.",
+    "AccMonth stored as 2-char, space-padded. '1 '=January, '10'=October. Always RTRIM().",
+    "AccYear stored as 4-char, no padding. e.g. '2026'.",
+    "SERVER_PROFILE_1 (Estate) main DB db_ptrj is OFFLINE; estate inventory data served from db_ptrj_mill.",
+    "SERVER_PROFILE_3 (Mill) db_ptrj_mill is the live/current system.",
+    "IN_ITEMCODE = flat item master (49 cols) + current snapshot. IN_ITEM = same + LocCode dimension.",
+    "IN_MTHENDITEM = time-series monthly balances for historical reporting.",
+    "IN_MTHENDTRX = double-entry journal for inventory transactions (balanced pairs per DocId).",
+    "IN_ITEM_ACC = sparse audit table; only DC*/POM* items have entries; all allocation fields empty.",
+    "DocId prefix: SI*=Stock Issue, FI*=Fuel Issue, SA*=Stock Adjustment. DocLnId: SIL*, FIL*.",
+    "DocType codes: '24'=Stock Issue, '25'=Fuel Issue, '20'=Stock Adj, '149','35'=rare.",
+    "ModuleCode='3' (padded) = Inventory module. All IN_MTHENDTRX records belong to module 3.",
+    "AccCode prefixes: GA=expense, CA=cost/inventory, OC=operational cost.",
+    "BlkCode empty for fuel/adj transactions; populated (OFFICE, BLR25001, GEN01001) for stock issues."
+  ]
+}

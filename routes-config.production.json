@@ -1,0 +1,58 @@
+[
+    {
+        "id": "upah",
+        "path": "/upah",
+        "target": "http://localhost:8002",
+        "description": "Sistem Penggajian/Payroll (Static dari dist folder)",
+        "enabled": true,
+        "rewriteContent": true,
+        "image": "https://broadwayshr.com/wp-content/uploads/2024/02/upah-lembur-per-jam-cover.jpg"
+    },
+    {
+        "id": "backend-upah",
+        "path": "/backend/upah",
+        "target": "http://localhost:8002",
+        "description": "Backend API untuk Sistem Penggajian",
+        "enabled": true,
+        "rewriteContent": false,
+        "changeOrigin": false,
+        "rewritePath": false,
+        "image": "https://broadwayshr.com/wp-content/uploads/2024/02/upah-lembur-per-jam-cover.jpg"
+    },
+    {
+        "id": "absen",
+        "path": "/absen",
+        "target": "http://localhost:5176",
+        "description": "Sistem Absensi Karyawan",
+        "enabled": true,
+        "rewriteContent": true,
+        "image": "https://broadwayshr.com/wp-content/uploads/2024/02/upah-lembur-per-jam-cover.jpg"
+    },
+    {
+        "id": "monitoring-beras",
+        "path": "/monitoring-beras",
+        "target": "http://localhost:5177",
+        "description": "Monitoring Distribusi Beras",
+        "enabled": true,
+        "rewriteContent": true
+    },
+    {
+        "id": "query",
+        "path": "/query",
+        "target": "http://localhost:8001",
+        "description": "SQL Gateway API",
+        "enabled": true,
+        "rewriteContent": false,
+        "rewritePath": false,
+        "public": true
+    },
+    {
+        "id": "file",
+        "path": "/file",
+        "target": "http://localhost:5178",
+        "description": "Google Drive File Gateway",
+        "enabled": true,
+        "rewriteContent": false,
+        "rewritePath": true
+    }
+]

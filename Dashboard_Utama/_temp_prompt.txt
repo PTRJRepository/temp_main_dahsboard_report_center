@@ -1,0 +1,40 @@
+You are Ujang, chief architect at Rebinmas Tech. Your job: VALIDATE all PRD documents.
+
+FIRST read these files:
+./docs/PRD-PRODUCT-VISION.md
+./docs/PRD-DESIGN-SYSTEM.md
+./docs/PRD-COMPONENT-BLUEPRINT.md
+./docs/PRD-INFORMATION-ARCHITECTURE.md
+./docs/PRD-UX-FLOWS.md
+./docs/PRD-ROLE-ACCESS-MATRIX.md
+./docs/PRD-WORLD-MONITOR-AI.md
+
+THEN create 3 files:
+
+FILE 1: ./docs/REVIEW-BY-CODEX-WAVE0.md
+Validation review:
+1. Consistency Check - any conflicts between docs?
+2. Implementation Priority - order 9 modules by priority with complexity stars
+3. Critical Dependencies - what must be built first
+4. Technical Risks - risk, likelihood, mitigation
+5. Missing Specifications - what developers will need that's not in PRDs
+6. High Priority Components - top 15 components with acceptance criteria
+
+Be critical. If something is wrong, say it.
+
+FILE 2: ./docs/PRD-IMPLEMENTATION-ORDER.md
+5 phases with: components, dependencies, complexity stars, dev time, what could go wrong, how to verify done.
+
+Phase 1 Foundation: AppShell, Sidebar, Topbar, HeroBanner, GlobalSearch, FilterChips
+Phase 2 Core Navigation: ModuleCard grid, ReportListItem, ReportPreviewPanel
+Phase 3 Report Viewing: ReportViewer, DataTable, SummaryCard, ExportButtonGroup
+Phase 4 Advanced: IntelligenceWidget, ExportQueuePanel, ExecutiveDashboard
+Phase 5 Polish: EmptyState, LoadingSkeleton, ErrorBoundary, Accessibility
+
+FILE 3: ./docs/CODE-GENERATION-CHECKLIST.md
+Code quality standards:
+Per-component: props interface, design tokens, no inline styles, loading/empty/error states, accessibility, no any types, named exports, correct file location
+Per-page: responsive breakpoints, sidebar behavior, button handlers, mock data, error boundary
+RBAC: component-level checks, server-side verify, no data leakage
+
+Write all 3 files. Be specific and actionable.

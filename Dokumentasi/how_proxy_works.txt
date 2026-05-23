@@ -1,0 +1,88 @@
+Struktur Dasar Proxy Server:
+      - Menggunakan Express.js dan Next.js sebagai server utama
+      - Menggunakan http-proxy-middleware untuk fungsionalitas proxy
+
+   2. Metode Forwarding:
+      - Permintaan dikirim ke gateway dan dicocokkan dengan konfigurasi routing
+      - Setelah cocok, permintaan diteruskan ke service backend dengan path rewrite
+      - Contoh: /absen/login diteruskan ke service absensi sebagai /login
+
+   3. Konfigurasi Routing:
+      - Disimpan dalam file JSON berdasarkan lingkungan (development/production)
+      - Mendukung fitur dynamic routing dan manajemen konfigurasi
+
+   4. Mekanisme Keseluruhan:
+      - Sistem reverse proxy yang menggabungkan beberapa layanan dalam satu akses
+      - Content rewriting otomatis untuk memastikan resource dimuat dengan benar
+      - Dukungan WebSocket untuk fitur real-time seperti HMR
+      - Dynamic configuration yang bisa diubah tanpa restart server
+      
+Sekarang mari saya jelaskan metode forwarding request dari client ke service backend berdasarkan analisis kode yang telah saya lakukan:
+
+  Metode forwarding request dalam proxy gateway ini bekerja sebagai berikut:
+
+   1. Penggunaan http-proxy-middleware
+      - Sistem menggunakan pustaka http-proxy-middleware untuk menciptakan proxy dinamis
+      - Middleware ini menangani forwarding permintaan HTTP dan WebSocket
+
+   2. Konfigurasi Routing Dinamis
+      - Konfigurasi routing disimpan dalam file JSON (routes-config.development.json, routes-config.production.json, atau routes-config.json)
+      - Setiap rute memiliki path (misalnya /absen) dan target (misalnya http://localhost:5176)
+
+   3. Proses Forwarding Request
+      - Ketika request masuk ke path seperti /absen/pegawai, sistem akan:
+        - Mencocokkan path tersebut dengan konfigurasi routing
+        - Memforward request ke target backend (misalnya http://localhost:5176/pegawai)
+        - Melakukan path rewrite: menghapus prefix /absen sebelum forwarding
+
+   4. Content Rewriting
+      - Sistem secara pintar mengganti path absolut di HTML, JavaScript, dan CSS yang diterima dari backend
+      - Contoh: /app.js menjadi /absen/app.js agar resource bisa dimuat dengan benar
+
+   5. Penanganan WebSocket
+      - Proxy juga mendukung WebSocket untuk fitur seperti Hot Module Replacement (HMR) di Vite
+      - Menggunakan middleware khusus untuk koneksi upgrade WebSocket
+
+   6. Manajemen Header dan Caching
+      - Proxy menghapus header kondisional (If-None-Match, If-Modified-Since) untuk memastikan response segar
+      - Menyesuaikan header content-length setelah melakukan content rewriting
+
+  Setelah saya pindahkan task ini ke selesai, saya akan lanjutkan untuk menganalisis konfigurasi routing:
+
+ ╭─────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ✓  TodoWrite Update todos                                                               │
+ │                                                                                         │
+ │    ●  Analisis struktur dasar proxy server di dalam gateway                             │
+ │    ●  Jelaskan metode forwarding request dari client ke service backend                 │
+ │    ◐  Analisis konfigurasi routing di routes-config*.json                               │
+ │    ○  Bahasa Indonesia: Jelaskan bagaimana mekanisme proxy berfungsi dalam gateway ini  │
+ ╰─────────────────────────────────────────────────────────────────────────────────────────╯
+✦ Mari saya lanjutkan dengan menganalisis konfigurasi routing yang ada dalam file routes-config*.json berdasarkan apa yang telah saya pelajari:
+
+   1. Struktur Konfigurasi Routing:
+      - File konfigurasi adalah file JSON yang menyimpan array objek route
+      - Setiap route memiliki properti: id, path, target, description, enabled, dan rewriteContent
+
+   2. Perbedaan Konfigurasi Berdasarkan Lingkungan:
+      - Ada versi berbeda untuk development (routes-config.development.json) dan production (routes-config.production.json)
+      - Di development, target biasanya mengarah ke localhost:port, sedangkan di production mengarah ke IP server aktual
+
+   3. Contoh Konfigurasi:
+      - Sistem upah: /upah → http://localhost:5175 (development) atau http://10.0.0.110:5175 (production)
+      - Sistem absensi: /absen → http://localhost:5176
+      - Sistem monitoring beras: /monitoring-beras → http://localhost:5177
+      - Google Drive Gateway: /file → http://localhost:5178
+
+   4. Fitur Dinamis:
+      - Konfigurasi dapat diubah tanpa restart server karena file dikawasi perubahan dengan fs.watchFile
+      - Proxy cache dibersihkan ketika konfigurasi berubah untuk memastikan penggunaan konfigurasi terbaru
+
+   5. Parameter Konfigurasi:
+      - rewriteContent: Jika true, maka konten HTML/JS/CSS akan dimodifikasi untuk menyesuaikan path (misalnya /app.js menjadi /absen/app.js)
+      - enabled: Menentukan apakah route aktif atau tidak
+
+   6. Fitur API Management:
+      - Tersedia endpoint REST untuk manajemen konfigurasi route seperti /api/routes, POST /api/routes, dll.
+      - Termasuk fungsionalitas toggle enable/disable dan pengecekan kesehatan layanan
+
+  Sekarang mari saya lengkapi penjelasan dalam bahasa Indonesia tentang mekanisme proxy dalam gateway ini:

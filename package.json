@@ -1,0 +1,25 @@
+{
+  "name": "proxy-gateway",
+  "version": "1.0.0",
+  "description": "Unified Dashboard and Proxy Gateway for PT Rebinmas Jaya",
+  "main": "server.js",
+  "scripts": {
+    "start": "cross-env NODE_ENV=production bun server.js",
+    "dev": "cross-env NODE_ENV=development bun --watch server.js",
+    "prod": "cross-env NODE_ENV=production bun server.js",
+    "build:dashboard": "cd Dashboard_Utama && npx next build"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "morgan": "^1.10.0",
+    "mssql": "^12.2.0",
+    "next": "^14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
