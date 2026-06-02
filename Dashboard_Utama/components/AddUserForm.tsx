@@ -1,6 +1,6 @@
 'use client'
 
-import { createUser } from '@/app/admin/actions'
+import { createUser } from '@/app/(login)/admin/actions'
 import { fetchGangs, type GangItem } from '@/app/actions/gang-actions'
 import { useRef, useState, useEffect } from 'react'
 import { X, UserPlus, Loader2 } from 'lucide-react'

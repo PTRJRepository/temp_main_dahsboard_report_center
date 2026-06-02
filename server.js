@@ -9,6 +9,10 @@ const path = require('path');
 const ROOT_DIR = __dirname;
 const DASHBOARD_DIR = path.join(ROOT_DIR, 'Dashboard_Utama');
 
+// Performance optimization patterns
+const STATIC_EXTENSIONS_RE = /\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|webp|avif|map)$/;
+const VERSION_HASH_RE = /-[a-f0-9]{6,}\.[a-z]+$/;
+
 // Load environment configuration based on NODE_ENV
 // Development: localhost
 // Production: 223.25.98.220 (atau fallback 10.0.0.110)
@@ -322,7 +326,6 @@ function getProxyMiddleware(route) {
                     console.log(`🚫 Auth Error (${proxyRes.statusCode}) for HTML request. Redirecting to /login.`);
                     res.writeHead(302, { 'Location': '/login' });
                     res.end();
-                    // Consume/discard the response data to avoid hanging
                     proxyRes.resume();
                     return;
                 }
@@ -337,18 +340,55 @@ function getProxyMiddleware(route) {
                 if (proxyRes.headers['location']) {
                     const location = proxyRes.headers['location'];
                     if (location.startsWith(route.target)) {
-                        // Rewrite http://localhost:8002/foo -> /upah/foo
                         const relativePath = location.replace(route.target, '');
-                        // Check if it's a global path like /login, normally we want to keep it relative to route
-                        // But if user wants relative, we prepend route.path
                         proxyRes.headers['location'] = `${route.path}${relativePath}`;
                     }
                 }
 
-                // Skip rewriting for compressed content (gzip, deflate, br)
                 const isCompressed = ['gzip', 'deflate', 'br'].includes(contentEncoding);
 
-                // Only rewrite HTML, JS, and CSS - skip root path and compressed content
+                // ================================================
+                // F-003: Passthrough routes — stream compressed bytes directly (no buffering)
+                // ================================================
+                if (route.rewriteContent === false) {
+                    res.statusCode = proxyRes.statusCode;
+                    Object.keys(proxyRes.headers).forEach(key => res.setHeader(key, proxyRes.headers[key]));
+                    return proxyRes.pipe(res);
+                }
+
+                // ================================================
+                // F-001: Static Extension Fast-Path — stream directly, zero buffering
+                // ================================================
+                const reqPath = new URL(req.url, 'http://localhost').pathname;
+                const STATIC_EXT_RE = /\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|webp|avif|map)$/;
+                if (STATIC_EXT_RE.test(reqPath)) {
+                    console.log(`⚡ Static fast-path: ${reqPath}`);
+                    res.statusCode = proxyRes.statusCode;
+                    Object.keys(proxyRes.headers).forEach(key => {
+                        if (key === 'content-encoding') return; // keep upstream compression
+                        res.setHeader(key, proxyRes.headers[key]);
+                    });
+
+                    // F-002: Cache-Control headers for static assets
+                    const hasVersionHash = /-[a-f0-9]{6,}\.[a-z]+$/.test(reqPath);
+                    if (hasVersionHash) {
+                        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+                    } else {
+                        res.setHeader('Cache-Control', 'public, max-age=3600');
+                    }
+
+                    // Stream direct — no buffering, no rewrite overhead
+                    return proxyRes.pipe(res);
+                }
+
+                // ================================================
+                // F-002: Cache-Control for HTML (no-cache, no-store)
+                // ================================================
+                if (isHtml) {
+                    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+                }
+
+                // Only rewrite HTML, JS, and CSS — skip root path and compressed content
                 const shouldRewrite = (isHtml || isJs || isCss) && route.path !== '/' && !isCompressed;
 
                 if (shouldRewrite) {
@@ -640,7 +680,8 @@ nextApp.prepare().then(() => {
             reqPath.startsWith('/_static') ||
             reqPath.startsWith('/api/routes') ||
             reqPath.startsWith('/api/auth') ||
-            reqPath.startsWith('/api/services')) {
+            reqPath.startsWith('/api/services') ||
+            reqPath.startsWith('/api/reports')) {
             return next();
         }
 
@@ -708,10 +749,13 @@ nextApp.prepare().then(() => {
             reqPath.startsWith('/report-center') ||
             reqPath === '/login' ||
             reqPath.startsWith('/dashboard') ||
+            reqPath.startsWith('/dashboard-user') ||
             reqPath.startsWith('/admin') ||
+            reqPath.startsWith('/modules') ||
             reqPath.startsWith('/api/auth') ||
             reqPath.startsWith('/api/services') ||
-            reqPath.startsWith('/api/routes');
+            reqPath.startsWith('/api/routes') ||
+            reqPath.startsWith('/api/reports');
 
         if (isDashboardRoute) {
             return nextHandle(req, res);

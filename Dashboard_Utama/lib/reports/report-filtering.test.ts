@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   applyReportFilters,
+  filtersFromSearchParams,
   hasActiveReportFilters,
   inferReportSchema,
   parseNaturalFilterLocally,
@@ -59,6 +60,15 @@ const aggregateFuel = parseNaturalFilterLocally('Group by kendaraan dan sum qty 
 assert.equal(aggregateFuel.filters.groupBy, 'Kendaraan')
 assert.equal(aggregateFuel.filters.aggregateField, 'QtyFuel')
 assert.equal(aggregateFuel.filters.aggregateFn, 'sum')
+
+const movementCategoryGroup = parseNaturalFilterLocally('group by movement category dan jumlah stock issue', may2026, [
+  'MovementCategory',
+  'StockIssueMovementCount',
+  'JumlahStockIssue',
+  'AmountItem',
+])
+assert.equal(movementCategoryGroup.filters.groupBy, 'MovementCategory')
+assert.equal(movementCategoryGroup.filters.aggregateField, 'StockIssueMovementCount')
 
 const statusOt = parseNaturalFilterLocally('Cari absensi yang status OT = yes', may2026, [
   'NamaKaryawan',
@@ -172,6 +182,55 @@ const filtered = applyReportFilters(
 assert.equal(filtered.rows.length, 1)
 assert.equal(filtered.rows[0].NamaFuel, 'DIESEL')
 assert.equal((filtered.summary as Record<string, unknown>).FilteredRows, 1)
+
+const movementCategoryParams = filtersFromSearchParams(new URLSearchParams('movementCategory=Fast+Moving'))
+assert.equal(movementCategoryParams.movementCategory, 'Fast Moving')
+
+const movementFiltered = applyReportFilters(
+  {
+    rows: [
+      { KodeBarang: 'A', MovementCategory: 'Fast Moving', StockIssueMovementCount: 8, AmountItem: 1000 },
+      { KodeBarang: 'B', MovementCategory: 'Slow Moving', StockIssueMovementCount: 1, AmountItem: 500 },
+      { KodeBarang: 'C', MovementCategory: 'Fast Moving', StockIssueMovementCount: 6, AmountItem: 800 },
+    ],
+    columns: ['KodeBarang', 'MovementCategory', 'StockIssueMovementCount', 'AmountItem'],
+    summary: {},
+    chart: [],
+    metadata: {},
+  },
+  {
+    movementCategory: 'Fast Moving',
+  },
+)
+assert.equal(movementFiltered.rows.length, 2)
+assert.equal((movementFiltered.summary as Record<string, unknown>).FilteredRows, 2)
+assert.equal((movementFiltered.summary as Record<string, unknown>).TotalStockIssueMovementCount, 14)
+
+const limitedDisplay = applyReportFilters(
+  {
+    rows: [
+      { Gudang: 'ARA', NamaFuel: 'SOLAR', QtyFuel: 40, Amount: 500 },
+      { Gudang: 'ARA', NamaFuel: 'DIESEL', QtyFuel: 70, Amount: 900 },
+      { Gudang: 'ARA', NamaFuel: 'BIOSOLAR', QtyFuel: 80, Amount: 1200 },
+    ],
+    columns: ['Gudang', 'NamaFuel', 'QtyFuel', 'Amount'],
+    summary: {},
+    chart: [],
+    metadata: {},
+  },
+  {
+    location: 'ARA',
+    sortColumn: 'Amount',
+    sortDirection: 'desc',
+    resultLimit: 1,
+  },
+)
+assert.equal(limitedDisplay.rows.length, 1)
+assert.equal(limitedDisplay.rows[0].NamaFuel, 'BIOSOLAR')
+assert.equal((limitedDisplay.summary as Record<string, unknown>).FilteredRows, 3)
+assert.equal((limitedDisplay.summary as Record<string, unknown>).TotalAmount, 2600)
+assert.equal((limitedDisplay.metadata as Record<string, unknown>).filteredRows, 3)
+assert.equal((limitedDisplay.metadata as Record<string, unknown>).displayRows, 1)
 
 const schema = inferReportSchema(filtered)
 assert.equal(schema.columns.find((column) => column.field === 'Tanggal')?.type, 'date')

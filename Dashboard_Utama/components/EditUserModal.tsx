@@ -1,6 +1,6 @@
 'use client'
 
-import { updateUser, fetchUserServices, resetUserPassword } from '@/app/admin/actions'
+import { updateUser, fetchUserServices, resetUserPassword } from '@/app/(login)/admin/actions'
 import { fetchGangs, type GangItem } from '@/app/actions/gang-actions'
 import { useEffect, useState } from 'react'
 import { X, Loader2, Save, Key } from 'lucide-react'

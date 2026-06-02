@@ -1,7 +1,7 @@
 'use client'
 
 import { Trash2, Check, X } from 'lucide-react'
-import { deleteService } from '@/app/admin/actions'
+import { deleteService } from '@/app/(login)/admin/actions'
 import { useRouter } from 'next/navigation'
 
 interface Service {

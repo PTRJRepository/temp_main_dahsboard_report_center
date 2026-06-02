@@ -11,6 +11,8 @@ const config: sql.config = {
         encrypt: false,
         trustServerCertificate: true,
     },
+    connectionTimeout: parseInt(process.env.MSSQL_CONNECTION_TIMEOUT_MS || '3000'),
+    requestTimeout: parseInt(process.env.MSSQL_REQUEST_TIMEOUT_MS || '5000'),
     pool: {
         max: 10,
         min: 0,

@@ -2,11 +2,14 @@ import assert from 'node:assert/strict'
 import {
   buildReportTableGroups,
   buildReportTableRows,
+  buildReportSummaryTotals,
   compactReportPayloadForAi,
+  formatInventoryQuantityBreakdown,
   normalizeReportTableWindow,
   selectSubtotalColumns,
   type DbRow,
 } from './report-detail-performance'
+import { buildMovementCategoryBalancedRows } from './movement-category'
 
 const rows: DbRow[] = [
   { id: 'A-1', group: 'A', item: 'Bearing', Qty: 2, Amount: 100, unit_cost: 50 },
@@ -79,5 +82,64 @@ assert.equal(windowed.windowed, true)
 const empty = normalizeReportTableWindow(undefined, 0, 100)
 assert.equal(empty.totalRows, 0)
 assert.equal(empty.pageCount, 1)
+
+const movementRows: DbRow[] = [
+  { id: 'dead-1', MovementCategory: 'Dead Stock', StockIssueMovementCount: 0, AmountItem: 500 },
+  { id: 'dead-2', MovementCategory: 'Dead Stock', StockIssueMovementCount: 0, AmountItem: 400 },
+  { id: 'fast-1', MovementCategory: 'Fast Moving', StockIssueMovementCount: 8, AmountItem: 300 },
+  { id: 'slow-1', MovementCategory: 'Slow Moving', StockIssueMovementCount: 1, AmountItem: 200 },
+  { id: 'stale-1', MovementCategory: 'Stale', StockIssueMovementCount: 0, AmountItem: 100 },
+]
+const balancedMovementRows = buildMovementCategoryBalancedRows(
+  movementRows,
+  4,
+  (row) => row.MovementCategory,
+  (left, right) => Number(right.AmountItem) - Number(left.AmountItem),
+)
+assert.deepEqual(balancedMovementRows.map((row) => row.MovementCategory), [
+  'Fast Moving',
+  'Slow Moving',
+  'Dead Stock',
+  'Stale',
+])
+
+const movementGroups = buildReportTableGroups(
+  balancedMovementRows,
+  'MovementCategory',
+  ['MovementCategory', 'StockIssueMovementCount', 'AmountItem'],
+  ['StockIssueMovementCount', 'AmountItem'],
+)
+assert.deepEqual(movementGroups.map((group) => group.label), ['Fast Moving', 'Slow Moving', 'Dead Stock', 'Stale'])
+assert.equal(movementGroups.length, 4)
+
+const summaryTotals = buildReportSummaryTotals(
+  {
+    TotalAssetAmount: 1000,
+    total_quantity: 60,
+    TotalStockIssueMovementCount: 12,
+  },
+  [
+    { AmountItem: 10, QtyOnHandHold: 2, StockIssueMovementCount: 1 },
+    { AmountItem: 20, QtyOnHandHold: 3, StockIssueMovementCount: 2 },
+  ],
+  ['AmountItem', 'QtyOnHandHold', 'StockIssueMovementCount'],
+  { fallbackToRows: false },
+)
+assert.deepEqual(summaryTotals, {
+  AmountItem: 1000,
+  QtyOnHandHold: 60,
+  StockIssueMovementCount: 12,
+})
+assert.deepEqual(
+  buildReportSummaryTotals(
+    { TotalAmount: 2600, TotalQty: 190 },
+    [{ Amount: 1200, QtyFuel: 80 }],
+    ['Amount', 'QtyFuel'],
+    { fallbackToRows: false },
+  ),
+  { Amount: 2600, QtyFuel: 190 },
+)
+assert.equal(formatInventoryQuantityBreakdown({ QtyOnHandHold: 6, QtyOnHand: 4, QtyOnHold: 2 }), '6(4+2)')
+assert.equal(formatInventoryQuantityBreakdown({ total_quantity: 7, quantity_on_hand: 7, quantity_on_hold: 0 }), '7(7+0)')
 
 console.log('report-detail-performance tests passed')

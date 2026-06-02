@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'fs'
+import { resolve } from 'path'
 import { db } from './db'
 
 // Service interface
@@ -19,6 +21,61 @@ export interface RolePermission {
     id: number
     role: string
     serviceId: string
+}
+
+interface GatewayRouteConfig {
+    id: string
+    path: string
+    target: string
+    description?: string
+    name?: string
+    enabled?: boolean
+    hidden?: boolean
+    public?: boolean
+    image?: string
+}
+
+function readGatewayRouteConfig(): GatewayRouteConfig[] {
+    const candidates = [
+        resolve(process.cwd(), 'routes-config.json'),
+        resolve(process.cwd(), '..', 'routes-config.json'),
+    ]
+
+    for (const filePath of candidates) {
+        try {
+            if (!existsSync(filePath)) continue
+            const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as GatewayRouteConfig[]
+            return Array.isArray(parsed) ? parsed : []
+        } catch (error) {
+            console.error('Failed to read gateway route config:', error)
+        }
+    }
+
+    return []
+}
+
+export function getGatewayFallbackServices(role: string): Service[] {
+    return getFallbackServices(role)
+}
+
+function getFallbackServices(role: string): Service[] {
+    const normalizedRole = role.trim().toUpperCase()
+    if (!['ADMIN', 'SUPERADMIN'].includes(normalizedRole)) return []
+
+    return readGatewayRouteConfig()
+        .filter(route => route.enabled !== false)
+        .filter(route => !route.hidden)
+        .filter(route => !route.id.startsWith('backend-'))
+        .map(route => ({
+            serviceId: route.id,
+            name: route.name || route.description || route.id,
+            description: route.description,
+            serviceUrl: route.target,
+            targetUrl: route.target,
+            path: route.path,
+            enabled: route.enabled !== false,
+            imagePath: route.image?.startsWith('/') ? route.image : null,
+        }))
 }
 
 /**
@@ -58,13 +115,18 @@ export class ServiceRepository {
      * Get services for a specific role
      */
     async findByRole(role: string): Promise<Service[]> {
-        return db.query<Service>(
-            `SELECT s.* FROM service_ptrj s
-             INNER JOIN role_service_permission rsp ON s.serviceId = rsp.serviceId
-             WHERE rsp.role = @role AND s.enabled = 1
-             ORDER BY s.name`,
-            { role }
-        )
+        try {
+            return await db.query<Service>(
+                `SELECT s.* FROM service_ptrj s
+                 INNER JOIN role_service_permission rsp ON s.serviceId = rsp.serviceId
+                 WHERE rsp.role = @role AND s.enabled = 1
+                 ORDER BY s.name`,
+                { role }
+            )
+        } catch (error) {
+            console.error('Service role lookup failed, using gateway config fallback:', error)
+            return getFallbackServices(role)
+        }
     }
 
     /**

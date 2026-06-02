@@ -53,6 +53,7 @@ export type ReportFilterInput = {
   supplier?: string
   status?: string
   vehicle?: string
+  movementCategory?: string
   blankField?: string
   minQty?: number
   minAmount?: number
@@ -401,6 +402,7 @@ export function normalizeReportFilters(input: Partial<Record<keyof ReportFilterI
     supplier: cleanText(input.supplier),
     status: cleanText(input.status),
     vehicle: cleanText(input.vehicle),
+    movementCategory: cleanText(input.movementCategory, 80),
     blankField: cleanText(input.blankField),
     minQty: cleanNumber(input.minQty),
     minAmount: cleanNumber(input.minAmount),
@@ -437,6 +439,7 @@ export function filtersFromSearchParams(params: { get(name: string): string | nu
     supplier: params.get('supplier') ?? undefined,
     status: params.get('status') ?? undefined,
     vehicle: params.get('vehicle') ?? undefined,
+    movementCategory: params.get('movementCategory') ?? undefined,
     blankField: params.get('blankField') ?? undefined,
     minQty: params.get('minQty') ?? undefined,
     minAmount: params.get('minAmount') ?? undefined,
@@ -742,6 +745,7 @@ function rowPassesFilters(row: DbRow, filters: ReportFilterInput) {
   if (!rowContains(row, fieldAliases.supplier, filters.supplier)) return false
   if (!rowContains(row, fieldAliases.status, filters.status)) return false
   if (!rowContains(row, fieldAliases.vehicle, filters.vehicle)) return false
+  if (filters.movementCategory && normalizeText(row.MovementCategory) !== normalizeText(filters.movementCategory)) return false
   if (!passesDateFilters(row, filters)) return false
   if (filters.blankField && !fieldIsBlank(row, filters.blankField)) return false
   if (!passesColumnFilters(row, filters.columnFilters)) return false
@@ -762,13 +766,14 @@ function sortRows(rows: DbRow[], filters: ReportFilterInput) {
       : metricValue(a, metric) - metricValue(b, metric)
     return direction === 'asc' ? delta : -delta
   })
-  return filters.top ? sorted.slice(0, filters.top) : sorted
+  return sorted
 }
 
 function windowRows(rows: DbRow[], filters: ReportFilterInput) {
+  const topLimited = filters.top ? rows.slice(0, filters.top) : rows
   const startIndex = filters.rowStart ? filters.rowStart - 1 : 0
   const endIndex = filters.rowEnd ? filters.rowEnd : undefined
-  const ranged = rows.slice(startIndex, endIndex)
+  const ranged = topLimited.slice(startIndex, endIndex)
   return filters.resultLimit ? ranged.slice(0, filters.resultLimit) : ranged
 }
 
@@ -852,6 +857,8 @@ function createFilteredChart(rows: DbRow[], filters: ReportFilterInput, fallback
 function createFilteredSummary(rows: DbRow[], totalBefore: number, filters: ReportFilterInput) {
   const totalAmount = rows.reduce((sum, row) => sum + metricValue(row, 'amount'), 0)
   const totalQty = rows.reduce((sum, row) => sum + metricValue(row, 'qty'), 0)
+  const hasMovementMetrics = rows.some((row) => row.StockIssueMovementCount !== undefined || row.StockIssueEventCount !== undefined)
+  const totalStockIssueMovementCount = rows.reduce((sum, row) => sum + toNumber(row.StockIssueMovementCount ?? row.StockIssueEventCount), 0)
   const amountValues = rows.map((row) => metricValue(row, 'amount'))
   const qtyValues = rows.map((row) => metricValue(row, 'qty'))
   const aggregate = aggregateValues(rows.map((row) => aggregateFieldValue(row, filters)), filters.aggregateFn)
@@ -867,6 +874,9 @@ function createFilteredSummary(rows: DbRow[], totalBefore: number, filters: Repo
 
   if (filters.blankField) {
     summary.BlankFieldRows = rows.filter((row) => fieldIsBlank(row, filters.blankField ?? '')).length
+  }
+  if (hasMovementMetrics) {
+    summary.TotalStockIssueMovementCount = roundMetric(totalStockIssueMovementCount)
   }
 
   return summary
@@ -893,24 +903,28 @@ export function applyReportFilters<T extends FilterablePayload>(payload: T, inpu
   }
 
   const matchedRows = sortRows(payload.rows.filter((row) => rowPassesFilters(row, filters)), filters)
-  const filteredRows = windowRows(matchedRows, filters)
+  const displayRows = windowRows(matchedRows, filters)
+  const windowed = displayRows.length < matchedRows.length
 
   return {
     ...payload,
-    rows: filteredRows,
-    columns: filteredRows[0] ? Object.keys(filteredRows[0]) : payload.columns,
-    summary: createFilteredSummary(filteredRows, payload.rows.length, filters),
-    chart: createFilteredChart(filteredRows, filters, payload.chart),
+    rows: displayRows,
+    columns: displayRows[0] ? Object.keys(displayRows[0]) : payload.columns,
+    summary: createFilteredSummary(matchedRows, payload.rows.length, filters),
+    chart: createFilteredChart(matchedRows, filters, payload.chart),
     metadata: {
       ...payload.metadata,
       reportSchema: schema,
       appliedFilters: activeFilters,
       rejectedColumnFilters: sanitized.rejectedColumnFilters,
       naturalQuery: filters.naturalQuery,
-      filteredRows: filteredRows.length,
+      filteredRows: matchedRows.length,
+      displayRows: displayRows.length,
+      returnedRows: displayRows.length,
+      rangeLimitedRows: windowed ? displayRows.length : undefined,
       matchedRowsBeforeRange: matchedRows.length,
       totalRowsBeforeFilter: payload.rows.length,
-      chartSource: 'filtered report payload',
+      chartSource: 'filtered report payload full matched rows',
       querySafety: readOnlyQuerySafety,
       filterMode: 'allowlisted read-only payload filter',
     },

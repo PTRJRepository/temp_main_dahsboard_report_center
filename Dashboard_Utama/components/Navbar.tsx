@@ -19,7 +19,6 @@ export default function Navbar() {
         { name: t.nav.operations, href: '#operations' },
         { name: t.nav.sustainability, href: '#sustainability' },
         { name: t.nav.news, href: '#news' },
-        { name: t.nav.gallery, href: '#gallery' },
         { name: t.nav.contact, href: '#contact' },
     ]
 
@@ -47,6 +46,7 @@ export default function Navbar() {
                                 src="/assets/logo.webp"
                                 alt="PT Rebinmas Jaya"
                                 fill
+                                sizes="48px"
                                 className="object-contain p-1"
                             />
                         </div>

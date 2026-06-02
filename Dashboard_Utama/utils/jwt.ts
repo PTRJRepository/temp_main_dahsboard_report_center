@@ -42,6 +42,10 @@ export interface JwtPayload {
     email: string
     name: string
     role: string
+    username?: string
+    divisi?: string | null
+    division?: string | null
+    divisions?: string[]
     iat?: number
     exp?: number
 }

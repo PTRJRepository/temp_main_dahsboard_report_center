@@ -119,7 +119,7 @@ export const inventoryReports: InventoryReport[] = [
     qualityNotes: [
       "QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder; QuantityClosing = 0 harus ditampilkan sebagai quality/risk flag.",
       "Usage stock issue: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.",
-      "MovementCategory memakai seluruh movement stock issue valid dan LastMovementDate: Fast Moving, Moving, Slow Moving, No Movement, atau Dead Stock.",
+      "MovementCategory memakai jumlah movement stock issue valid: Fast Moving, Moving, Slow Moving, Dead Stock, atau Stale.",
       "ProdCatCode kosong/null/0 harus masuk data-quality note.",
       "LastIssueDate < 2000-01-01 dianggap placeholder.",
     ],
@@ -200,7 +200,7 @@ export const inventoryReports: InventoryReport[] = [
     executiveQuestion: "Berapa jumlah/qty/amount movement dari tiap stock, dan item mana yang paling aktif berdasarkan stock issue?",
     status: "live",
     priority: "critical",
-    tags: ["All Stock", "Movement Analysis", "Real Time", "Valuation", "Stock Issue", "Fast Moving", "Slow Moving", "Dead Stock"],
+    tags: ["All Stock", "Movement Analysis", "Real Time", "Valuation", "Stock Issue", "Fast Moving", "Slow Moving", "Stale", "Dead Stock"],
     sourceTables: ["IN_ITEM", "IN_MTHENDITEM", "IN_PRODTYPE", "IN_STOCKISSUE", "IN_STOCKISSUELN", "WS_JOBSTOCK"],
     lastUpdated: "Real-time current stock mengikuti IN_ITEM; histori valuation hanya saat user memilih periode historis memakai IN_MTHENDITEM AccYear/AccMonth",
     owner: "Inventory Control",
@@ -246,8 +246,9 @@ export const inventoryReports: InventoryReport[] = [
     ],
     qualityNotes: [
       "Valuation current memakai (QtyOnHand + QtyOnHold) x AverageCost; periode historis memakai IN_MTHENDITEM.Amount.",
-      "MovementCategory dihitung dari StockIssue Movement Count: Fast Moving event >= 6, Moving 2-5, Slow Moving 1, Dead Stock bila stok ada tetapi StockIssue Movement 0, dan No Movement bila stok dan movement 0.",
+      "MovementCategory dihitung dari StockIssue Movement Count: Fast Moving event >= 6, Moving 2-5, Slow Moving 1, Dead Stock bila stok ada tetapi StockIssue Movement 0, dan Stale bila stok dan movement 0.",
       "StockIssueEventCount, StockIssueQtyAllPeriod, dan StockIssueAmountAllPeriod: ItemType 1 Stock dari IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop dari WS_JOBSTOCK.TransType = 1.",
+      "MovementSource wajib ternormalisasi: ItemType 4 = WS_JOBSTOCK, ItemType 1 = STOCK_ISSUE_REGULAR. Mismatch tampil sebagai warning di Quality.",
       "Report ini hanya memuat metrik movement; update-risk tetap di report Stock Aging & Item Movement Health.",
       "Scope item aktif ItemType 1 Stock dan 4 Workshop; ItemType 6 Asset dikeluarkan dari inventory gudang.",
     ],
@@ -309,7 +310,7 @@ export const inventoryReports: InventoryReport[] = [
     qualityNotes: [
       "Scope report hanya ItemType 1 (Stock) dan 4 (Workshop); ItemType 6 (Asset) dikeluarkan karena bukan stok gudang inventory.",
       "Usage stock issue: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.",
-      "MovementCategory memakai seluruh movement stock issue valid dan LastMovementDate: Fast Moving, Moving, Slow Moving, No Movement, atau Dead Stock.",
+      "MovementCategory memakai jumlah movement stock issue valid: Fast Moving, Moving, Slow Moving, Dead Stock, atau Stale.",
       "5.534 item aktif saat validasi tidak punya LastIssueDate valid.",
       "5.269 item aktif saat validasi update lebih dari 12 bulan.",
       "Tanggal 1900 tidak boleh dianggap tanggal transaksi.",
@@ -810,7 +811,7 @@ export const inventoryReports: InventoryReport[] = [
     qualityNotes: [
       "UpdateDate adalah metadata master item, bukan tanggal movement transaksi.",
       "Usage stock issue: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.",
-      "MovementCategory memakai seluruh movement stock issue valid dan LastMovementDate: Fast Moving, Moving, Slow Moving, No Movement, atau Dead Stock.",
+      "MovementCategory memakai jumlah movement stock issue valid: Fast Moving, Moving, Slow Moving, Dead Stock, atau Stale.",
       "Scope report hanya ItemType 1 (Stock) dan 4 (Workshop); ItemType 6 (Asset) tidak dihitung sebagai stok gudang.",
       "Filter report mendukung lebih dari 1 tahun, kurang dari 1 tahun, atau semua item aktif.",
       "Saat validasi estate, 5.269 dari 7.483 item aktif tidak update lebih dari 1 tahun.",
@@ -975,7 +976,7 @@ export const inventoryReports: InventoryReport[] = [
     qualityNotes: [
       "Definisi pupuk menggunakan IN_ITEM.ProdCatCode = CA2111.",
       "Usage stock issue: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.",
-      "MovementCategory memakai seluruh movement stock issue valid dan LastMovementDate: Fast Moving, Moving, Slow Moving, No Movement, atau Dead Stock.",
+      "MovementCategory memakai jumlah movement stock issue valid: Fast Moving, Moving, Slow Moving, Dead Stock, atau Stale.",
       "LastIssue tidak valid dihitung dari movement aktual; ItemType 4 memakai WS_JOBSTOCK.",
       "Saat validasi estate, 106 item pupuk aktif, 21 item ada stok, dan nilai stok pupuk sekitar Rp13,43B.",
     ],

@@ -171,7 +171,7 @@ function Tile({
   className?: string
 }) {
   return (
-    <div className={`rounded-[18px] border border-[#DDE6F0] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.07)] ${className}`}>
+    <div className={`rounded-xl border border-[#DDE6F0] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.07)] ${className}`}>
       {children}
     </div>
   )
@@ -181,10 +181,10 @@ function chartPalette(chart: AiChartDefinition) {
   return chart.config?.colorPalette?.length ? chart.config.colorPalette : palette
 }
 
-function chartHeightClass(chart: AiChartDefinition) {
-  if (chart.config?.height === 'compact') return 'h-40'
-  if (chart.config?.height === 'tall') return 'h-72'
-  return 'h-52'
+function chartHeightClass(chart: AiChartDefinition, rowCount = 0) {
+  if (chart.config?.height === 'compact' || rowCount <= 4) return 'h-36'
+  if (chart.config?.height === 'tall') return 'h-64'
+  return 'h-48'
 }
 
 function thresholdMatches(row: DbRow, chart: AiChartDefinition) {
@@ -279,7 +279,7 @@ function BarChart({
   if (vertical) {
     return (
       <div>
-        <div className={`flex items-end gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-4 ${chartHeightClass(chart)}`}>
+        <div className={`flex items-end gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-4 ${chartHeightClass(chart, rows.length)}`}>
           {rows.map((row, index) => {
             const value = metricValue(row, chart)
             const height = Math.max(7, (Math.abs(value) / max) * 100)
@@ -340,7 +340,7 @@ function LineChart({ rows, chart }: { rows: DbRow[]; chart: AiChartDefinition })
 
   return (
     <div>
-      <svg viewBox="0 0 100 110" className={`${chartHeightClass(chart)} w-full overflow-visible rounded-2xl border border-slate-100 bg-slate-50 p-2`}>
+      <svg viewBox="0 0 100 110" className={`${chartHeightClass(chart, rows.length)} w-full overflow-visible rounded-xl border border-slate-100 bg-slate-50 p-2`}>
         {chart.config?.showGrid !== false && [25, 50, 75].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="#CBD5E1" strokeWidth="0.4" />)}
         <polyline fill="none" stroke={colors[0] ?? '#167A3A'} strokeWidth="2.6" points={points} vectorEffect="non-scaling-stroke" />
         {values.map((value, index) => {
@@ -368,7 +368,7 @@ function ScatterChart({ rows, chart }: { rows: DbRow[]; chart: AiChartDefinition
   const yMax = Math.max(1, ...yValues)
 
   return (
-    <svg viewBox="0 0 100 100" className={`${chartHeightClass(chart)} w-full rounded-2xl border border-slate-100 bg-slate-50`}>
+    <svg viewBox="0 0 100 100" className={`${chartHeightClass(chart, rows.length)} w-full rounded-xl border border-slate-100 bg-slate-50`}>
       {chart.config?.showGrid !== false && [25, 50, 75].map((line) => (
         <g key={line}>
           <line x1={line} x2={line} y1="0" y2="100" stroke="#CBD5E1" strokeWidth="0.35" />
@@ -460,45 +460,53 @@ function ChartTile({
   const filename = `ai-chart-${chart.id}`
   const segmentHandler = (row: DbRow) => onSegment(chart, row)
   const exportEnabled = chart.config?.interaction?.exportEnabled !== false
+  const dimension = chart.xField ?? chart.categoryField ?? '-'
+  const metric = chart.yField ?? chart.valueField ?? '-'
+  const insight = chart.dataNote ?? chart.description
 
   return (
     <Tile className={highlighted ? 'ring-4 ring-emerald-500/20' : ''}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">{chart.type.replace('_', ' ')}</p>
-          <h3 className="mt-1 text-lg font-extrabold text-slate-950">{chart.title}</h3>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{chart.description}</p>
+          <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">{chart.type.replace('_', ' ')}</span>
+          <h3 className="mt-2 text-base font-extrabold leading-6 text-slate-950">{chart.title}</h3>
+          <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{insight}</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+            <span className="rounded-md bg-slate-100 px-2 py-1">Rows: {rows.length.toLocaleString('id-ID')}</span>
+            <span className="rounded-md bg-slate-100 px-2 py-1">Dimension: {dimension}</span>
+            <span className="rounded-md bg-slate-100 px-2 py-1">Metric: {metric}</span>
+          </div>
         </div>
         <div className="flex gap-2">
           {exportEnabled && (
             <>
-              <button type="button" onClick={() => downloadBlob(`${filename}.csv`, rowsToCsv(rows), 'text/csv;charset=utf-8')} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" aria-label="Export CSV">
+              <button type="button" onClick={() => downloadBlob(`${filename}.csv`, rowsToCsv(rows), 'text/csv;charset=utf-8')} className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" aria-label="Export CSV" title="Export CSV">
                 <Download size={15} />
               </button>
-              <button type="button" onClick={() => void exportExcel(filename, rows)} className="grid h-9 w-9 place-items-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" aria-label="Export Excel">
+              <button type="button" onClick={() => void exportExcel(filename, rows)} className="grid h-9 w-9 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" aria-label="Export Excel" title="Export Excel">
                 <FileSpreadsheet size={15} />
               </button>
-              <button type="button" onClick={() => void exportPdf(chart.title, filename, rows)} className="grid h-9 w-9 place-items-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" aria-label="Export PDF">
+              <button type="button" onClick={() => void exportPdf(chart.title, filename, rows)} className="grid h-9 w-9 place-items-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" aria-label="Export PDF" title="Export PDF">
                 <FileText size={15} />
               </button>
             </>
           )}
-          <button type="button" onClick={onToggle} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" aria-label={collapsed ? 'Expand chart' : 'Collapse chart'}>
+          <button type="button" onClick={onToggle} className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" aria-label={collapsed ? 'Expand chart' : 'Collapse chart'}>
             {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
           </button>
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-        <p className="text-xs font-bold text-slate-700">Reason</p>
-        <p className="mt-1 text-xs leading-5 text-slate-500">{chart.reason}</p>
+      <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <summary className="cursor-pointer text-xs font-black text-slate-700">Reason & action</summary>
+        <p className="mt-2 text-xs leading-5 text-slate-500">{chart.reason}</p>
         {chart.dataNote && <p className="mt-2 text-xs font-semibold leading-5 text-emerald-700">{chart.dataNote}</p>}
         <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
-          {chart.config?.orientation && <span className="rounded-lg bg-white px-2 py-1">Orientation: {chart.config.orientation}</span>}
-          {chart.config?.colorMode && <span className="rounded-lg bg-white px-2 py-1">Color: {chart.config.colorMode}</span>}
-          {chart.config?.threshold && <span className="rounded-lg bg-white px-2 py-1">Threshold: {chart.config.threshold.label}</span>}
+          {chart.config?.orientation && <span className="rounded-md bg-white px-2 py-1">Orientation: {chart.config.orientation}</span>}
+          {chart.config?.colorMode && <span className="rounded-md bg-white px-2 py-1">Color: {chart.config.colorMode}</span>}
+          {chart.config?.threshold && <span className="rounded-md bg-white px-2 py-1">Threshold: {chart.config.threshold.label}</span>}
         </div>
-      </div>
+      </details>
 
       {!collapsed && (
         <div className="mt-4">
@@ -641,7 +649,7 @@ function InsightTile({
     <button
       type="button"
       onClick={() => onHighlight(insight.relatedChartId)}
-      className={`rounded-[18px] border p-[18px] text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 ${severityClass(insight.severity)}`}
+      className={`rounded-xl border p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 ${severityClass(insight.severity)}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -650,13 +658,13 @@ function InsightTile({
         </div>
         <Lightbulb size={18} />
       </div>
-      <p className="mt-3 text-sm leading-6">{insight.finding}</p>
-      <div className="mt-3 rounded-2xl border border-white/50 bg-white/60 p-3 text-xs leading-5 text-slate-700">
+      <p className="mt-3 text-sm leading-6"><span className="font-black">What happened:</span> {insight.finding}</p>
+      <p className="mt-2 text-xs font-semibold leading-5"><span className="font-black">Why it matters:</span> {insight.businessImpact}</p>
+      <p className="mt-2 text-xs font-extrabold leading-5"><span className="font-black">Recommended action:</span> {insight.recommendedAction}</p>
+      <div className="mt-3 rounded-lg border border-white/50 bg-white/60 p-3 text-xs leading-5 text-slate-700">
         Evidence: {insight.evidence.source}.{insight.evidence.field}
         {insight.evidence.value !== undefined ? ` = ${formatValue(insight.evidence.value)}` : ''}
       </div>
-      <p className="mt-3 text-xs font-semibold leading-5">{insight.businessImpact}</p>
-      <p className="mt-2 text-xs font-extrabold leading-5">Action: {insight.recommendedAction}</p>
     </button>
   )
 }

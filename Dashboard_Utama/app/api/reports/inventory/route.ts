@@ -7,6 +7,15 @@ import {
   validateReadOnlySql,
   type ReportFilterInput,
 } from '@/lib/reports/report-filtering'
+import {
+  MOVEMENT_CATEGORY_ORDER,
+  buildMovementCategoryBalancedRows,
+  countMovementCategoryRows,
+  isMovementCategoryField,
+  movementAnalysisSqlCase,
+  movementCategoryRankSqlCase,
+  movementCategorySqlCase,
+} from '@/lib/reports/movement-category'
 
 export const dynamic = 'force-dynamic'
 
@@ -415,16 +424,10 @@ ${issueDocsSql}
 }
 
 function stockIssueUsageColumns(quantityExpression?: string) {
+  const movementEventCount = 'ISNULL(movement12.MovementEventCountAll, 0)'
   const movementGap = quantityExpression
     ? `CAST(${quantityExpression} - ISNULL(issueUsage.StockIssueQtyAllPeriod, 0) AS DECIMAL(18,2)) AS MovementGapQty,
-      CASE
-        WHEN latestMovement.LastMovementDate IS NULL THEN 'Dead Stock'
-        WHEN latestMovement.LastMovementDate <= DATEADD(YEAR, -2, GETDATE()) THEN 'Dead Stock'
-        WHEN ISNULL(movement12.MovementEventCountAll, 0) >= 6 THEN 'Fast Moving'
-        WHEN ISNULL(movement12.MovementEventCountAll, 0) BETWEEN 2 AND 5 THEN 'Moving'
-        WHEN ISNULL(movement12.MovementEventCountAll, 0) = 1 THEN 'Slow Moving'
-        ELSE 'No Movement'
-      END AS MovementCategory,
+      ${movementCategorySqlCase(movementEventCount, quantityExpression)} AS MovementCategory,
       CASE
         WHEN ${quantityExpression} = 0 AND ISNULL(movement12.MovementEventCountAll, 0) = 0 THEN 'Stok nol, tidak ada movement valid'
         WHEN latestMovement.LastMovementDate IS NULL THEN 'Tidak ada movement valid'
@@ -451,26 +454,15 @@ function stockIssueUsageColumns(quantityExpression?: string) {
 }
 
 function stockMovementAnalysisColumns(quantityExpression: string) {
+  const issueCount = 'ISNULL(issueUsage.StockIssueEventCount, 0)'
   return `CAST(ISNULL(issueUsage.StockIssueEventCount, 0) AS INT) AS StockIssueMovementCount,
       CAST(ISNULL(issueUsage.StockIssueQtyAllPeriod, 0) AS DECIMAL(18,2)) AS StockIssueMovementQty,
       CAST(ISNULL(issueUsage.StockIssueAmountAllPeriod, 0) AS DECIMAL(18,2)) AS StockIssueMovementAmount,
       issueUsage.LastStockIssueDate AS LastStockIssueMovementDate,
       latestMovement.LastMovementDate AS LastMovementDate,
       CAST(${quantityExpression} - ISNULL(issueUsage.StockIssueQtyAllPeriod, 0) AS DECIMAL(18,2)) AS StockIssueMovementGapQty,
-      CASE
-        WHEN ISNULL(issueUsage.StockIssueEventCount, 0) >= 6 THEN 'Fast Moving'
-        WHEN ISNULL(issueUsage.StockIssueEventCount, 0) BETWEEN 2 AND 5 THEN 'Moving'
-        WHEN ISNULL(issueUsage.StockIssueEventCount, 0) = 1 THEN 'Slow Moving'
-        WHEN ${quantityExpression} > 0 THEN 'Dead Stock'
-        ELSE 'No Movement'
-      END AS MovementCategory,
-      CASE
-        WHEN ISNULL(issueUsage.StockIssueEventCount, 0) >= 6 THEN 'Fast Moving: StockIssue Movement >= 6'
-        WHEN ISNULL(issueUsage.StockIssueEventCount, 0) BETWEEN 2 AND 5 THEN 'Moving: StockIssue Movement 2-5'
-        WHEN ISNULL(issueUsage.StockIssueEventCount, 0) = 1 THEN 'Slow Moving: StockIssue Movement 1'
-        WHEN ${quantityExpression} > 0 THEN 'Dead Stock: stok ada, StockIssue Movement 0'
-        ELSE 'No Movement: stok dan StockIssue Movement 0'
-      END AS MovementAnalysis,
+      ${movementCategorySqlCase(issueCount, quantityExpression)} AS MovementCategory,
+      ${movementAnalysisSqlCase(issueCount, quantityExpression)} AS MovementAnalysis,
       latestMovement.MovementEvent1 AS StockIssueMovementEvent1,
       latestMovement.MovementEvent2 AS StockIssueMovementEvent2,
       CAST(ISNULL(issueUsage.StockIssueEventCount, 0) AS INT) AS StockIssueEventCount,
@@ -499,6 +491,29 @@ function stockMovementAnalysisColumns(quantityExpression: string) {
         ELSE 10
       END AS RiskScore`
 }
+
+function shouldUseMovementCategoryWindow(filters?: ReportFilterInput) {
+  if (filters?.groupBy) return isMovementCategoryField(filters.groupBy)
+  if (filters?.chartDimension) return isMovementCategoryField(filters.chartDimension)
+  return true
+}
+
+function movementCategoryLoadedGroups(rowsData: DbRow[]) {
+  const counts = countMovementCategoryRows(rowsData)
+  return MOVEMENT_CATEGORY_ORDER
+    .filter((category) => counts[category] !== undefined)
+    .join(', ')
+}
+
+function numericRowValue(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const numeric = Number(value.replace(/[^\d.-]/g, ''))
+    return Number.isFinite(numeric) ? numeric : 0
+  }
+  return 0
+}
+
 function textSearch(search: string, fields: string[]) {
   const q = sanitizeLike(search)
   if (!q) return ''
@@ -1264,6 +1279,9 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
   const whereSearch = textSearch(search, ['i.ItemCode', 'i.Description', 'i.ProdTypeCode', "ISNULL(pt.Description, '')", 'i.LocCode', "ISNULL(i.ProdCatCode, '')", "ISNULL(i.StockAnalysisCode, '')"])
   const location = sanitizeLike(filters?.location ?? '')
   const category = sanitizeLike(filters?.category ?? '')
+  const movementCategory = sanitizeLike(filters?.movementCategory ?? '')
+  const movementCategoryFilter = movementCategory ? `WHERE MovementCategory = N'${movementCategory}'` : ''
+  const useMovementCategoryWindow = !movementCategory && !limitAll && shouldUseMovementCategoryWindow(filters)
   const locationFilter = location ? `AND RTRIM(i.LocCode) LIKE N'%${location}%'` : ''
   const categoryFilter = category
     ? `AND (
@@ -1313,7 +1331,7 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
           AND issueItem.LocCode = h.LocCode
         WHERE h.PostDate >= '2000-01-01'
           AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, GETDATE()))
-          AND ${warehouseInventoryItemTypeExpression('issueItem')} = '1'
+          ${nonWorkshopItemTypeFilter('issueItem')}
         UNION ALL
         SELECT
           s.ItemCode,
@@ -1448,6 +1466,14 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
           WHEN '4' THEN 'Workshop'
           ELSE ISNULL(${warehouseInventoryItemTypeExpression('i')}, '-')
         END AS ItemTypeName,
+        CASE
+          WHEN ${warehouseInventoryItemTypeExpression('i')} = '4' THEN 'WS_JOBSTOCK'
+          ELSE 'STOCK_ISSUE_REGULAR'
+        END AS MovementSource,
+        CAST(CASE
+          WHEN ${warehouseInventoryItemTypeExpression('i')} IN ('1', '4') THEN 1
+          ELSE 0
+        END AS INT) AS MovementSourceValid,
         RTRIM(i.UOMCode) AS uom,
         RTRIM(i.UOMCode) AS Satuan,
         NULLIF(RTRIM(i.ProdCatCode), '') AS product_category_code,
@@ -1482,15 +1508,37 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
         ${whereSearch}
     )`
 
-  const reportRows = await rows(ctx, `
+  const movementPriorityOrder = `RiskScore DESC,
+      TotalAmount DESC,
+      StockIssueMovementCount DESC,
+      LastMovementDate DESC`
+  const reportRows = await rows(ctx, useMovementCategoryWindow
+    ? `
+    ${reportSql},
+    ranked_movement_analysis AS (
+      SELECT
+        movement_analysis.*,
+        ROW_NUMBER() OVER (
+          PARTITION BY MovementCategory
+          ORDER BY ${movementPriorityOrder}
+        ) AS MovementCategoryWindowRank
+      FROM movement_analysis
+    )
+    SELECT TOP ${rowLimit} *
+    FROM ranked_movement_analysis
+    ${movementCategoryFilter}
+    ORDER BY
+      MovementCategoryWindowRank ASC,
+      ${movementCategoryRankSqlCase('MovementCategory')},
+      ${movementPriorityOrder}
+  `
+    : `
     ${reportSql}
     SELECT TOP ${rowLimit} *
     FROM movement_analysis
+    ${movementCategoryFilter}
     ORDER BY
-      RiskScore DESC,
-      TotalAmount DESC,
-      StockIssueMovementCount DESC,
-      LastMovementDate DESC
+      ${movementPriorityOrder}
   `)
 
   const summary = await first(ctx, `
@@ -1513,8 +1561,10 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       CAST(SUM(CASE WHEN MovementCategory = 'Moving' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS MovingAmount,
       SUM(CASE WHEN MovementCategory = 'Slow Moving' THEN 1 ELSE 0 END) AS SlowMovingItem,
       CAST(SUM(CASE WHEN MovementCategory = 'Slow Moving' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS SlowMovingAmount,
-      SUM(CASE WHEN MovementCategory = 'No Movement' THEN 1 ELSE 0 END) AS NoMovementItem,
-      CAST(SUM(CASE WHEN MovementCategory = 'No Movement' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS NoMovementAmount,
+      SUM(CASE WHEN MovementCategory = 'Stale' THEN 1 ELSE 0 END) AS StaleItem,
+      CAST(SUM(CASE WHEN MovementCategory = 'Stale' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS StaleAmount,
+      SUM(CASE WHEN MovementCategory = 'Stale' THEN 1 ELSE 0 END) AS NoMovementItem,
+      CAST(SUM(CASE WHEN MovementCategory = 'Stale' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS NoMovementAmount,
       SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN 1 ELSE 0 END) AS DeadMovementItem,
       CAST(SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS DeadMovementAmount,
       CAST(SUM(quantity_on_hand) AS DECIMAL(18,2)) AS total_quantity_on_hand,
@@ -1531,8 +1581,16 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       CAST(SUM(StockIssueMovementQty) AS DECIMAL(18,2)) AS TotalStockIssueQty,
       CAST(SUM(StockIssueMovementAmount) AS DECIMAL(38,6)) AS TotalStockIssueAmount,
       CAST(SUM(AmountItem) AS DECIMAL(38,6)) AS TotalAmountItem,
+      SUM(CASE WHEN ItemType = '4' THEN 1 ELSE 0 END) AS ItemType4WorkshopItem,
+      SUM(CASE WHEN ItemType = '4' AND MovementSource = 'WS_JOBSTOCK' THEN 1 ELSE 0 END) AS ItemType4WorkshopSourceValid,
+      SUM(CASE WHEN ItemType = '4' AND MovementSource <> 'WS_JOBSTOCK' THEN 1 ELSE 0 END) AS ItemType4WorkshopSourceInvalid,
+      SUM(CASE WHEN MovementSource IS NULL OR RTRIM(MovementSource) = '' THEN 1 ELSE 0 END) AS MovementSourceMissing,
+      SUM(CASE WHEN MovementSourceValid = 0 THEN 1 ELSE 0 END) AS MovementSourceInvalid,
+      CAST(SUM(CASE WHEN ItemType = '4' THEN StockIssueMovementCount ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopStockIssueMovementCount,
+      CAST(SUM(CASE WHEN ItemType = '1' THEN StockIssueMovementCount ELSE 0 END) AS DECIMAL(18,2)) AS RegularStockIssueMovementCount,
       MAX(LastMovementDate) AS LastMovementDate
     FROM movement_analysis
+    ${movementCategoryFilter}
   `)
 
   const chart = await rows(ctx, `
@@ -1547,16 +1605,10 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       CAST(SUM(StockIssueMovementQty) AS DECIMAL(18,2)) AS StockIssueMovementQty,
       CAST(SUM(StockIssueMovementAmount) AS DECIMAL(38,6)) AS StockIssueMovementAmount
     FROM movement_analysis
+    ${movementCategoryFilter}
     GROUP BY MovementCategory
     ORDER BY
-      CASE MovementCategory
-        WHEN 'Fast Moving' THEN 1
-        WHEN 'Moving' THEN 2
-        WHEN 'Slow Moving' THEN 3
-        WHEN 'Dead Stock' THEN 4
-        WHEN 'No Movement' THEN 5
-        ELSE 9
-      END,
+      ${movementCategoryRankSqlCase('MovementCategory')},
       AssetAmountRealTime DESC
   `)
 
@@ -1582,12 +1634,30 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       statusScope: 'Tidak filter Status; scope mengikuti IN_ITEM WHERE ItemType IN (1, 4).',
       quantityRule: useMonthEnd ? 'Histori: total_quantity = IN_MTHENDITEM.Qty.' : 'Current: total_quantity = QtyOnHand + QtyOnHold; QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder.',
       valuationRule: useMonthEnd ? 'Histori: AmountItem = IN_MTHENDITEM.Qty * AverageCost.' : 'Current: TotalAssetAmount = SUM((QtyOnHand + QtyOnHold) * AverageCost) FROM IN_ITEM WHERE ItemType IN (1, 4).',
-      movementRule: 'MovementCategory dihitung dari StockIssue Movement Count per item: Fast Moving >= 6, Moving 2-5, Slow Moving 1, Dead Stock jika stok real-time ada tapi StockIssue Movement 0, No Movement jika stok real-time dan StockIssue Movement 0.',
+      movementRule: 'MovementCategory dihitung dari StockIssue Movement Count per item: Fast Moving >= 6, Moving 2-5, Slow Moving 1, Dead Stock jika stok real-time ada tapi StockIssue Movement 0, Stale jika stok real-time dan StockIssue Movement 0.',
       issueUsageRule: 'StockIssue Movement: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1. Asset Amount Real Time tetap berasal dari IN_ITEM (QtyOnHand + QtyOnHold) * AverageCost.',
+      movementSourceRule: 'MovementSource dinormalisasi per row: ItemType 4 = WS_JOBSTOCK, ItemType 1 = STOCK_ISSUE_REGULAR.',
+      movementSourceQuality: {
+        itemType4WorkshopItem: summary.ItemType4WorkshopItem,
+        itemType4WorkshopSourceValid: summary.ItemType4WorkshopSourceValid,
+        itemType4WorkshopSourceInvalid: summary.ItemType4WorkshopSourceInvalid,
+        movementSourceMissing: summary.MovementSourceMissing,
+        movementSourceInvalid: summary.MovementSourceInvalid,
+      },
       activeFilter: 'Semua IN_ITEM current stock real-time ItemType 1 dan 4.',
+      summaryScope: 'Full data aggregation; tidak mengikuti limit/pagination rows table.',
+      tableRowsScope: limitAll ? 'Full listing request/export.' : 'Rows table dipaginasi untuk render cepat; summary tetap full dataset.',
+      totalRows: summary.TotalItem,
+      filteredRows: summary.TotalItem,
+      movementCategoryOrder: MOVEMENT_CATEGORY_ORDER.join(', '),
+      groupWindowField: useMovementCategoryWindow ? 'MovementCategory' : undefined,
+      groupWindowStrategy: useMovementCategoryWindow ? 'balanced' : 'ranked',
+      loadedMovementCategoryGroups: movementCategoryLoadedGroups(reportRows),
+      loadedMovementCategoryCounts: JSON.stringify(countMovementCategoryRows(reportRows)),
+      movementCategoryFilter: movementCategory || undefined,
       primaryChart: 'Item by Movement Category',
       availableCharts: ['Item by Movement Category', 'Stock issue event by movement category', 'Movement qty and amount by category', 'Top movement items'],
-      qualityFocus: ['MovementCategory', 'StockIssueMovementCount', 'StockIssueMovementQty', 'StockIssueMovementAmount', 'LastMovementDate'],
+      qualityFocus: ['MovementCategory', 'MovementSource', 'StockIssueMovementCount', 'StockIssueMovementQty', 'StockIssueMovementAmount', 'LastMovementDate'],
     }),
   }
 }
@@ -2767,13 +2837,14 @@ async function stockReturn({ limit, search, ctx, stale }: { limit: number; searc
   }
 }
 
-async function itemUpdateAge({ limit, limitAll, search, ctx, stale }: ReportHandlerOptions): Promise<ReportPayload> {
+async function itemUpdateAge({ limit, limitAll, search, ctx, stale, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const ageFilter = staleUpdateFilter('i', stale)
-  const topClause = limitAll ? '' : `TOP ${limit}`
+  const useMovementCategoryWindow = !limitAll && shouldUseMovementCategoryWindow(filters)
+  const topClause = limitAll || useMovementCategoryWindow ? '' : `TOP ${limit}`
   const quantityClosing = quantityClosingExpression('i')
   const quantityClosingField = quantityClosingExpression()
-  const reportRows = await rows(ctx, `
+  const reportRowsRaw = await rows(ctx, `
     SELECT ${topClause}
       CASE
         WHEN (i.UpdateDate IS NULL OR i.UpdateDate <= DATEADD(YEAR, -2, GETDATE())) AND ${quantityClosing} * ISNULL(i.AverageCost, 0) > 0 THEN 'Critical'
@@ -2844,6 +2915,17 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale }: ReportHand
       ${quantityClosing} * ISNULL(i.AverageCost, 0) DESC,
       i.UpdateDate ASC
   `)
+  const reportRows = useMovementCategoryWindow
+    ? buildMovementCategoryBalancedRows(
+        reportRowsRaw,
+        limit,
+        (row) => row.MovementCategory,
+        (left, right) =>
+          numericRowValue(right.RiskScore) - numericRowValue(left.RiskScore) ||
+          numericRowValue(right.TotalAmount ?? right.NilaiStok) - numericRowValue(left.TotalAmount ?? left.NilaiStok) ||
+          numericRowValue(right.StockIssueEventCount) - numericRowValue(left.StockIssueEventCount),
+      )
+    : reportRowsRaw
 
   const summary = await first(ctx, `
     SELECT
@@ -2894,6 +2976,11 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale }: ReportHand
       itemTypeScope: 'ItemType 1 Stock dan 4 Workshop saja; ItemType 6 Asset dikeluarkan dari inventory gudang.',
       activeFilter: staleUpdateLabel(stale),
       rowLimit: limitAll ? 'all' : limit,
+      movementCategoryOrder: MOVEMENT_CATEGORY_ORDER.join(', '),
+      groupWindowField: useMovementCategoryWindow ? 'MovementCategory' : undefined,
+      groupWindowStrategy: useMovementCategoryWindow ? 'balanced' : 'ranked',
+      loadedMovementCategoryGroups: movementCategoryLoadedGroups(reportRows),
+      loadedMovementCategoryCounts: JSON.stringify(countMovementCategoryRows(reportRows)),
       primaryChart: 'Nilai Item Stale per Gudang',
       availableCharts: ['Distribusi Umur Stok', 'Nilai Stok Berisiko per Gudang', 'Top Item Stale by Value', 'Issue Breakdown', 'Aging Heatmap'],
       qualityFocus: ['UpdateDate adalah metadata master item, bukan tanggal movement transaksi.', 'Scope report dibatasi ke ItemType 1 Stock dan 4 Workshop karena hanya item gudang yang masuk inventory module.'],
@@ -3351,7 +3438,7 @@ export async function GET(request: NextRequest) {
     const postFilterInput = sqlScopedFilters
       ? { ...filters, search: undefined, period: undefined, location: undefined, category: undefined }
       : allStockMovementScopedFilters
-        ? { ...filters, search: undefined, period: undefined, accYear: undefined, accMonth: undefined, actualYear: undefined, actualMonth: undefined, dateFrom: undefined, dateTo: undefined, location: undefined, category: undefined, stale: undefined }
+        ? { ...filters, search: undefined, period: undefined, accYear: undefined, accMonth: undefined, actualYear: undefined, actualMonth: undefined, dateFrom: undefined, dateTo: undefined, location: undefined, category: undefined, movementCategory: undefined, stale: undefined }
       : periodScopedFilters
         ? { ...filters, period: undefined, accYear: undefined, accMonth: undefined, actualYear: undefined, actualMonth: undefined, dateFrom: undefined, dateTo: undefined }
       : filters
@@ -3374,6 +3461,18 @@ export async function GET(request: NextRequest) {
             location: filters.location,
             category: filters.category,
           }
+        : allStockMovementScopedFilters
+          ? {
+              search: filters.search,
+              period: filters.period,
+              accYear: filters.accYear,
+              accMonth: filters.accMonth,
+              actualYear: filters.actualYear,
+              actualMonth: filters.actualMonth,
+              location: filters.location,
+              category: filters.category,
+              movementCategory: filters.movementCategory,
+            }
         : undefined,
     }
 

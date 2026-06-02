@@ -1,6 +1,6 @@
 'use client'
 
-import { addService } from '@/app/admin/actions'
+import { addService } from '@/app/(login)/admin/actions'
 import { useRef, useState } from 'react'
 
 export default function AddServiceForm() {

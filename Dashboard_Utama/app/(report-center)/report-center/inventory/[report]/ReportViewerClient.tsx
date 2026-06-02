@@ -30,7 +30,9 @@ import type { AiDashboardDefinition } from '@/lib/reports/ai-dashboard'
 import {
   buildReportTableGroups,
   buildReportTableRows,
+  buildReportSummaryTotals,
   compactReportPayloadForAi,
+  formatInventoryQuantityBreakdown,
   normalizeReportTableWindow,
   selectSubtotalColumns,
   type ReportTableRenderRow,
@@ -166,33 +168,37 @@ const periodContextColumns = [
 ]
 
 const stockAgingBusinessColumns = [
-  'RiskLevel',
-  'AgingBucket',
-  'MovementCategory',
   'KodeBarang',
   'NamaBarang',
-  'RecommendedAction',
-  'Gudang',
-  'Kategori',
+  'QtyOnHandHold',
+  'AmountItem',
+  'MovementCategory',
+  'MovementAnalysis',
   'QuantityClosing',
-  'MovementEventCountAll',
-  'MovementQtyAll',
-  'MovementAmountAll',
-  'LastMovementDate',
   'StockIssueEventCount',
   'StockIssueQtyAllPeriod',
   'StockIssueAmountAllPeriod',
   'LastStockIssueDate',
+  'MovementEventCountAll',
+  'MovementQtyAll',
+  'MovementAmountAll',
+  'LastMovementDate',
+  'MovementGapQty',
   'MovementEvent1',
   'MovementEvent2',
   'StockIssueEvent1',
   'StockIssueEvent2',
-  'StokAkhir',
-  'NilaiStok',
-  'TotalAmount',
+  'RiskLevel',
+  'AgingBucket',
   'UmurBulan',
+  'UmurTahun',
+  'RecommendedAction',
+  'KodeKategori',
+  'Kategori',
+  'TotalAmount',
   'LastUpdateDate',
   'IssueSummary',
+  'Gudang',
 ]
 
 const stockAgingTechnicalColumns = new Set([
@@ -212,6 +218,8 @@ const stockAgingTechnicalColumns = new Set([
   'quantity_on_hold',
   'quantity_on_order',
   'total_quantity',
+  'QtyOnHand',
+  'QtyOnHold',
   'unit_cost',
   'total_amount',
   'raw_status',
@@ -349,20 +357,11 @@ const stockAgingManualFilterColumns = [
 ]
 
 const movementAnalysisBusinessColumns = [
-  'MovementCategory',
   'KodeBarang',
   'NamaBarang',
-  'Gudang',
-  'KodeKategori',
-  'Kategori',
-  'ItemTypeName',
-  'Satuan',
-  'QtyOnHand',
-  'QtyOnHold',
   'QtyOnHandHold',
-  'AverageCost',
   'AmountItem',
-  'QuantityClosing',
+  'MovementCategory',
   'StockIssueMovementCount',
   'StockIssueMovementQty',
   'StockIssueMovementAmount',
@@ -371,6 +370,11 @@ const movementAnalysisBusinessColumns = [
   'MovementAnalysis',
   'StockIssueMovementEvent1',
   'StockIssueMovementEvent2',
+  'KodeKategori',
+  'Kategori',
+  'ItemTypeName',
+  'Satuan',
+  'Gudang',
 ]
 
 const movementAnalysisTechnicalColumns = new Set([
@@ -382,6 +386,9 @@ const movementAnalysisTechnicalColumns = new Set([
   'UmurBulan',
   'UmurTahun',
   'StaleMovementRelation',
+  'MovementCategoryWindowRank',
+  'MovementSource',
+  'MovementSourceValid',
   'StockIssueEventCount',
   'JumlahStockIssue',
   'StockIssueQtyAllPeriod',
@@ -419,6 +426,10 @@ const movementAnalysisTechnicalColumns = new Set([
   'quantity_on_hold',
   'quantity_on_order',
   'total_quantity',
+  'QtyOnHand',
+  'QtyOnHold',
+  'AverageCost',
+  'QuantityClosing',
   'unit_cost',
   'total_amount',
   'raw_status',
@@ -564,10 +575,12 @@ function displayColumnLabel(field: string) {
   if (field === 'AmountItem') return 'Asset Amount Real Time'
   if (field === 'QtyOnHand') return 'Qty On Hand'
   if (field === 'QtyOnHold') return 'Qty On Hold'
-  if (field === 'QtyOnHandHold') return 'Qty On Hand + On Hold'
+  if (field === 'QtyOnHandHold') return 'Real-Time Qty'
   if (field === 'AverageCost') return 'Average Cost'
   if (field === 'QuantityClosing') return 'Quantity Closing'
   if (field === 'MovementCategory') return 'Movement Category'
+  if (field === 'MovementSource') return 'Movement Source'
+  if (field === 'MovementSourceValid') return 'Movement Source Valid'
   if (field === 'StaleMovementRelation') return 'Movement Analysis'
   if (field === 'MovementAnalysis') return 'StockIssue Movement Analysis'
   if (field === 'StockIssueMovementCount') return 'StockIssue Movement Count'
@@ -678,7 +691,7 @@ function movementAnalysisKpis(summary: DbRow, rows: DbRow[] = []) {
     categoryCard('Moving', 'MovingItem', 'MovingAmount', 'border-blue-100 bg-blue-50 text-blue-700'),
     categoryCard('Slow Moving', 'SlowMovingItem', 'SlowMovingAmount', 'border-yellow-100 bg-yellow-50 text-yellow-700'),
     categoryCard('Dead Stock', 'DeadMovementItem', 'DeadMovementAmount', 'border-red-100 bg-red-50 text-red-700'),
-    categoryCard('No Movement', 'NoMovementItem', 'NoMovementAmount', 'border-slate-200 bg-slate-50 text-slate-700'),
+    categoryCard('Stale', 'StaleItem', 'StaleAmount', 'border-orange-100 bg-orange-50 text-orange-700'),
     { label: 'StockIssue Movement', value: summary.TotalStockIssueMovementCount ?? rows.reduce((sum, row) => sum + toNumber(row.StockIssueMovementCount), 0), description: 'Jumlah transaksi movement', tone: 'border-amber-100 bg-amber-50 text-amber-700' },
   ]
 }
@@ -688,8 +701,11 @@ function movementAnalysisQualityItems(payload: ReportPayload | null, rows: DbRow
     ['Fast Moving', payload?.summary.FastMovingItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Fast Moving').length],
     ['Moving', payload?.summary.MovingItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Moving').length],
     ['Slow Moving', payload?.summary.SlowMovingItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Slow Moving').length],
-    ['No Movement', payload?.summary.NoMovementItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'No Movement').length],
+    ['Stale', payload?.summary.StaleItem ?? rows.filter((row) => ['Stale', 'No Movement'].includes(String(row.MovementCategory ?? ''))).length],
     ['Dead Stock', payload?.summary.DeadMovementItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Dead Stock').length],
+    ['ItemType 4 Source Valid', payload?.summary.ItemType4WorkshopSourceValid ?? rows.filter((row) => String(row.ItemType ?? '') === '4' && String(row.MovementSource ?? '') === 'WS_JOBSTOCK').length],
+    ['ItemType 4 Source Invalid', payload?.summary.ItemType4WorkshopSourceInvalid ?? rows.filter((row) => String(row.ItemType ?? '') === '4' && String(row.MovementSource ?? '') !== 'WS_JOBSTOCK').length],
+    ['Movement Source Missing', payload?.summary.MovementSourceMissing ?? rows.filter((row) => !String(row.MovementSource ?? '').trim()).length],
     ['Total StockIssue Movement', payload?.summary.TotalStockIssueMovementCount ?? rows.reduce((sum, row) => sum + toNumber(row.StockIssueMovementCount), 0)],
   ]
 }
@@ -773,14 +789,21 @@ function getReportViewerProfile(reportId: string): ReportViewerProfile {
       fallbackColumns: movementAnalysisBusinessColumns,
       technicalColumns: movementAnalysisTechnicalColumns,
       manualFilterColumns: movementAnalysisBusinessColumns,
-      preferredGroupColumns: ['Gudang', 'KodeKategori', 'MovementCategory', 'KodeBarang', ...baseProfile.preferredGroupColumns],
+      preferredGroupColumns: ['MovementCategory', 'Gudang', 'KodeKategori', 'KodeBarang', ...baseProfile.preferredGroupColumns],
+      kpiPresetByLabel: {
+        'Fast Moving': 'Fast Moving',
+        Moving: 'Moving',
+        'Slow Moving': 'Slow Moving',
+        'Dead Stock': 'Dead Stock',
+        Stale: 'Stale',
+      },
       presets: [
         { label: 'Semua Item', description: 'Reset filter movement', filters: { stale: 'semua' } },
-        { label: 'Fast Moving', description: 'StockIssue >= 6 event', filters: { stale: 'semua', columnFilters: [{ field: 'MovementCategory', operator: 'equals', value: 'Fast Moving' }] } },
-        { label: 'Moving', description: 'StockIssue 2-5 event', filters: { stale: 'semua', columnFilters: [{ field: 'MovementCategory', operator: 'equals', value: 'Moving' }] } },
-        { label: 'Slow Moving', description: 'StockIssue 1 event', filters: { stale: 'semua', columnFilters: [{ field: 'MovementCategory', operator: 'equals', value: 'Slow Moving' }] } },
-        { label: 'Dead Stock', description: 'Stok ada, 0 movement', filters: { stale: 'semua', columnFilters: [{ field: 'MovementCategory', operator: 'equals', value: 'Dead Stock' }] } },
-        { label: 'No Movement', description: 'Stok dan movement 0', filters: { stale: 'semua', columnFilters: [{ field: 'MovementCategory', operator: 'equals', value: 'No Movement' }] } },
+        { label: 'Fast Moving', description: 'StockIssue >= 6 event', filters: { stale: 'semua', movementCategory: 'Fast Moving' } },
+        { label: 'Moving', description: 'StockIssue 2-5 event', filters: { stale: 'semua', movementCategory: 'Moving' } },
+        { label: 'Slow Moving', description: 'StockIssue 1 event', filters: { stale: 'semua', movementCategory: 'Slow Moving' } },
+        { label: 'Dead Stock', description: 'Stok ada, 0 movement', filters: { stale: 'semua', movementCategory: 'Dead Stock' } },
+        { label: 'Stale', description: 'Stok dan movement 0', filters: { stale: 'semua', movementCategory: 'Stale' } },
         { label: 'Nilai Stok Tinggi', description: 'Prioritas nilai terbesar', filters: { stale: 'semua', sortColumn: 'AmountItem', sortDirection: 'desc', resultLimit: 100 } },
         { label: 'Gudang Tertentu', description: 'Filter per gudang/lokasi', filters: { stale: 'semua', groupBy: 'Gudang' } },
       ],
@@ -898,11 +921,19 @@ function movementTone(value: unknown) {
   if (text === 'moving') return 'border-blue-200 bg-blue-50 text-blue-700'
   if (text.includes('slow')) return 'border-yellow-200 bg-yellow-50 text-yellow-700'
   if (text.includes('dead')) return 'border-red-200 bg-red-50 text-red-700'
+  if (text.includes('stale')) return 'border-orange-200 bg-orange-50 text-orange-700'
   if (text.includes('no movement')) return 'border-slate-200 bg-slate-50 text-slate-700'
   return 'border-slate-200 bg-slate-50 text-slate-700'
 }
 
-function renderReportCell(column: string, value: unknown) {
+function renderReportCell(column: string, value: unknown, row?: DbRow) {
+  if (column === 'QtyOnHandHold') {
+    return (
+      <span className="inline-flex whitespace-nowrap rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-900">
+        {row ? formatInventoryQuantityBreakdown(row) : formatValue(value)}
+      </span>
+    )
+  }
   if (column === 'RiskLevel') {
     return <span className={`rounded-lg border px-2 py-1 text-xs font-bold ${riskTone(value)}`}>{formatValue(value)}</span>
   }
@@ -930,7 +961,7 @@ function renderReportCell(column: string, value: unknown) {
       </span>
     )
   }
-  if (/^(StockIssueEvent|MovementEvent)\d+$/.test(column)) {
+  if (/^(StockIssueEvent|MovementEvent)\d+$/.test(column) || /^StockIssueMovementEvent\d+$/.test(column)) {
     return <span className="block max-w-[360px] whitespace-normal leading-5">{formatValue(value)}</span>
   }
   return formatValue(value)
@@ -952,51 +983,85 @@ function ReportRowDetail({ row, columns, colSpan, mode }: { row: DbRow; columns:
     .slice(0, 12)
     .map((column): [string, unknown] => [displayColumnLabel(column), row[column]])
 
+  const itemCode = row.KodeBarang ?? row.item_code ?? row.ItemCode ?? '-'
+  const itemName = row.NamaBarang ?? row.description ?? row.ItemDescription ?? '-'
+  const category = row.MovementCategory ?? row.RiskLevel ?? row.AgingBucket
+  const categoryText = String(category ?? '').toLowerCase()
+  const accentClass = categoryText.includes('dead')
+    ? 'border-l-red-400'
+    : categoryText.includes('slow') || categoryText.includes('stale')
+      ? 'border-l-amber-400'
+      : 'border-l-emerald-400'
   const movementMetrics = ([
-    ['Movement Category', row.MovementCategory],
-    ['Movement Analysis', row.MovementAnalysis ?? row.StaleMovementRelation],
-    ['Movement Gap Qty', row.MovementGapQty],
-    ['Last Movement Date', row.LastMovementDate],
-    ['Movement Age Days', row.MovementAgeDays],
-    ['StockIssue Movement Count', row.StockIssueMovementCount],
-    ['StockIssue Movement Qty', row.StockIssueMovementQty],
-    ['StockIssue Movement Amount', row.StockIssueMovementAmount],
+    ['Real-Time Qty', formatInventoryQuantityBreakdown(row)],
+    ['Asset Amount', row.AmountItem ?? row.AmountCurrent ?? row.TotalAssetAmount ?? row.TotalAmount],
+    ['SI Count', row.StockIssueMovementCount ?? row.StockIssueEventCount],
+    ['SI Qty', row.StockIssueMovementQty ?? row.StockIssueQtyAllPeriod],
+    ['SI Amount', row.StockIssueMovementAmountTransaksi ?? row.StockIssueMovementAmount ?? row.StockIssueAmountAllPeriod],
+    ['Gap Qty', row.StockIssueMovementGapQty ?? row.MovementGapQty],
   ] as Array<[string, unknown]>).filter(([, value]) => value !== null && value !== undefined && value !== '')
 
-  const movementEvents = [
-    ['StockIssue Movement Event 1', row.StockIssueMovementEvent1],
-    ['StockIssue Movement Event 2', row.StockIssueMovementEvent2],
-  ] as Array<[string, unknown]>
-  const events = mode === 'movement'
-    ? movementEvents.filter(([, value]) => value !== null && value !== undefined && value !== '')
-    : []
+  const movementFacts = ([
+    ['Gudang', row.Gudang ?? row.location ?? row.Location],
+    ['Last Movement', row.LastStockIssueMovementDate ?? row.LastMovementDate],
+    ['Movement Source', row.MovementSource],
+    ['Item Type', row.ItemTypeName ?? row.ItemType],
+  ] as Array<[string, unknown]>).filter(([, value]) => value !== null && value !== undefined && value !== '')
+
+  const analysis = row.MovementAnalysis ?? row.StaleMovementRelation ?? row.IssueSummary
+  const movementEvents = ([
+    ['StockIssue Movement Event 1', row.StockIssueMovementEvent1 ?? row.MovementEvent1],
+    ['StockIssue Movement Event 2', row.StockIssueMovementEvent2 ?? row.MovementEvent2],
+  ] as Array<[string, unknown]>).filter(([, value]) => value !== null && value !== undefined && value !== '')
+
+  const genericRows = mode === 'movement' ? [] : genericDetails
+  const metricRows = movementMetrics.length > 0 ? movementMetrics : genericRows.slice(0, 6)
+  const factRows = movementFacts.length > 0 ? movementFacts : genericRows.slice(6, 10)
 
   return (
-    <tr className="bg-slate-50">
-      <td colSpan={Math.max(colSpan, 1)} className="border-y border-slate-200 px-5 py-4">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-800">{mode === 'movement' ? 'Movement detail' : 'Row detail'}</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {(mode === 'movement' && movementMetrics.length > 0 ? movementMetrics : genericDetails).map(([label, value]) => (
-                <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-                  <p className="mt-1 text-sm font-black text-slate-950">{formatValue(value)}</p>
-                </div>
-              ))}
+    <tr className="bg-[#FBFDFF]">
+      <td colSpan={Math.max(colSpan, 1)} className="border-b border-slate-200 p-0">
+        <div className={`border-l-4 ${accentClass} bg-[#FBFDFF] px-4 py-3 shadow-inner`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{mode === 'movement' ? 'Movement detail' : 'Row detail'}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="font-mono text-sm font-black text-slate-950">{formatValue(itemCode)}</span>
+                <span className="min-w-0 max-w-4xl text-sm font-bold leading-5 text-slate-800">{formatValue(itemName)}</span>
+              </div>
             </div>
+            {category !== undefined && (
+              <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black ${movementTone(category)}`}>
+                {formatValue(category)}
+              </span>
+            )}
           </div>
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-800">{mode === 'movement' ? 'Movement events' : 'Source fields'}</p>
-            <div className="mt-3 space-y-2">
-              {(events.length > 0 ? events : genericDetails.slice(0, 4)).map(([label, value]) => (
-                <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-                  <p className="mt-1 whitespace-normal text-sm font-semibold leading-5 text-slate-800">{formatValue(value)}</p>
-                </div>
-              ))}
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6">
+            {metricRows.map(([label, value]) => (
+              <div key={label} className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-1 truncate text-sm font-black text-slate-950">{formatValue(value)}</p>
+              </div>
+            ))}
+          </div>
+
+          {(analysis || factRows.length > 0 || movementEvents.length > 0) && (
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)]">
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Analysis</p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-slate-800">{formatValue(analysis ?? movementEvents[0]?.[1] ?? '-')}</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {factRows.map(([label, value]) => (
+                  <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</p>
+                    <p className="mt-1 truncate text-xs font-bold text-slate-800">{formatValue(value)}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </td>
     </tr>
@@ -1090,6 +1155,7 @@ function buildReportParams(report: InventoryReport, source: ReportSource, limit:
   appendFilterParam(params, 'supplier', filters.supplier)
   appendFilterParam(params, 'status', filters.status)
   appendFilterParam(params, 'vehicle', filters.vehicle)
+  appendFilterParam(params, 'movementCategory', filters.movementCategory)
   appendFilterParam(params, 'blankField', filters.blankField)
   appendFilterParam(params, 'minQty', filters.minQty)
   appendFilterParam(params, 'minAmount', filters.minAmount)
@@ -1430,13 +1496,45 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     () => selectSubtotalColumns(visibleColumns, filteredRows),
     [filteredRows, visibleColumns],
   )
+  const groupSummaryTotals = useMemo(() => {
+    const totals = new Map<string, Record<string, number>>()
+    if (activeTableGroupColumn !== 'MovementCategory') return totals
+
+    ;(payload?.chart ?? []).forEach((row) => {
+      const label = String(row.MovementCategory ?? row.Label ?? '').trim()
+      if (!label) return
+      totals.set(label, {
+        ItemCurrent: toNumber(row.TotalItem),
+        AmountItem: toNumber(row.AssetAmountRealTime ?? row.TotalAmount ?? row.AmountItem),
+        QtyOnHandHold: toNumber(row.Qty ?? row.total_quantity ?? row.QtyOnHandHold),
+        StockIssueMovementCount: toNumber(row.StockIssueMovementCount),
+        StockIssueMovementQty: toNumber(row.StockIssueMovementQty),
+        StockIssueMovementAmount: toNumber(row.StockIssueMovementAmount),
+      })
+    })
+
+    return totals
+  }, [activeTableGroupColumn, payload?.chart])
   const tableGroups = useMemo(
-    () => buildReportTableGroups(filteredRows, activeTableGroupColumn, visibleColumns, subtotalColumns),
-    [activeTableGroupColumn, filteredRows, subtotalColumns, visibleColumns],
+    () => buildReportTableGroups(filteredRows, activeTableGroupColumn, visibleColumns, subtotalColumns)
+      .map((group) => {
+        const totals = groupSummaryTotals.get(group.label)
+        if (!totals) return group
+        return {
+          ...group,
+          totals: { ...group.totals, ...totals },
+          subtotalColumns: [
+            ...new Set([
+              ...group.subtotalColumns,
+              ...Object.keys(totals).filter((column) => visibleColumns.includes(column)),
+            ]),
+          ],
+        }
+      }),
+    [activeTableGroupColumn, filteredRows, groupSummaryTotals, subtotalColumns, visibleColumns],
   )
   const tableTotals = useMemo(() => {
     if (tableExpanded || subtotalColumns.length === 0) return {}
-    const totals: Record<string, number> = {}
     const preferredMovementTotals = ['AmountItem', 'QtyOnHandHold', 'QuantityClosing', 'StockIssueMovementCount', 'StockIssueMovementQty', 'StockIssueMovementAmount']
     const orderedColumns = report.id === 'all-stock-movement-analysis'
       ? [
@@ -1444,11 +1542,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           ...subtotalColumns.filter((column) => !preferredMovementTotals.includes(column)),
         ]
       : subtotalColumns
-    orderedColumns.slice(0, 6).forEach((column) => {
-      totals[column] = filteredRows.reduce((sum, row) => sum + toNumber(row[column]), 0)
-    })
-    return totals
-  }, [filteredRows, report.id, subtotalColumns, tableExpanded])
+    return buildReportSummaryTotals(payload?.summary, filteredRows, orderedColumns.slice(0, 6), { fallbackToRows: !serverPaged })
+  }, [filteredRows, payload?.summary, report.id, serverPaged, subtotalColumns, tableExpanded])
   const groupedTableActive = Boolean(activeTableGroupColumn && tableGroups.length > 0)
   const shownTableRows = groupedTableActive
     ? tableGroups.reduce((total, group) => total + (collapsedGroups[group.key] ? 0 : group.rows.length), 0)
@@ -1552,6 +1647,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
       const preset = viewerProfile.presets.find((item) => item.filters.stale === value)
       return `Update aging: ${preset?.label ?? String(value)}`
     }
+    if (key === 'movementCategory') return `Movement Category: ${String(value)}`
     if (key === 'columnFilters' && Array.isArray(value)) {
       return value
         .map((item) => {
@@ -1590,10 +1686,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   }
 
   const toggleMovementRow = (rowKey: string) => {
-    setExpandedMovementRows((current) => ({
-      ...current,
-      [rowKey]: !current[rowKey],
-    }))
+    setExpandedMovementRows((current) => (current[rowKey] ? {} : { [rowKey]: true }))
   }
 
   const toggleReportRow = (event: { preventDefault: () => void; stopPropagation: () => void }, rowKey: string) => {
@@ -1883,15 +1976,67 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     : effectiveTableDensity === 'compact'
       ? 'px-3 py-2.5'
       : 'px-4 py-3'
-  const headerCellClass = () => {
-    const wrap = tableExpanded ? 'whitespace-nowrap' : 'whitespace-normal break-words'
-    return `min-w-[136px] max-w-[300px] ${wrap} border-b-2 border-slate-300 bg-[#EFF4FB] ${headerPadding} align-bottom leading-tight font-extrabold text-slate-700`
+
+  const isCodeColumn = (column: string) => ['KodeBarang', 'item_code', 'ItemCode'].includes(column)
+  const isNameColumn = (column: string) => ['NamaBarang', 'description', 'ItemDescription'].includes(column)
+  const isPinnedColumn = (column: string) => isCodeColumn(column) || isNameColumn(column)
+  const isNumericColumn = (column: string) => (
+    /(amount|nilai|qty|quantity|count|jumlah|total|stock|stok|gap|cost|harga|umur|age|rows|item)$/i.test(column) &&
+    !isNameColumn(column) &&
+    !isCodeColumn(column)
+  )
+  const stickyLeftForColumn = (column: string) => {
+    if (isCodeColumn(column)) return 0
+    if (isNameColumn(column)) return visibleColumns.some(isCodeColumn) ? 132 : 0
+    return undefined
+  }
+  const stickyCellStyle = (column: string) => {
+    const left = stickyLeftForColumn(column)
+    return left === undefined ? undefined : { left }
+  }
+  const stickyColumnClass = (column: string, header = false) => {
+    if (!isPinnedColumn(column)) return ''
+    const depth = header ? 'z-40' : 'z-20'
+    const shadow = isNameColumn(column) ? 'shadow-[8px_0_14px_-14px_rgba(15,23,42,0.45)]' : ''
+    return `sticky ${depth} ${shadow}`
+  }
+  const columnWidthClass = (column: string) => {
+    if (isCodeColumn(column)) return 'w-[132px] min-w-[132px] max-w-[132px] whitespace-nowrap'
+    if (isNameColumn(column)) {
+      return 'min-w-[280px] max-w-[380px] whitespace-normal break-words leading-[1.35]'
+    }
+    if (isNumericColumn(column)) return 'min-w-[126px] max-w-[220px] whitespace-nowrap text-right tabular-nums'
+    return `min-w-[136px] max-w-[300px] ${tableExpanded ? 'whitespace-nowrap' : 'whitespace-normal break-words'}`
+  }
+  const headerWidthClass = (column: string) => {
+    if (isCodeColumn(column)) return 'w-[132px] min-w-[132px] max-w-[132px]'
+    if (isNameColumn(column)) return 'min-w-[280px] max-w-[380px]'
+    if (isNumericColumn(column)) return 'min-w-[126px] max-w-[220px]'
+    return 'min-w-[136px] max-w-[300px]'
+  }
+  const cellContentClass = (column: string) => {
+    if (isNameColumn(column)) return effectiveTableDensity === 'compact' ? 'line-clamp-2' : 'line-clamp-4'
+    if (/analysis|event|relation|remarks|description/i.test(column)) return tableExpanded ? 'line-clamp-2' : 'line-clamp-3'
+    return ''
+  }
+  const headerCellClass = (column: string) => {
+    return `${headerWidthClass(column)} ${stickyColumnClass(column, true)} whitespace-normal break-words border-b-2 border-r border-slate-300 bg-[#EEF4FB] ${headerPadding} align-bottom leading-tight font-extrabold text-slate-700`
   }
 
-  const bodyCellClass = (columnIndex: number, subtotal = false) => {
-    const text = subtotal ? 'text-sm font-black text-white' : columnIndex === 0 ? 'font-semibold text-slate-950' : 'text-slate-700'
-    const wrap = tableExpanded ? 'whitespace-nowrap' : 'whitespace-normal break-words'
-    return `min-w-[136px] max-w-[300px] ${wrap} ${cellPadding} align-top leading-snug ${text}`
+  const bodyCellClass = (column: string, columnIndex: number, subtotal = false, selected = false, zebraAlt = false) => {
+    const text = subtotal
+      ? 'text-sm font-black text-white'
+      : columnIndex === 0 || isCodeColumn(column)
+        ? 'font-semibold text-slate-950'
+        : 'text-slate-700'
+    const bg = subtotal
+      ? 'bg-[#167A3A]'
+      : selected
+        ? 'bg-[#E7FFF3] group-hover:bg-[#E7FFF3]'
+        : zebraAlt
+          ? 'bg-[#F8FBFA] group-hover:bg-[#F1F8F5]'
+          : 'bg-white group-hover:bg-[#F1F8F5]'
+    return `${columnWidthClass(column)} ${stickyColumnClass(column)} ${bg} border-b border-r border-slate-100 ${cellPadding} align-top leading-snug ${text}`
   }
   const displayTableTotalRows = serverPaged && tableWindow.windowed ? reachableTableRows : safeTotalTableRows
   const estimateTableRowSize = useCallback((index: number) => {
@@ -1962,7 +2107,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           {visibleColumns.map((column, columnIndex) => (
             <td
               key={column}
-              className={bodyCellClass(columnIndex, true)}
+              className={bodyCellClass(column, columnIndex, true)}
+              style={stickyCellStyle(column)}
             >
               {columnIndex === 0
                 ? `Subtotal ${group.label}`
@@ -1980,17 +2126,28 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     }
 
     const movementExpanded = Boolean(expandedMovementRows[rowModel.rowKey])
+    const zebraAlt = rowModel.rowIndex % 2 !== 0
     return (
-      <tr key={rowModel.key} className={rowModel.rowIndex % 2 === 0 ? 'bg-white hover:bg-emerald-50' : 'bg-slate-50/80 hover:bg-emerald-50'}>
+      <tr
+        key={rowModel.key}
+        className={`group cursor-pointer ${movementExpanded ? 'is-selected' : ''}`}
+        onClick={() => toggleMovementRow(rowModel.rowKey)}
+      >
         {visibleColumns.map((column, columnIndex) => (
-          <td key={column} className={bodyCellClass(columnIndex)}>
+          <td
+            key={column}
+            className={bodyCellClass(column, columnIndex, false, movementExpanded, zebraAlt)}
+            style={stickyCellStyle(column)}
+          >
             {columnIndex === 0 ? (
               <button type="button" onClick={(event) => toggleReportRow(event, rowModel.rowKey)} className="inline-flex max-w-[420px] items-start gap-2 text-left leading-snug text-slate-950 hover:text-emerald-800">
                 {movementExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                <span className="whitespace-normal break-words">{renderReportCell(column, rowModel.row[column])}</span>
+                <span className="whitespace-normal break-words">{renderReportCell(column, rowModel.row[column], rowModel.row)}</span>
               </button>
             ) : (
-              renderReportCell(column, rowModel.row[column])
+              <span className={cellContentClass(column)}>
+                {renderReportCell(column, rowModel.row[column], rowModel.row)}
+              </span>
             )}
           </td>
         ))}
@@ -2001,7 +2158,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   return (
     <main className="min-h-full bg-[#0F2B1A]">
       <div className="mx-auto max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <section className="rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-[#12351F] via-[#0F2B1A] to-[#0B1F15] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.22)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <nav className="text-xs font-medium text-white/30">
               <Link href={`/report-center?source=${selectedSource}`} className="hover:text-emerald-400">Dashboard</Link>
@@ -2013,14 +2171,15 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight text-white">{report.title}</h1>
               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300">Inventory</span>
-              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs font-bold text-emerald-200">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300 shadow-[0_0_0_4px_rgba(110,231,183,0.16)]" />
                 {report.status === 'live' ? 'LIVE' : 'Update'}
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-extrabold text-white">
                 <FileSpreadsheet size={13} />
                 {sourceLabel(selectedSource)}
               </span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/40">
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
                 {sourceDescription(selectedSource)}
               </span>
               <button
@@ -2032,18 +2191,18 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 <Star size={18} fill={isFavorite ? 'currentColor' : 'none'} />
               </button>
             </div>
-            <p className="mt-1 max-w-5xl text-xs leading-5 text-white/35">{report.description}</p>
+            <p className="mt-2 max-w-5xl text-sm leading-6 text-white/60">{report.description}</p>
             <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
               <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
                 <ShieldCheck size={14} />
                 Read-only SELECT
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/5 bg-white/5 px-2.5 py-1 text-white/30">
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-sky-200">
                 <Sparkles size={14} />
                 AI baca payload saja
               </span>
               {payload?.metadata?.filteredRows !== undefined && (
-                <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/5 bg-white/5 px-2.5 py-1 text-white/30">
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-amber-200">
                   {formatValue(payload.metadata.filteredRows)} row filter
                 </span>
               )}
@@ -2055,7 +2214,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           </Link>
         </div>
 
-        <section className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
           {kpiCards.slice(0, 12).map((kpi) => {
             const canFilter = Boolean(viewerProfile.kpiPresetByLabel?.[kpi.label])
             return (
@@ -2071,6 +2230,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               </button>
             )
           })}
+        </div>
         </section>
 
         <section className="mt-4 text-white">
@@ -2580,9 +2740,11 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                       {visibleColumns.map((column) => (
                         <th
                           key={column}
-                          className={headerCellClass()}
+                          className={headerCellClass(column)}
+                          style={stickyCellStyle(column)}
+                          title={displayColumnLabel(column)}
                         >
-                          <button type="button" onClick={() => sortBy(column)} className="text-left font-bold leading-tight hover:text-emerald-700">
+                          <button type="button" onClick={() => sortBy(column)} className="w-full text-left font-bold leading-tight hover:text-emerald-700">
                             {displayColumnLabel(column)}{sortColumn === column ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
                           </button>
                         </th>

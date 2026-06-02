@@ -2,7 +2,7 @@
 
 import AdminTable from './AdminTable'
 import EditUserModal from './EditUserModal'
-import { deleteUser, resetUserPassword } from '@/app/admin/actions'
+import { deleteUser, resetUserPassword } from '@/app/(login)/admin/actions'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 

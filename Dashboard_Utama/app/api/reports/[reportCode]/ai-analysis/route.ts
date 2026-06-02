@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 const DISPLAY_PROVIDER = 'local-llm'
-const PROVIDER_ENGINE = 'adacode'
+const PROVIDER_ENGINE = '9router'
 const ADACODE_URL = process.env.ADACODE_BASE_URL ?? process.env.LOCAL_LLM_BASE_URL ?? 'https://api.local-llm.ai/v1/chat/completions'
 const rawAdaCodeModel = (process.env.ADACODE_MODEL ?? process.env.LOCAL_LLM_MODEL ?? '').trim()
 const ADACODE_MODEL =

@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import { verifyToken } from '@/utils/jwt'
-import { serviceRepository } from '@/utils/service-repository'
+import { getGatewayFallbackServices, serviceRepository } from '@/utils/service-repository'
 import Link from 'next/link'
 import { Server, Settings, Shield } from 'lucide-react'
 import LogoutButton from '@/components/LogoutButton'
@@ -45,8 +45,9 @@ export default async function DashboardUserPage() {
         )
     }
 
-    // Get services authorized for this user's role from database
-    const services = await serviceRepository.findByRole(user.role)
+    const services = user.id === 0
+        ? getGatewayFallbackServices(user.role)
+        : await serviceRepository.findByRole(user.role)
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">

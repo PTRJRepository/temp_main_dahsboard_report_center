@@ -50,6 +50,27 @@ function numericValue(value: unknown) {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
+function optionalNumericValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return undefined
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (typeof value !== 'string') return undefined
+  const normalized = value.replace(/[^\d.-]/g, '')
+  const numeric = Number(normalized)
+  return Number.isFinite(numeric) ? numeric : undefined
+}
+
+function firstNumericValue(row: DbRow | undefined, keys: string[]) {
+  for (const key of keys) {
+    const value = optionalNumericValue(row?.[key])
+    if (value !== undefined) return value
+  }
+  return undefined
+}
+
+function formatQuantityPart(value: number) {
+  return value.toLocaleString('id-ID', { maximumFractionDigits: 2 })
+}
+
 function isNumericCell(value: unknown) {
   if (typeof value === 'number') return Number.isFinite(value)
   if (typeof value !== 'string' || !value.trim()) return false
@@ -146,6 +167,85 @@ export function buildReportTableGroups<T extends DbRow>(
   return [...map.values()]
 }
 
+const subtotalSummaryAliases: Record<string, string[]> = {
+  Amount: ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
+  amount: ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
+  AmountItem: ['TotalAssetAmount', 'TotalAmountItem', 'TotalAmount', 'total_amount', 'AssetAmountRealTime'],
+  AmountCurrent: ['TotalAmount', 'NilaiPersediaan', 'total_amount', 'TotalAssetAmount'],
+  TotalAmount: ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
+  total_amount: ['total_amount', 'TotalAmount', 'TotalAssetAmount'],
+  NilaiStok: ['NilaiPersediaan', 'TotalAmount', 'total_amount'],
+  NilaiPersediaan: ['NilaiPersediaan', 'TotalAmount', 'total_amount'],
+  Qty: ['TotalQty', 'total_quantity'],
+  qty: ['TotalQty', 'total_quantity'],
+  Quantity: ['TotalQty', 'total_quantity'],
+  QtyOnHandHold: ['total_quantity', 'TotalQtyOnHandHold', 'TotalQty', 'Qty'],
+  total_quantity: ['total_quantity', 'TotalQtyOnHandHold', 'TotalQty', 'Qty'],
+  QuantityClosing: ['TotalQty', 'total_quantity', 'TotalQuantityClosing'],
+  StokAkhir: ['TotalQty', 'total_quantity', 'TotalQuantityClosing'],
+  QtyOnHand: ['total_quantity_on_hand', 'TotalQtyOnHand'],
+  quantity_on_hand: ['total_quantity_on_hand', 'TotalQtyOnHand'],
+  QtyOnHold: ['total_quantity_on_hold', 'TotalQtyOnHold'],
+  quantity_on_hold: ['total_quantity_on_hold', 'TotalQtyOnHold'],
+  StockIssueMovementCount: ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'],
+  StockIssueMovementQty: ['TotalStockIssueMovementQty', 'TotalStockIssueQty'],
+  StockIssueMovementAmount: ['TotalStockIssueMovementAmount', 'TotalStockIssueAmount'],
+  StockIssueEventCount: ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'],
+  StockIssueQtyAllPeriod: ['TotalStockIssueMovementQty', 'TotalStockIssueQty'],
+  StockIssueAmountAllPeriod: ['TotalStockIssueMovementAmount', 'TotalStockIssueAmount'],
+  ItemCurrent: ['TotalItem', 'total_item'],
+}
+
+function dynamicSummaryAliases(column: string) {
+  if (/(amount|nilai|cost|biaya)/i.test(column)) return ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount']
+  if (/(qty|quantity|stok)/i.test(column)) return ['TotalQty', 'total_quantity']
+  if (/(count|jumlah|rows|baris)/i.test(column)) return ['FilteredRows', 'TotalItem', 'total_item']
+  return []
+}
+
+export function buildReportSummaryTotals(
+  summary: DbRow | undefined,
+  rows: DbRow[],
+  columns: string[],
+  options: { fallbackToRows?: boolean } = {},
+) {
+  const fallbackToRows = options.fallbackToRows ?? true
+  const totals: Record<string, number> = {}
+
+  columns.forEach((column) => {
+    const summaryValue = firstNumericValue(summary, [
+      column,
+      ...(subtotalSummaryAliases[column] ?? []),
+      ...dynamicSummaryAliases(column),
+    ])
+    if (summaryValue !== undefined) {
+      totals[column] = summaryValue
+      return
+    }
+
+    if (fallbackToRows) {
+      totals[column] = rows.reduce((sum, row) => sum + numericValue(row[column]), 0)
+    }
+  })
+
+  return totals
+}
+
+export function formatInventoryQuantityBreakdown(row: DbRow) {
+  const onHand = firstNumericValue(row, ['QtyOnHand', 'quantity_on_hand'])
+  const onHold = firstNumericValue(row, ['QtyOnHold', 'quantity_on_hold'])
+  const total = firstNumericValue(row, ['QtyOnHandHold', 'total_quantity'])
+
+  if (onHand !== undefined || onHold !== undefined) {
+    const safeOnHand = onHand ?? 0
+    const safeOnHold = onHold ?? 0
+    return `${formatQuantityPart(total ?? safeOnHand + safeOnHold)}(${formatQuantityPart(safeOnHand)}+${formatQuantityPart(safeOnHold)})`
+  }
+
+  if (total !== undefined) return formatQuantityPart(total)
+  return '-'
+}
+
 export function buildReportTableRows<T extends DbRow>(options: {
   grouped: boolean
   groups: ReportTableGroup<T>[]
@@ -204,4 +304,3 @@ export function normalizeReportTableWindow(metadata: DbRow | undefined, loadedRo
     windowed: Boolean(metadata?.windowed) || reachableRows < totalRows,
   }
 }
-

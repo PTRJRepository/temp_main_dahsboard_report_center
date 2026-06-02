@@ -5,7 +5,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import { useReportStore } from '@/store/reportStore'
 
-export default function ReportsCenterLayout({
+export default function ReportCenterShell({
   children,
 }: {
   children: React.ReactNode
@@ -14,15 +14,9 @@ export default function ReportsCenterLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* ── Sidebar ── */}
       <Sidebar />
-
-      {/* ── Main column ── */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* ── Topbar ── */}
         <Topbar />
-
-        {/* ── Content area ── */}
         <motion.main
           key={sidebarCollapsed ? 'collapsed' : 'expanded'}
           initial={{ opacity: 0, y: 8 }}

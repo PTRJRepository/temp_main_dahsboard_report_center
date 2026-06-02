@@ -12,6 +12,7 @@ export default function LoginPage() {
                     src="/assets/kebun sawit.webp"
                     alt="Perkebunan Kelapa Sawit"
                     fill
+                    sizes="100vw"
                     className="object-cover"
                     priority
                 />

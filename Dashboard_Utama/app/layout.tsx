@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PT Rebinmas Jaya",
-  description: "Profil perusahaan, operasional, keberlanjutan, dan portal internal PT Rebinmas Jaya.",
+  title: "PT Rebinmas Jaya - Perkebunan Kelapa Sawit Berkelanjutan",
+  description: "PT Rebinmas Jaya adalah perusahaan perkebunan kelapa sawit yang berkomitmen menghadirkan produk berkualitas tinggi dengan standar operasional terbaik dan kepedulian terhadap masyarakat sekitar di Belitung, Bangka Belitung.",
   icons: {
     icon: "/favicon.ico",
   },
