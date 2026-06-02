@@ -1,0 +1,145 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - button "Buka sidebar" [ref=e5]:
+        - img [ref=e6]
+      - generic [ref=e8]:
+        - heading "all stock movement analysis" [level=1] [ref=e9]
+        - paragraph [ref=e10]: Pusat akses laporan perusahaan
+      - generic [ref=e12]:
+        - img
+        - searchbox "Cari laporan, kategori, atau kata kunci..." [ref=e13]
+        - generic [ref=e14]: Ctrl + K
+      - generic [ref=e15]:
+        - button "ID" [ref=e16]:
+          - img [ref=e17]
+          - text: ID
+        - button "Notification" [ref=e22]:
+          - img [ref=e23]
+        - generic [ref=e28]: AD
+    - main [ref=e29]:
+      - main [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - navigation [ref=e34]:
+                - link "Dashboard" [ref=e35] [cursor=pointer]:
+                  - /url: /report-center?source=pabrik
+                - text: /
+                - link "Modules / Inventory" [ref=e36] [cursor=pointer]:
+                  - /url: /report-center/inventory?source=pabrik
+                - text: /ALL Stock Movement Analysis Real Time
+              - generic [ref=e37]:
+                - heading "ALL Stock Movement Analysis Real Time" [level=1] [ref=e38]
+                - generic [ref=e39]: Inventory
+                - generic [ref=e40]: LIVE
+                - generic [ref=e41]:
+                  - img [ref=e42]
+                  - text: Pabrik
+                - generic [ref=e45]: SERVER_PROFILE_3 / db_ptrj_mill
+                - button "Tambah favorit" [ref=e46]:
+                  - img [ref=e47]
+              - paragraph [ref=e49]: "Analisis movement real-time per item stock/workshop: jumlah stock issue, qty movement, amount movement, tanggal movement terakhir, event terakhir, dan asset amount current sebagai konteks stok."
+              - generic [ref=e50]:
+                - generic [ref=e51]:
+                  - img [ref=e52]
+                  - text: Read-only SELECT
+                - generic [ref=e55]:
+                  - img [ref=e56]
+                  - text: AI baca payload saja
+            - link "Kembali ke Modul" [ref=e59] [cursor=pointer]:
+              - /url: /report-center/inventory?source=pabrik&report=all-stock-movement-analysis
+              - img [ref=e60]
+              - text: Kembali ke Modul
+          - generic [ref=e63]:
+            - generic [ref=e64]:
+              - generic [ref=e65]:
+                - img [ref=e66]
+                - text: Natural Filter
+              - generic [ref=e69]:
+                - textbox "Natural Filter" [ref=e70]:
+                  - /placeholder: "Contoh: group by movement category, fast moving, stock issue event > 5, sort movement event desc"
+                - button "Jalankan" [disabled] [ref=e71]:
+                  - img [ref=e72]
+                  - text: Jalankan
+              - button "Read-only SELECT" [ref=e76]
+            - generic [ref=e77]:
+              - generic [ref=e78]:
+                - generic [ref=e79]:
+                  - img [ref=e80]
+                  - text: Preset & Filter
+                - button "Manual Filter" [ref=e81]
+              - generic [ref=e82]:
+                - paragraph [ref=e83]: Quick Preset Movement
+                - generic [ref=e84]:
+                  - button "Semua Item Reset filter movement" [ref=e85]:
+                    - generic [ref=e86]: Semua Item
+                    - generic [ref=e87]: Reset filter movement
+                  - button "Fast Moving StockIssue >= 6 event" [ref=e88]:
+                    - generic [ref=e89]: Fast Moving
+                    - generic [ref=e90]: StockIssue >= 6 event
+                  - button "Moving StockIssue 2-5 event" [ref=e91]:
+                    - generic [ref=e92]: Moving
+                    - generic [ref=e93]: StockIssue 2-5 event
+                  - button "Slow Moving StockIssue 1 event" [ref=e94]:
+                    - generic [ref=e95]: Slow Moving
+                    - generic [ref=e96]: StockIssue 1 event
+                  - button "Dead Stock Stok ada, 0 movement" [ref=e97]:
+                    - generic [ref=e98]: Dead Stock
+                    - generic [ref=e99]: Stok ada, 0 movement
+                  - button "No Movement Stok dan movement 0" [ref=e100]:
+                    - generic [ref=e101]: No Movement
+                    - generic [ref=e102]: Stok dan movement 0
+                  - button "Nilai Stok Tinggi Prioritas nilai terbesar" [ref=e103]:
+                    - generic [ref=e104]: Nilai Stok Tinggi
+                    - generic [ref=e105]: Prioritas nilai terbesar
+                  - button "Gudang Tertentu Filter per gudang/lokasi" [ref=e106]:
+                    - generic [ref=e107]: Gudang Tertentu
+                    - generic [ref=e108]: Filter per gudang/lokasi
+              - generic [ref=e109]:
+                - button "Terapkan" [ref=e110]:
+                  - img [ref=e111]
+                  - text: Terapkan
+                - button "Reset" [ref=e112]:
+                  - img [ref=e113]
+                  - text: Reset
+          - generic [ref=e118]:
+            - generic [ref=e119]:
+              - generic [ref=e121]:
+                - img
+                - textbox "Search dalam table..." [ref=e122]
+              - generic [ref=e123]:
+                - combobox [ref=e124]:
+                  - option "Auto group" [selected]
+                  - option "Tanpa group"
+                - button "Comfort" [ref=e125]
+                - group [ref=e126]:
+                  - generic "Columns" [ref=e127] [cursor=pointer]
+                - button "Excel" [ref=e128]:
+                  - img [ref=e129]
+                  - text: Excel
+                - button "Export PDF" [ref=e132]:
+                  - img [ref=e133]
+                  - text: Export PDF
+                - button "CSV" [ref=e136]:
+                  - img [ref=e137]
+                  - text: CSV
+                - button "Print" [ref=e140]:
+                  - img [ref=e141]
+                  - text: Print
+                - button "Copy Link" [ref=e145]:
+                  - img [ref=e146]
+                  - text: Copy Link
+                - button "Insight" [ref=e149]:
+                  - img [ref=e150]
+                  - text: Insight
+                - button "Charts" [ref=e152]
+                - button "Quality" [ref=e153]
+                - button "Full Table" [ref=e154]:
+                  - img [ref=e155]
+                  - text: Full Table
+            - generic [ref=e165]:
+              - img [ref=e166]
+              - text: Memuat data tabel...
+  - button "Open Next.js Dev Tools" [ref=e176] [cursor=pointer]:
+    - img [ref=e177]

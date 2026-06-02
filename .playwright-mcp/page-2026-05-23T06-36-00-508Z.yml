@@ -1,0 +1,251 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e7]
+          - generic [ref=e10]:
+            - paragraph [ref=e11]: PT REBINMAS JAYA
+            - paragraph [ref=e12]: REPORT PORTAL
+        - navigation [ref=e13]:
+          - generic [ref=e14]:
+            - link "Dashboard Report Ringkasan & akses cepat" [ref=e17] [cursor=pointer]:
+              - /url: /report-center?source=pabrik
+              - img [ref=e19]
+              - generic [ref=e22]:
+                - generic [ref=e23]: Dashboard Report
+                - generic [ref=e24]: Ringkasan & akses cepat
+            - generic [ref=e25]:
+              - paragraph [ref=e26]: MODUL UTAMA
+              - generic [ref=e27]:
+                - link "Procurement Inventory live" [ref=e28] [cursor=pointer]:
+                  - /url: /report-center?module=procurement&source=pabrik#modules
+                  - img [ref=e30]
+                  - generic [ref=e34]:
+                    - generic [ref=e35]: Procurement
+                    - generic [ref=e36]: Inventory live
+                - link "Financial Produktivitas & efisiensi" [ref=e37] [cursor=pointer]:
+                  - /url: /report-center?module=financial&source=pabrik#modules
+                  - img [ref=e39]
+                  - generic [ref=e42]:
+                    - generic [ref=e43]: Financial
+                    - generic [ref=e44]: Produktivitas & efisiensi
+                - link "Human Resources Payroll, upah, premi, lembur" [ref=e45] [cursor=pointer]:
+                  - /url: /report-center?module=human-resources&source=pabrik#modules
+                  - img [ref=e47]
+                  - generic [ref=e51]:
+                    - generic [ref=e52]: Human Resources
+                    - generic [ref=e53]: Payroll, upah, premi, lembur
+                - link "Budget Budget, realisasi, variance" [ref=e54] [cursor=pointer]:
+                  - /url: /report-center?module=budget&source=pabrik#modules
+                  - img [ref=e56]
+                  - generic [ref=e58]:
+                    - generic [ref=e59]: Budget
+                    - generic [ref=e60]: Budget, realisasi, variance
+            - generic [ref=e61]:
+              - paragraph [ref=e62]: REPORT CEPAT
+              - generic [ref=e63]:
+                - link "Inventory Live Report real yang sudah aktif" [ref=e64] [cursor=pointer]:
+                  - /url: /report-center/inventory?source=pabrik
+                  - img [ref=e66]
+                  - generic [ref=e69]:
+                    - generic [ref=e70]: Inventory Live
+                    - generic [ref=e71]: Report real yang sudah aktif
+                - link "Daftar Laporan Semua sub-modul report" [ref=e72] [cursor=pointer]:
+                  - /url: /report-center?source=pabrik#modules
+                  - img [ref=e74]
+                  - generic [ref=e76]:
+                    - generic [ref=e77]: Daftar Laporan
+                    - generic [ref=e78]: Semua sub-modul report
+                - link "Favorit Saya Laporan yang disimpan" [ref=e79] [cursor=pointer]:
+                  - /url: /report-center?source=pabrik#favorites
+                  - img [ref=e81]
+                  - generic [ref=e83]:
+                    - generic [ref=e84]: Favorit Saya
+                    - generic [ref=e85]: Laporan yang disimpan
+            - generic [ref=e86]:
+              - paragraph [ref=e87]: PENGELOLAAN
+              - generic [ref=e88]:
+                - link "Integrasi Data Status & sinkronisasi data" [ref=e89] [cursor=pointer]:
+                  - /url: /report-center?source=pabrik#integration
+                  - img [ref=e91]
+                  - generic [ref=e95]:
+                    - generic [ref=e96]: Integrasi Data
+                    - generic [ref=e97]: Status & sinkronisasi data
+                - link "Pengaturan Pengaturan laporan & akses" [ref=e98] [cursor=pointer]:
+                  - /url: /report-center?source=pabrik#settings
+                  - img [ref=e100]
+                  - generic [ref=e103]:
+                    - generic [ref=e104]: Pengaturan
+                    - generic [ref=e105]: Pengaturan laporan & akses
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - generic [ref=e108]:
+              - img [ref=e110]
+              - img [ref=e113]
+            - paragraph [ref=e115]: Butuh bantuan?
+            - paragraph [ref=e116]: Lihat panduan atau hubungi tim
+          - button "Sembunyikan Menu" [ref=e117]:
+            - img [ref=e118]
+            - text: Sembunyikan Menu
+          - button "Logout" [ref=e120]:
+            - img [ref=e121]
+            - text: Logout
+          - paragraph [ref=e124]: Report Portal v2.0.0
+    - generic [ref=e125]:
+      - banner [ref=e126]:
+        - generic [ref=e127]:
+          - button "Navigasi" [ref=e128]:
+            - img [ref=e129]
+          - generic [ref=e131]:
+            - heading "all stock movement analysis" [level=1] [ref=e132]
+            - paragraph [ref=e133]: Pusat akses laporan perusahaan
+        - generic [ref=e135]:
+          - img
+          - searchbox "Cari laporan, kategori, atau kata kunci..." [ref=e136]
+          - generic [ref=e137]: Ctrl + K
+        - generic [ref=e138]:
+          - button "ID" [ref=e139]:
+            - img [ref=e140]
+            - text: ID
+          - button "Notification" [ref=e145]:
+            - img [ref=e146]
+          - generic [ref=e150]:
+            - button "Estate" [ref=e151]:
+              - img [ref=e152]
+              - text: Estate
+            - button "Pabrik" [ref=e156]:
+              - img [ref=e157]
+              - text: Pabrik
+          - generic [ref=e161]:
+            - generic [ref=e162]: AD
+            - generic [ref=e163]:
+              - generic [ref=e164]: Administrator
+              - generic [ref=e165]: Administrator · Pabrik
+      - main [ref=e166]:
+        - main [ref=e167]:
+          - generic [ref=e168]:
+            - generic [ref=e169]:
+              - generic [ref=e170]:
+                - navigation [ref=e171]:
+                  - link "Dashboard" [ref=e172] [cursor=pointer]:
+                    - /url: /report-center?source=pabrik
+                  - text: /
+                  - link "Modules / Inventory" [ref=e173] [cursor=pointer]:
+                    - /url: /report-center/inventory?source=pabrik
+                  - text: /ALL Stock Movement Analysis Real Time
+                - generic [ref=e174]:
+                  - heading "ALL Stock Movement Analysis Real Time" [level=1] [ref=e175]
+                  - generic [ref=e176]: Inventory
+                  - generic [ref=e177]: LIVE
+                  - generic [ref=e178]:
+                    - img [ref=e179]
+                    - text: Pabrik
+                  - generic [ref=e182]: SERVER_PROFILE_3 / db_ptrj_mill
+                  - button "Tambah favorit" [ref=e183]:
+                    - img [ref=e184]
+                - paragraph [ref=e186]: "Analisis movement real-time per item stock/workshop: jumlah stock issue, qty movement, amount movement, tanggal movement terakhir, event terakhir, dan asset amount current sebagai konteks stok."
+                - generic [ref=e187]:
+                  - generic [ref=e188]:
+                    - img [ref=e189]
+                    - text: Read-only SELECT
+                  - generic [ref=e192]:
+                    - img [ref=e193]
+                    - text: AI baca payload saja
+              - link "Kembali ke Modul" [ref=e196] [cursor=pointer]:
+                - /url: /report-center/inventory?source=pabrik&report=all-stock-movement-analysis
+                - img [ref=e197]
+                - text: Kembali ke Modul
+            - generic [ref=e200]:
+              - generic [ref=e201]:
+                - generic [ref=e202]:
+                  - img [ref=e203]
+                  - text: Natural Filter
+                - generic [ref=e206]:
+                  - textbox "Natural Filter" [ref=e207]:
+                    - /placeholder: "Contoh: group by movement category, fast moving, stock issue event > 5, sort movement event desc"
+                  - button "Jalankan" [disabled] [ref=e208]:
+                    - img [ref=e209]
+                    - text: Jalankan
+                - button "Read-only SELECT" [ref=e213]
+              - generic [ref=e214]:
+                - generic [ref=e215]:
+                  - generic [ref=e216]:
+                    - img [ref=e217]
+                    - text: Preset & Filter
+                  - button "Manual Filter" [ref=e218]
+                - generic [ref=e219]:
+                  - paragraph [ref=e220]: Quick Preset Movement
+                  - generic [ref=e221]:
+                    - button "Semua Item Reset filter movement" [ref=e222]:
+                      - generic [ref=e223]: Semua Item
+                      - generic [ref=e224]: Reset filter movement
+                    - button "Fast Moving StockIssue >= 6 event" [ref=e225]:
+                      - generic [ref=e226]: Fast Moving
+                      - generic [ref=e227]: StockIssue >= 6 event
+                    - button "Moving StockIssue 2-5 event" [ref=e228]:
+                      - generic [ref=e229]: Moving
+                      - generic [ref=e230]: StockIssue 2-5 event
+                    - button "Slow Moving StockIssue 1 event" [ref=e231]:
+                      - generic [ref=e232]: Slow Moving
+                      - generic [ref=e233]: StockIssue 1 event
+                    - button "Dead Stock Stok ada, 0 movement" [ref=e234]:
+                      - generic [ref=e235]: Dead Stock
+                      - generic [ref=e236]: Stok ada, 0 movement
+                    - button "No Movement Stok dan movement 0" [ref=e237]:
+                      - generic [ref=e238]: No Movement
+                      - generic [ref=e239]: Stok dan movement 0
+                    - button "Nilai Stok Tinggi Prioritas nilai terbesar" [ref=e240]:
+                      - generic [ref=e241]: Nilai Stok Tinggi
+                      - generic [ref=e242]: Prioritas nilai terbesar
+                    - button "Gudang Tertentu Filter per gudang/lokasi" [ref=e243]:
+                      - generic [ref=e244]: Gudang Tertentu
+                      - generic [ref=e245]: Filter per gudang/lokasi
+                - generic [ref=e246]:
+                  - button "Terapkan" [ref=e247]:
+                    - img [ref=e248]
+                    - text: Terapkan
+                  - button "Reset" [ref=e249]:
+                    - img [ref=e250]
+                    - text: Reset
+            - generic [ref=e255]:
+              - generic [ref=e256]:
+                - generic [ref=e258]:
+                  - img
+                  - textbox "Search dalam table..." [ref=e259]
+                - generic [ref=e260]:
+                  - combobox [ref=e261]:
+                    - option "Auto group" [selected]
+                    - option "Tanpa group"
+                  - button "Comfort" [ref=e262]
+                  - group [ref=e263]:
+                    - generic "Columns" [ref=e264] [cursor=pointer]
+                  - button "Excel" [ref=e265]:
+                    - img [ref=e266]
+                    - text: Excel
+                  - button "Export PDF" [ref=e269]:
+                    - img [ref=e270]
+                    - text: Export PDF
+                  - button "CSV" [ref=e273]:
+                    - img [ref=e274]
+                    - text: CSV
+                  - button "Print" [ref=e277]:
+                    - img [ref=e278]
+                    - text: Print
+                  - button "Copy Link" [ref=e282]:
+                    - img [ref=e283]
+                    - text: Copy Link
+                  - button "Insight" [ref=e286]:
+                    - img [ref=e287]
+                    - text: Insight
+                  - button "Charts" [ref=e289]
+                  - button "Quality" [ref=e290]
+                  - button "Full Table" [ref=e291]:
+                    - img [ref=e292]
+                    - text: Full Table
+              - generic [ref=e302]:
+                - img [ref=e303]
+                - text: Memuat data tabel...
+  - button "Open Next.js Dev Tools" [ref=e313] [cursor=pointer]:
+    - img [ref=e314]
+  - alert [ref=e317]

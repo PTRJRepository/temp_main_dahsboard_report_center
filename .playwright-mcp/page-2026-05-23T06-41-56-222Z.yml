@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - button "Buka sidebar" [ref=e5]:
+        - img [ref=e6]
+      - generic [ref=e8]:
+        - heading "all stock movement analysis" [level=1] [ref=e9]
+        - paragraph [ref=e10]: Pusat akses laporan perusahaan
+      - generic [ref=e12]:
+        - img
+        - searchbox "Cari laporan, kategori, atau kata kunci..." [ref=e13]
+        - generic [ref=e14]: Ctrl + K
+      - generic [ref=e15]:
+        - button "ID" [ref=e16]:
+          - img [ref=e17]
+          - text: ID
+        - button "Notification" [ref=e22]:
+          - img [ref=e23]
+        - generic [ref=e28]: AD
+    - main [ref=e29]:
+      - generic [ref=e30]: Memuat report...
+  - button "Open Next.js Dev Tools" [ref=e36] [cursor=pointer]:
+    - img [ref=e37]
