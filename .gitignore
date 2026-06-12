@@ -63,3 +63,11 @@ iTunes_Control/
 # Logs
 *.log
 logs/
+
+# nul on Windows
+nul
+nul.*
+
+# Docs - only generated doc files (not source docs that may be large)
+docs/notebooklm_upload*.py
+

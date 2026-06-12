@@ -360,9 +360,12 @@ async function startDashboardIfNeeded() {
 
     const dashboardScript = process.env.NODE_ENV === 'production' ? 'start' : 'dev';
 
+    // Use process.execPath (the running Bun executable) for spawning child processes on Windows
+    const bunExecutable = process.execPath;
+
     console.log(`Starting dashboard upstream with bun run ${dashboardScript} at ${DASHBOARD_TARGET}...`);
     const child = Bun.spawn({
-        cmd: ['bun', 'run', dashboardScript, '--', '-p', String(DASHBOARD_PORT), '--hostname', '127.0.0.1'],
+        cmd: [bunExecutable, 'run', dashboardScript, '--', '-p', String(DASHBOARD_PORT), '--hostname', '127.0.0.1'],
         cwd: DASHBOARD_DIR,
         stdout: 'inherit',
         stderr: 'inherit',
