@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
+    // Standalone output for Docker
+    output: 'standalone',
     // Allow HMR websocket from parent server
     allowedDevOrigins: ['http://localhost:3001'],
     // Configure Turbopack root to avoid lockfile detection issues
