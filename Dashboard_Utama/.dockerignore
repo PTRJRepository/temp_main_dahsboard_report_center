@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Next.js build output
+.next
+out
+
+# Environment files (secrets — use .env.docker instead)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs
+
+# Docker (exclude only if you want fully isolated build)
+# docker-compose.override.yml
+
+# Docs (reduce image size)
+docs
+*.md
+
+# Temp files
+_temp_*
+*.tmp
