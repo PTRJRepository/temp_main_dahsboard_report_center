@@ -43,7 +43,7 @@ Auth: `X-API-Key` on protected routes; public = none.
 
 **Frontend proxy actions** (`handleFrontendProxy`, `server_bun.js:230`): `getDashboard, listClients, getClient, getClientConfig, registerClient, updateClientConfig, sendHeartbeat, getModuleStatuses, reportModuleStatus, pollCommands, listCommands, createCommand, reportCommandResult, listClientGroups, createClientGroup, updateClientGroup, deleteClientGroup, listAuditLogs, listSyncDivisions, syncBootstrap, listSyncJobs, getSyncJob`.
 
-> ⚠️ **Bug:** Next.js proxy exposes `updateTemplate` via `PUT /api/ifess/query-gateway/templates/:code`, but `server_bun.js` `handleQueryGateway` has **no PUT handler** — editing existing templates via the dashboard 404s at the gateway.
+> ✅ **Fixed:** `updateTemplate` via `PUT /api/ifess/query-gateway/templates/:code` now has a handler in `handleQueryGateway` (`server_bun.js`). Before, editing templates via the dashboard 404'd at the gateway.
 
 ## 4. Client Lifecycle
 1. **Register** — client fetches `/server-info`, POSTs `/clients/register`. `registerClient` (`service.js:822`): upsert client (status `Online`), create default `configs[clientId]` (`configVersion:1, allowRun:true, modules:[]`), `loadAll()` then `saveDirty(['clients'])`.

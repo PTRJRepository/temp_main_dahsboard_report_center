@@ -2811,6 +2811,20 @@ function handleQueryGateway(req, reqPath) {
         return new Response(JSON.stringify(result), { status: result.success ? 200 : 404, headers: { 'Content-Type': 'application/json' } });
     }
 
+    // PUT /query-gateway/templates/:code — update an existing template (mirror of Next.js proxy updateTemplate)
+    if (req.method === 'PUT' && /\/query-gateway\/templates\/[\w-]+$/.test(normalizedPath)) {
+        const templateCode = normalizedPath.split('/').pop();
+        return req.arrayBuffer().then(body => {
+            try {
+                const updates = JSON.parse(new TextDecoder().decode(body));
+                const result = ifessService.updateQueryTemplate(templateCode, updates);
+                return new Response(JSON.stringify(result), { status: result.success ? 200 : 404, headers: { 'Content-Type': 'application/json' } });
+            } catch {
+                return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+            }
+        });
+    }
+
     // POST /query-gateway/jobs/:jobId/result — client reports inline query result
     if (req.method === 'POST' && /\/query-gateway\/jobs\/[^/]+\/result$/.test(normalizedPath)) {
         const jobId = normalizedPath.split('/').slice(-2, -1)[0];

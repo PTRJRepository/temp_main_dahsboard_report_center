@@ -454,13 +454,13 @@ ORDER BY Nama`,
     {
         templateCode: 'EXEC_KPI',
         templateName: 'KPI Eksekutif Bulan #MONTH#',
-        description: 'Ringkasan: total FFB, loosefruit, karyawan, OT cost, trip kendaraan, latex.',
+        description: 'Ringkasan: total FFB, loosefruit (brondolan), karyawan, trip kendaraan. Estate kelapa sawit: RT/latex tidak berlaku (RTSCANNERDATA kosong).',
         queryText: `SELECT
   (SELECT SUM(COALESCE(RIPEBCH,0)+COALESCE(UNRIPEBCH,0)+COALESCE(BLACKBCH,0)) FROM FFBSCANNERDATA#MONTH#) AS TOTAL_FFB,
-  (SELECT SUM(COALESCE(LOOSEFRUIT,0)) FROM FFBSCANNERDATA#MONTH#) AS TOTAL_LOOSEFRUIT,
+  (SELECT SUM(COALESCE(LOOSEFRUIT2,0)) FROM FFBSCANNERDATA#MONTH#) AS TOTAL_LOOSEFRUIT,
   (SELECT COUNT(*) FROM EMP) AS TOTAL_EMP,
   (SELECT COUNT(*) FROM GWSCANNERDATA#MONTH#) AS TOTAL_TRIPS,
-  (SELECT COALESCE(SUM(TOTALLATEXWEIGHT),0) FROM RTSCANNERDATA#MONTH#) AS TOTAL_LATEX
+  0 AS TOTAL_LATEX
 FROM RDB$DATABASE`,
         defaultMaxRows: 1,
         defaultTimeoutSeconds: 60,

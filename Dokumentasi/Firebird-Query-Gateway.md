@@ -72,7 +72,7 @@ isql paginates (~20 rows/page: `header` → `===` separator → `data` → blank
 
 ## 8. Seeded Templates
 Live store `data/ifess/query-templates.json` (25 templates) — edit directly, mtime-cached. Seed `DEFAULT_QUERY_TEMPLATES` (`service.js:102`) runs only when JSON empty.
-⚠️ `EXEC_KPI` (`service.js:455`) sums `LOOSEFRUIT` (all 0) and `RTSCANNERDATA` (=0) for loose-fruit; should use `LOOSEFRUIT2` and RT has no data in ARE-C.
+✅ **Fixed:** `EXEC_KPI` now uses `LOOSEFRUIT2` (real brondolan weight) and reports `TOTAL_LATEX = 0` with a note that RT/latex is N/A on this palm estate (`RTSCANNERDATA` is 0 rows). Previously it summed the all-zero `LOOSEFRUIT` column and `RTSCANNERDATA`.
 
 ## 9. Key Refs
 `handleQueryGateway:2598/3874`, `execLocalQuery:2968`, `parseIsqlOutput:2895`, `withIsqlLock:2962`, `isReadOnlySql:1426`, `DEFAULT_QUERY_TEMPLATES:102`.
