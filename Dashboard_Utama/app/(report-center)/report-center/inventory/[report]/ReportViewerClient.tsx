@@ -146,6 +146,7 @@ const MOVEMENT_ANALYSIS_REPORT_IDS = new Set(['all-stock-movement-analysis'])
 const ASSET_VALUATION_REPORT_IDS = new Set(['asset-stock-valuasi-listing'])
 const EMPTY_COLUMNS: string[] = []
 const TABLE_FIRST_LIMIT = 500
+const REPORT_INFO_AUTO_HIDE_MS = 6500
 
 const genericTechnicalColumns = new Set([
   'raw_status',
@@ -1270,6 +1271,9 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   const [filterError, setFilterError] = useState<string | null>(null)
   const [tableExpanded, setTableExpanded] = useState(false)
   const [manualFilterOpen, setManualFilterOpen] = useState(false)
+  const [reportInfoVisible, setReportInfoVisible] = useState(false)
+  const [reportInfoManuallyOpened, setReportInfoManuallyOpened] = useState(false)
+  const [aiInsightVisible, setAiInsightVisible] = useState(false)
   const [insightTab, setInsightTab] = useState<InsightTab>('charts')
   const [tableDensity, setTableDensity] = useState<TableDensity>('compact')
   const [expandedMovementRows, setExpandedMovementRows] = useState<Record<string, boolean>>({})
@@ -1331,6 +1335,10 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     setError(null)
     setAiDashboard(null)
     setAiDashboardError(null)
+    setReportInfoVisible(false)
+    setReportInfoManuallyOpened(false)
+    setAiInsightVisible(false)
+    setInsightTab('charts')
     uniqueValuesCache.current.clear()
 
     fetchReport(report, selectedSource, initialLimit, requestFilters, {
@@ -1384,7 +1392,14 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   }, [tableReady, payload, report.id, requestFilters, selectedSource])
 
   useEffect(() => {
-    if (!payload || !tableReady || !analysisReady) {
+    if (!reportInfoVisible || !tableReady || loading || error || reportInfoManuallyOpened) return
+
+    const timer = window.setTimeout(() => setReportInfoVisible(false), REPORT_INFO_AUTO_HIDE_MS)
+    return () => window.clearTimeout(timer)
+  }, [error, loading, payload, reportInfoManuallyOpened, reportInfoVisible, tableReady])
+
+  useEffect(() => {
+    if (!aiInsightVisible || !payload || !tableReady || !analysisReady) {
       setAiDashboard(null)
       setAiDashboardError(null)
       setAiDashboardLoading(false)
@@ -1449,7 +1464,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
       active = false
       window.clearTimeout(timer)
     }
-  }, [aiRefreshKey, requestFilters, payload, report.apiReport, report.code, report.description, report.id, report.title, selectedSource, getCachedAi, setCachedAi, tableReady, analysisReady])
+  }, [aiRefreshKey, aiInsightVisible, requestFilters, payload, report.apiReport, report.code, report.description, report.id, report.title, selectedSource, getCachedAi, setCachedAi, tableReady, analysisReady])
 
   const serverPaged = Boolean(payload?.metadata?.paginated)
   const filteredRows = useMemo(() => {
@@ -1881,11 +1896,37 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     .map((column) => [displayColumnLabel(column), payloadContextValue(payload, column)] as [string, unknown])
     .filter(([, value]) => value !== null && value !== undefined && value !== '')
 
+  const toggleReportInfo = () => {
+    const nextVisible = !reportInfoVisible
+    setReportInfoVisible(nextVisible)
+    setReportInfoManuallyOpened(nextVisible)
+  }
+
   const jumpToAnalysis = (tab: InsightTab) => {
+    if (tab === 'ai') {
+      setAiInsightVisible(true)
+      setInsightTab('ai')
+      window.setTimeout(() => {
+        window.requestAnimationFrame(() => {
+          document.getElementById('analysis-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      }, 0)
+      return
+    }
+
     setInsightTab(tab)
-    window.requestAnimationFrame(() => {
-      document.getElementById('analysis-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+    setReportInfoVisible(true)
+    setReportInfoManuallyOpened(true)
+    window.setTimeout(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById('analysis-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }, 0)
+  }
+
+  const hideAiInsight = () => {
+    setAiInsightVisible(false)
+    if (insightTab === 'ai') setInsightTab('charts')
   }
 
   const enterFullTable = () => {
@@ -1964,6 +2005,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     metadata: 'Metadata',
     recommendations: 'Recommendations',
   }
+  const analysisPanelVisible = reportInfoVisible || aiInsightVisible
 
   const effectiveTableDensity = tableExpanded ? 'compact' : tableDensity
   const headerPadding = tableExpanded
@@ -2020,23 +2062,23 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     return ''
   }
   const headerCellClass = (column: string) => {
-    return `${headerWidthClass(column)} ${stickyColumnClass(column, true)} whitespace-normal break-words border-b-2 border-r border-slate-300 bg-[#EEF4FB] ${headerPadding} align-bottom leading-tight font-extrabold text-slate-700`
+    return `${headerWidthClass(column)} ${stickyColumnClass(column, true)} whitespace-normal break-words border-b border-r border-amber-400/20 bg-[#0b1018] ${headerPadding} align-bottom leading-tight font-black text-amber-100 shadow-[inset_0_-1px_0_rgba(245,158,11,0.28)]`
   }
 
   const bodyCellClass = (column: string, columnIndex: number, subtotal = false, selected = false, zebraAlt = false) => {
     const text = subtotal
-      ? 'text-sm font-black text-white'
+      ? 'text-sm font-black text-slate-950'
       : columnIndex === 0 || isCodeColumn(column)
-        ? 'font-semibold text-slate-950'
-        : 'text-slate-700'
+        ? 'font-bold text-amber-100'
+        : 'text-slate-300'
     const bg = subtotal
-      ? 'bg-[#167A3A]'
+      ? 'bg-amber-500'
       : selected
-        ? 'bg-[#E7FFF3] group-hover:bg-[#E7FFF3]'
+        ? 'bg-amber-500/10 group-hover:bg-amber-500/20'
         : zebraAlt
-          ? 'bg-[#F8FBFA] group-hover:bg-[#F1F8F5]'
-          : 'bg-white group-hover:bg-[#F1F8F5]'
-    return `${columnWidthClass(column)} ${stickyColumnClass(column)} ${bg} border-b border-r border-slate-100 ${cellPadding} align-top leading-snug ${text}`
+          ? 'bg-[#111827] group-hover:bg-[#172033]'
+          : 'bg-[#0f172a] group-hover:bg-[#172033]'
+    return `${columnWidthClass(column)} ${stickyColumnClass(column)} ${bg} border-b border-r border-white/10 ${cellPadding} align-top leading-snug ${text}`
   }
   const displayTableTotalRows = serverPaged && tableWindow.windowed ? reachableTableRows : safeTotalTableRows
   const estimateTableRowSize = useCallback((index: number) => {
@@ -2073,23 +2115,23 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         .slice(0, 2)
 
       return (
-        <tr key={rowModel.key} className="bg-[#D1E8FA] text-slate-700">
-          <td colSpan={Math.max(visibleColumns.length, 1)} className="border-y border-blue-200 px-4 py-3">
+        <tr key={rowModel.key} className="bg-[#071426] text-slate-200">
+          <td colSpan={Math.max(visibleColumns.length, 1)} className="border-y border-amber-400/20 px-4 py-3">
             <button
               type="button"
               onClick={() => toggleGroup(group.key)}
               className="flex w-full flex-wrap items-center justify-between gap-3 text-left"
             >
-              <span className="inline-flex min-w-0 items-center gap-2 font-black text-slate-950">
+              <span className="inline-flex min-w-0 items-center gap-2 font-black text-amber-100">
                 {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                 <span className="truncate">{displayColumnLabel(activeTableGroupColumn ?? '')}: {group.label}</span>
               </span>
               <span className="flex flex-wrap gap-1.5">
-                <span className="rounded border border-emerald-200 bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-900">{movementReport ? 'Item' : 'Item Current'}: {formatValue(itemCurrent)}</span>
-                <span className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600">{movementReport ? 'Asset Amount' : 'Amount Current'}: {formatValue(amountCurrent)}</span>
-                <span className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-500">{movementReport ? 'Stock Qty' : 'Total Qty'}: {formatValue(totalQuantity)}</span>
+                <span className="rounded border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-bold text-emerald-200">{movementReport ? 'Item' : 'Item Current'}: {formatValue(itemCurrent)}</span>
+                <span className="rounded border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[11px] font-bold text-amber-100">{movementReport ? 'Asset Amount' : 'Amount Current'}: {formatValue(amountCurrent)}</span>
+                <span className="rounded border border-slate-300/15 bg-white/5 px-2 py-1 text-[11px] font-bold text-slate-300">{movementReport ? 'Stock Qty' : 'Total Qty'}: {formatValue(totalQuantity)}</span>
                 {subtotalChips.map((column) => (
-                  <span key={column} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-500">
+                  <span key={column} className="rounded border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-bold text-slate-300">
                     {displayColumnLabel(column)}: {formatValue(group.totals[column])}
                   </span>
                 ))}
@@ -2140,7 +2182,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             style={stickyCellStyle(column)}
           >
             {columnIndex === 0 ? (
-              <button type="button" onClick={(event) => toggleReportRow(event, rowModel.rowKey)} className="inline-flex max-w-[420px] items-start gap-2 text-left leading-snug text-slate-950 hover:text-emerald-800">
+              <button type="button" onClick={(event) => toggleReportRow(event, rowModel.rowKey)} className="inline-flex max-w-[420px] items-start gap-2 text-left leading-snug text-amber-100 hover:text-amber-300">
                 {movementExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                 <span className="whitespace-normal break-words">{renderReportCell(column, rowModel.row[column], rowModel.row)}</span>
               </button>
@@ -2179,9 +2221,11 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 <FileSpreadsheet size={13} />
                 {sourceLabel(selectedSource)}
               </span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
-                {sourceDescription(selectedSource)}
-              </span>
+              {reportInfoVisible && (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
+                  {sourceDescription(selectedSource)}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => toggleFavorite(report.id)}
@@ -2191,29 +2235,43 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 <Star size={18} fill={isFavorite ? 'currentColor' : 'none'} />
               </button>
             </div>
-            <p className="mt-2 max-w-5xl text-sm leading-6 text-white/60">{report.description}</p>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
-              <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
-                <ShieldCheck size={14} />
-                Read-only SELECT
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-sky-200">
-                <Sparkles size={14} />
-                AI baca payload saja
-              </span>
-              {payload?.metadata?.filteredRows !== undefined && (
-                <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-amber-200">
-                  {formatValue(payload.metadata.filteredRows)} row filter
-                </span>
-              )}
-            </div>
+            {reportInfoVisible && (
+              <>
+                <p className="mt-2 max-w-5xl text-sm leading-6 text-white/60">{report.description}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
+                    <ShieldCheck size={14} />
+                    Read-only SELECT
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-sky-200">
+                    <Sparkles size={14} />
+                    AI baca payload saja
+                  </span>
+                  {payload?.metadata?.filteredRows !== undefined && (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-amber-200">
+                      {formatValue(payload.metadata.filteredRows)} row filter
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          <Link href={`/report-center/inventory?source=${selectedSource}&report=${report.id}`} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
-            <ArrowLeft size={16} />
-            Kembali ke Modul
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={toggleReportInfo}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2.5 text-sm font-bold text-emerald-100 hover:bg-emerald-400/20"
+            >
+              {reportInfoVisible ? 'Sembunyikan Info & Filter' : 'Tampilkan Info & Filter'}
+            </button>
+            <Link href={`/report-center/inventory?source=${selectedSource}&report=${report.id}`} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
+              <ArrowLeft size={16} />
+              Kembali ke Modul
+            </Link>
+          </div>
         </div>
 
+        {reportInfoVisible && kpiCards.length > 0 && (
         <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
           {kpiCards.slice(0, 12).map((kpi) => {
             const canFilter = Boolean(viewerProfile.kpiPresetByLabel?.[kpi.label])
@@ -2231,8 +2289,10 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             )
           })}
         </div>
+        )}
         </section>
 
+        {reportInfoVisible && (
         <section className="mt-4 text-white">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
@@ -2559,10 +2619,11 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             </div>
           </div>
         </section>
+        )}
 
         <div className={tableExpanded ? '' : 'mt-5'}>
-        <section className={tableExpanded ? 'fixed inset-0 z-50 overflow-hidden bg-white p-2' : 'overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-white shadow-[0_24px_60px_rgba(0,0,0,0.22)]'}>
-          <div className={`sticky top-0 z-40 flex flex-wrap items-center justify-between border-b border-emerald-500/20 bg-[#12351F] ${tableExpanded ? 'mb-1 gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-900 shadow-sm' : 'gap-3 px-5 py-4'}`}>
+        <section className={tableExpanded ? 'fixed inset-0 z-50 overflow-hidden bg-[#06080d] p-2' : 'overflow-hidden rounded-2xl border border-amber-400/25 bg-[#0b1018] shadow-[0_24px_80px_rgba(0,0,0,0.32)]'}>
+          <div className={`sticky top-0 z-40 flex flex-wrap items-center justify-between border-b border-amber-400/20 bg-[#071426] ${tableExpanded ? 'mb-1 gap-1 rounded-lg border border-amber-400/20 bg-[#0b1018] px-2 py-1 text-slate-100 shadow-sm' : 'gap-3 px-5 py-4'}`}>
             <div className="flex flex-wrap items-center gap-2">
               {tableExpanded && (
                 <button
@@ -2689,7 +2750,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               </button>
               <button type="button" onClick={() => jumpToAnalysis('ai')} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20'}>
                 <BarChart3 size={16} />
-                Insight
+                Tampilkan AI Insight
               </button>
               <button type="button" onClick={() => jumpToAnalysis('charts')} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}>
                 Charts
@@ -2706,8 +2767,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
 
           {loading ? (
             <div className="space-y-3 p-5">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
-                <Loader2 className="animate-spin text-emerald-700" size={16} />
+              <div className="flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-bold text-amber-100">
+                <Loader2 className="animate-spin text-amber-300" size={16} />
                 Memuat data tabel...
               </div>
               <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
@@ -2721,7 +2782,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             </div>
           ) : (
             <>
-              {!tableExpanded && tableContextItems.length > 0 && (
+              {!tableExpanded && reportInfoVisible && tableContextItems.length > 0 && (
                 <div className="border-b border-slate-200 bg-[#F0F4FA] px-4 py-3">
                   <div className="flex flex-wrap gap-2">
                     {tableContextItems.map(([label, value]) => (
@@ -2733,9 +2794,9 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   </div>
                 </div>
               )}
-              <div className={`overflow-auto ${tableExpanded ? 'h-[calc(100vh-58px)] rounded-lg border border-slate-200 bg-white' : 'h-[76vh] min-h-[620px] max-h-[920px]'}`} ref={tableContainerRef}>
+              <div className={`overflow-auto ${tableExpanded ? 'h-[calc(100vh-58px)] rounded-lg border border-amber-400/20 bg-[#0b1018]' : 'h-[76vh] min-h-[620px] max-h-[920px] bg-[#0b1018]'}`} ref={tableContainerRef}>
                 <table className={`min-w-full table-auto border-separate border-spacing-0 text-left ${tableExpanded ? 'text-xs' : 'text-[13px]'}`}>
-                  <thead className={`sticky top-0 z-30 border-b-2 border-slate-300 uppercase text-slate-700 ${tableExpanded ? 'text-[10px] tracking-[0.08em]' : 'text-[11px] tracking-[0.12em]'}`}>
+                  <thead className={`sticky top-0 z-30 border-b border-amber-400/25 uppercase text-amber-100 ${tableExpanded ? 'text-[10px] tracking-[0.08em]' : 'text-[11px] tracking-[0.12em]'}`}>
                     <tr>
                       {visibleColumns.map((column) => (
                         <th
@@ -2744,17 +2805,17 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                           style={stickyCellStyle(column)}
                           title={displayColumnLabel(column)}
                         >
-                          <button type="button" onClick={() => sortBy(column)} className="w-full text-left font-bold leading-tight hover:text-emerald-700">
+                          <button type="button" onClick={() => sortBy(column)} className="w-full text-left font-bold leading-tight hover:text-amber-300">
                             {displayColumnLabel(column)}{sortColumn === column ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
                           </button>
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-white/10">
                     {filteredRows.length === 0 ? (
                       <tr>
-                        <td colSpan={Math.max(visibleColumns.length, 1)} className="px-4 py-12 text-center text-slate-500">
+                        <td colSpan={Math.max(visibleColumns.length, 1)} className="px-4 py-12 text-center text-slate-400">
                           Tidak ada report ditemukan. Coba ubah kata kunci atau filter.
                         </td>
                       </tr>
@@ -2780,7 +2841,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 </table>
               </div>
 
-              {!tableExpanded && Object.keys(tableTotals).length > 0 && (
+              {!tableExpanded && reportInfoVisible && Object.keys(tableTotals).length > 0 && (
                 <div className="flex flex-wrap gap-3 border-t border-slate-200 bg-[#F0F4FA] px-5 py-3">
                   {Object.entries(tableTotals).map(([column, total]) => (
                     <div key={column} className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 shadow-sm ${report.id === 'all-stock-movement-analysis' && column === 'AmountItem' ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
@@ -2792,7 +2853,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               )}
 
               {!tableExpanded && (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-400/20 bg-[#071426] px-5 py-3 text-sm text-slate-300">
                 <div className="flex flex-wrap items-center gap-3">
                   <span>
                     Menampilkan {shownTableRows} dari {displayTableTotalRows} row{serverPaged && tableWindow.windowed ? ` dari ${safeTotalTableRows} total` : ''}
@@ -2817,11 +2878,11 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 </div>
                 {!groupedTableActive && (
                   <div className="flex gap-2">
-                    <button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30">
+                    <button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30">
                       Prev
                     </button>
                     <span className="rounded-xl border border-emerald-700 bg-emerald-700 px-3 py-1.5 text-xs font-black text-white">{page} / {pageCount}</span>
-                    <button type="button" disabled={page === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30">
+                    <button type="button" disabled={page === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30">
                       Next
                     </button>
                   </div>
@@ -2831,12 +2892,14 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             </>
           )}
         </section>
-        {!tableExpanded && tableReady && !analysisReady && (
+        {!tableExpanded && analysisPanelVisible && tableReady && !analysisReady && (
           <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">Analysis Workspace</p>
-                <p className="mt-1 text-xs font-semibold text-white/45">Chart, AI insight, quality, metadata, dan recommendations disiapkan setelah table.</p>
+                <p className="mt-1 text-xs font-semibold text-white/45">
+                  {aiInsightVisible ? 'AI insight, chart, quality, metadata, dan recommendations disiapkan setelah table.' : 'Chart, quality, metadata, dan recommendations disiapkan setelah table.'}
+                </p>
               </div>
               <Loader2 className="animate-spin text-emerald-300" size={18} />
             </div>
@@ -2845,16 +2908,26 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             </div>
           </section>
         )}
-        {!tableExpanded && tableReady && analysisReady && (
+        {!tableExpanded && analysisPanelVisible && tableReady && analysisReady && (
           <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">Analysis Workspace</p>
-                <p className="mt-1 text-xs font-semibold text-white/45">AI insight, chart analysis, quality, metadata, dan recommendations tetap lengkap setelah table.</p>
+                <p className="mt-1 text-xs font-semibold text-white/45">
+                  {aiInsightVisible ? 'AI insight, chart analysis, quality, metadata, dan recommendations tetap lengkap setelah table.' : 'Chart, quality, metadata, dan recommendations tampil dulu. AI Insight menunggu tombol khusus.'}
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={aiInsightVisible ? hideAiInsight : () => jumpToAnalysis('ai')}
+                className={aiInsightVisible ? 'rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/60 hover:bg-white/10 hover:text-white' : 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20'}
+              >
+                {aiInsightVisible ? 'Sembunyikan AI Insight' : 'Tampilkan AI Insight'}
+              </button>
             </div>
 
-            <div className="mb-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div className={aiInsightVisible ? 'mb-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]' : 'mb-4 grid gap-4'}>
+              {aiInsightVisible && (
               <div className="rounded-xl border border-white/10 bg-[#0F2B1A] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-black text-white">AI Insight Preview</p>
@@ -2871,12 +2944,13 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 <p className="mt-3 text-sm font-semibold leading-6 text-white/70">{aiSections[0]?.content}</p>
                 <button
                   type="button"
-                  onClick={() => setInsightTab('ai')}
+                  onClick={() => jumpToAnalysis('ai')}
                   className="mt-3 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-500/20"
                 >
                   Open AI Insight
                 </button>
               </div>
+              )}
 
               <div className="rounded-xl border border-white/10 bg-[#0F2B1A] p-4">
                 <div className="mb-3 flex items-start justify-between gap-3">
@@ -2927,8 +3001,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               </div>
             </div>
 
-            <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-[#0F2B1A] p-1 md:grid-cols-5">
-              {(Object.keys(insightTabLabels) as InsightTab[]).map((tab) => (
+            <div className={`mb-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-[#0F2B1A] p-1 ${aiInsightVisible ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
+              {(Object.keys(insightTabLabels) as InsightTab[]).filter((tab) => tab !== 'ai' || aiInsightVisible).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -2944,7 +3018,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               ))}
             </div>
 
-            {insightTab === 'ai' && (
+            {insightTab === 'ai' && aiInsightVisible && (
               <div className="space-y-3">
                 {aiDashboardError && (
                   <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-xs font-semibold text-red-200">

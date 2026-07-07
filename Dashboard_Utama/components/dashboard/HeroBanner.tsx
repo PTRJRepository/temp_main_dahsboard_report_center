@@ -72,7 +72,7 @@ export default function HeroBanner() {
           </div>
         </div>
 
-        <aside className="self-center rounded-2xl border border-white/15 bg-white/12 p-5 shadow-2xl backdrop-blur-md">
+        <aside className="self-center rounded-2xl border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur-md">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Status Sistem</p>

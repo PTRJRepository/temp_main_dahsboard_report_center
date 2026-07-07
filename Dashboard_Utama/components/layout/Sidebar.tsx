@@ -118,10 +118,10 @@ export default function Sidebar() {
   }
 
   const navContent = (
-    <div className="flex h-full flex-col bg-gradient-to-b from-[#071B34] to-[#06162B] text-white">
+    <div className="flex h-full flex-col bg-gradient-to-b from-[#0b1018] via-[#090d14] to-[#06080d] text-white">
       <div className="flex min-h-[78px] items-center gap-3 border-b border-white/10 px-4">
         <div className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/15">
-          <FileText size={19} className="text-emerald-200" />
+          <FileText size={19} className="text-amber-300" />
         </div>
         {!sidebarCollapsed && (
           <div className="min-w-0">
@@ -160,8 +160,8 @@ export default function Sidebar() {
                       className={[
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition',
                         active
-                          ? 'bg-[#173B6D] text-white shadow-[0_4px_12px_rgba(37,99,235,0.18)] before:absolute before:left-0 before:top-2 before:h-[calc(100%-16px)] before:w-1 before:rounded-r before:bg-[#3B82F6]'
-                          : 'text-slate-300 hover:bg-white/8 hover:text-white',
+                          ? 'bg-amber-500/10 text-white shadow-none ring-1 ring-amber-400/25 before:absolute before:left-0 before:top-2 before:h-[calc(100%-16px)] before:w-1 before:rounded-r before:bg-amber-400'
+                          : 'text-slate-300 hover:bg-white/10 hover:text-white',
                         sidebarCollapsed ? 'justify-center' : '',
                       ].join(' ')}
                     >
@@ -183,15 +183,15 @@ export default function Sidebar() {
 
       <div className="space-y-3 border-t border-white/10 px-3 py-4">
         {!sidebarCollapsed && (
-          <div className="rounded-[14px] bg-gradient-to-br from-[#0F6B3B] to-[#0B3B2A] p-4 ring-1 ring-white/10">
+          <div className="rounded-[14px] bg-gradient-to-br from-amber-500/20 to-white/5 p-4 ring-1 ring-amber-300/15">
             <div className="flex items-center justify-between gap-3">
-              <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/12">
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/10">
                 <HelpCircle size={18} />
               </div>
-              <ChevronRight size={18} className="text-emerald-100" />
+              <ChevronRight size={18} className="text-amber-100" />
             </div>
             <p className="mt-3 text-sm font-semibold">Butuh bantuan?</p>
-            <p className="mt-1 text-xs leading-5 text-emerald-100/80">Lihat panduan atau hubungi tim</p>
+            <p className="mt-1 text-xs leading-5 text-amber-100/75">Lihat panduan atau hubungi tim</p>
           </div>
         )}
 
@@ -220,7 +220,7 @@ export default function Sidebar() {
       <motion.aside
         animate={{ width: sidebarCollapsed ? 84 : 250 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
-        className="hidden h-screen shrink-0 border-r border-[#102A4C] bg-[#071B34] lg:block"
+        className="hidden h-screen shrink-0 border-r border-[var(--rc-border)] bg-[#0b1018] lg:block"
       >
         {navContent}
       </motion.aside>

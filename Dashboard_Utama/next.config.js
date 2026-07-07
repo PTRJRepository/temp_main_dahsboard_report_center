@@ -31,6 +31,14 @@ const nextConfig = {
             },
             {
                 protocol: 'https',
+                hostname: 'myfirstblog123.hashnode.dev',
+            },
+            {
+                protocol: 'https',
+                hostname: 'cdn.hashnode.com',
+            },
+            {
+                protocol: 'https',
                 hostname: 'bookdown.org',
             },
             {

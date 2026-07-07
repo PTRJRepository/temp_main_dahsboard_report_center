@@ -9,7 +9,7 @@ BEGIN
         'report-center',
         'Report Center',
         'Dashboard laporan inventaris, analisis stok, dan pergerakan barang',
-        'http://localhost:3000',
+        'http://localhost:3001/report-center',
         '/report-center',
         1,
         'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop'
@@ -18,6 +18,11 @@ BEGIN
 END
 ELSE
 BEGIN
+    UPDATE service_ptrj
+    SET serviceUrl = 'http://localhost:3001/report-center',
+        path = '/report-center',
+        updatedAt = GETDATE()
+    WHERE serviceId = 'report-center';
     PRINT 'Service report-center already exists, skipping';
 END
 GO

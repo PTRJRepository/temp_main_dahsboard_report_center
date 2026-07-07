@@ -34,7 +34,13 @@ if (fs.existsSync(envPath)) {
     }
 }
 
-// Log current environment
+// Use the exact Next.js version from the dashboard app to avoid manifest version mismatch
+const next = require(path.join(DASHBOARD_DIR, 'node_modules', 'next'));
+
+const dev = process.env.NODE_ENV !== 'production';
+const PORT = process.env.PORT || 3001;
+
+// Log current environment AFTER PORT is defined
 console.log(`🌍 Running in ${env.toUpperCase()} mode`);
 if (typeof Bun !== 'undefined') {
     console.log(`🍞 Running on Bun v${Bun.version}`);
@@ -42,17 +48,17 @@ if (typeof Bun !== 'undefined') {
 console.log(`📡 Backend Host: ${process.env.BACKEND_HOST || 'localhost'}`);
 console.log(`📡 Fallback Host: ${process.env.BACKEND_HOST_FALLBACK || 'localhost'}`);
 
+// IFESS Control Server configuration
+console.log(`🔧 IFESS Server Host: ${process.env.IFESS_SERVER_HOST || 'localhost'}`);
+console.log(`🔧 IFESS Server Port: ${process.env.IFESS_SERVER_PORT || PORT}`);
+console.log(`🔧 IFESS Base URL: ${process.env.IFESS_BASE_URL || `http://localhost:${PORT}`}`);
+console.log(`🔧 IFESS API Key: ${process.env.IFESS_API_KEY ? '***' + process.env.IFESS_API_KEY.slice(-4) : 'NOT SET'}`);
+
 // Next.js 16 resolves production artifacts from process.cwd() in this embedded server.
 // Keep gateway paths rooted at ROOT_DIR, but run Next from the dashboard app directory.
 if (process.cwd() !== DASHBOARD_DIR) {
     process.chdir(DASHBOARD_DIR);
 }
-
-// Use the exact Next.js version from the dashboard app to avoid manifest version mismatch
-const next = require(path.join(DASHBOARD_DIR, 'node_modules', 'next'));
-
-const dev = process.env.NODE_ENV !== 'production';
-const PORT = process.env.PORT || 3001;
 
 // Configure Next.js with the correct host and port
 // This ensures that Next.js RSC/prefetch requests use the correct URL
@@ -478,9 +484,11 @@ function getWsProxyMiddleware(route) {
     if (!wsProxyCache.has(route.id)) {
         console.log(`📦 Creating WebSocket proxy for ${route.path} -> ${route.target}`);
 
-        // Create pathRewrite rule to strip the route path prefix
+        // Create pathRewrite rule to strip the route path prefix unless disabled
         const pathRewriteRule = {};
-        pathRewriteRule[`^${route.path}`] = '';
+        if (route.rewritePath !== false) {
+            pathRewriteRule[`^${route.path}`] = '';
+        }
 
         const wsProxy = createProxyMiddleware({
             target: route.target,
@@ -615,6 +623,47 @@ nextApp.prepare().then(() => {
     });
 
     // ============================================
+    // IFESS CONTROL SERVER INTEGRATION
+    // ============================================
+
+    // Load IFESS Control Server routes
+    let ifessRouter;
+    let ifessAuth;
+    try {
+        const ifessModule = require('./Services/ifess-control-server/routes');
+        ifessRouter = ifessModule.router;
+        ifessAuth = ifessModule.auth;
+        console.log('✅ IFESS Control Server loaded');
+    } catch (error) {
+        console.error('❌ Failed to load IFESS Control Server:', error.message);
+        ifessRouter = null;
+    }
+
+    // IFESS API routes - with authentication for /api/ifess paths
+    if (ifessRouter) {
+        // Apply body parser for IFESS routes
+        app.use('/api/ifess', express.json());
+
+        // Apply API key authentication middleware (except health and server-info endpoints)
+        app.use('/api/ifess', (req, res, next) => {
+            console.log(`[IFESS Auth] Processing: ${req.method} ${req.path}`);
+            // Skip auth for public endpoints
+            const publicPaths = ['/health', '/server-info'];
+            if (publicPaths.includes(req.path)) {
+                console.log(`[IFESS Auth] Public path - skipping auth`);
+                return next();
+            }
+            // Apply auth middleware
+            ifessAuth.authMiddleware(req, res, next);
+        });
+
+        // Mount IFESS routes
+        app.use('/api/ifess', ifessRouter);
+
+        console.log('🔗 IFESS Control Server routes mounted at /api/ifess');
+    }
+
+    // ============================================
     // LEGACY API ROUTES FOR BACKWARD COMPATIBILITY
     // ============================================
 
@@ -681,7 +730,8 @@ nextApp.prepare().then(() => {
             reqPath.startsWith('/api/routes') ||
             reqPath.startsWith('/api/auth') ||
             reqPath.startsWith('/api/services') ||
-            reqPath.startsWith('/api/reports')) {
+            reqPath.startsWith('/api/ifess')) {
+            console.log(`[Proxy Skip] Passing through: ${reqPath}`);
             return next();
         }
 
@@ -746,16 +796,15 @@ nextApp.prepare().then(() => {
         // Only let Next.js handle dashboard-specific routes
         const isDashboardRoute =
             reqPath === '/' ||
-            reqPath.startsWith('/report-center') ||
             reqPath === '/login' ||
+            reqPath === '/ifess-control' ||
             reqPath.startsWith('/dashboard') ||
             reqPath.startsWith('/dashboard-user') ||
             reqPath.startsWith('/admin') ||
             reqPath.startsWith('/modules') ||
             reqPath.startsWith('/api/auth') ||
             reqPath.startsWith('/api/services') ||
-            reqPath.startsWith('/api/routes') ||
-            reqPath.startsWith('/api/reports');
+            reqPath.startsWith('/api/routes');
 
         if (isDashboardRoute) {
             return nextHandle(req, res);
@@ -805,7 +854,7 @@ nextApp.prepare().then(() => {
                 matchedRoute = sortedRoutes.find(r =>
                     r.enabled &&
                     r.rewriteContent === true &&
-                    (r.target.includes(':5173') || r.target.includes(':5174') || r.target.includes(':5175') || r.target.includes(':5176') || r.target.includes(':5177'))
+                    (r.target.includes(':3000') || r.target.includes(':5173') || r.target.includes(':5174') || r.target.includes(':5175') || r.target.includes(':5176') || r.target.includes(':5177'))
                 );
             }
 

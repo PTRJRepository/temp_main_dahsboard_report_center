@@ -87,16 +87,17 @@ function pageTitle(pathname: string) {
 export default function Topbar() {
   const pathname = usePathname()
   const searchRef = useRef<HTMLInputElement>(null)
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
-  const [reportSource, setReportSource] = useState<ReportSource>('estate')
+  const [currentUser] = useState<UserProfile | null>(() => readStoredUser())
+  const [reportSource, setReportSource] = useState<ReportSource>(() => {
+    if (typeof window === 'undefined') return 'estate'
+    const params = new URLSearchParams(window.location.search)
+    return normalizeSource(params.get('source') ?? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY))
+  })
   const [title, subtitle] = pageTitle(pathname)
   const name = displayName(currentUser)
   const role = roleLabel(currentUser?.role)
 
   useEffect(() => {
-    setCurrentUser(readStoredUser())
-    const params = new URLSearchParams(window.location.search)
-    setReportSource(normalizeSource(params.get('source') ?? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY)))
     const handler = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
@@ -134,11 +135,11 @@ export default function Topbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-[78px] shrink-0 items-center gap-4 border-b border-[#E2E8F0] bg-white px-4 text-slate-950 shadow-sm lg:px-7">
+    <header className="sticky top-0 z-30 flex h-[78px] shrink-0 items-center gap-4 border-b border-[var(--rc-border)] bg-[#0b1018]/92 px-4 text-[var(--rc-text)] shadow-none backdrop-blur-xl lg:px-7">
       <button
         type="button"
         onClick={openSidebar}
-        className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+        className="rounded-xl p-2 text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)] lg:hidden"
         aria-label="Buka sidebar"
       >
         <Menu size={20} />
@@ -147,7 +148,7 @@ export default function Topbar() {
       <div className="flex min-w-[220px] items-center gap-3">
         <button
           type="button"
-          className="hidden h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 lg:grid"
+          className="hidden h-10 w-10 place-items-center rounded-xl border border-[var(--rc-border)] bg-white/5 text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)] lg:grid"
           aria-label="Navigasi"
         >
           <ChevronLeft size={18} />
@@ -167,7 +168,7 @@ export default function Topbar() {
             placeholder="Cari laporan, kategori, atau kata kunci..."
             onFocus={openGlobalSearch}
             onClick={openGlobalSearch}
-            className="h-[42px] w-full rounded-xl border border-[#DDE5EF] bg-white pl-10 pr-20 text-sm font-medium text-slate-950 outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+            className="h-[42px] w-full rounded-xl border border-[var(--rc-border)] bg-[#0f172a]/90 pl-10 pr-20 text-sm font-medium text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-[var(--rc-accent)] focus:ring-4 focus:ring-amber-500/10"
           />
           <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
             Ctrl + K
@@ -178,20 +179,20 @@ export default function Topbar() {
       <div className="ml-auto flex items-center gap-2">
         <button
           type="button"
-          className="hidden h-[42px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:inline-flex"
+          className="hidden h-[42px] items-center gap-2 rounded-xl border border-[var(--rc-border)] bg-white/5 px-3 text-sm font-semibold text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)] sm:inline-flex"
         >
           <Globe2 size={16} />
           ID
         </button>
         <button
           type="button"
-          className="relative grid h-[42px] w-[42px] place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+          className="relative grid h-[42px] w-[42px] place-items-center rounded-xl border border-[var(--rc-border)] bg-white/5 text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
           aria-label="Notification"
         >
           <Bell size={18} />
-          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#22C55E]" />
+          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--rc-accent)]" />
         </button>
-        <div className="hidden h-[42px] items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm lg:flex">
+        <div className="hidden h-[42px] items-center rounded-xl border border-[var(--rc-border)] bg-white/5 p-1 shadow-none lg:flex">
           {REPORT_SOURCES.map((source) => (
             <button
               key={source.id}
@@ -201,8 +202,8 @@ export default function Topbar() {
               className={[
                 'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-extrabold transition',
                 reportSource === source.id
-                  ? 'bg-[#16834A] text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
+                  ? 'bg-[var(--rc-accent)] text-slate-950 shadow-none'
+                  : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
               ].join(' ')}
             >
               <Database size={13} />
@@ -210,8 +211,8 @@ export default function Topbar() {
             </button>
           ))}
         </div>
-        <div className="flex h-[42px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-2.5 pr-3 hover:bg-slate-50">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#16834A] text-xs font-bold text-white">{initials(name)}</span>
+        <div className="flex h-[42px] items-center gap-3 rounded-xl border border-[var(--rc-border)] bg-white/5 px-2.5 pr-3 hover:bg-white/10">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--rc-accent)] text-xs font-bold text-slate-950">{initials(name)}</span>
           <span className="hidden text-left lg:block">
             <span className="block text-sm font-bold leading-tight text-slate-900">{name}</span>
             <span className="block text-[11px] font-medium text-slate-500">{role} · {sourceLabel(reportSource)}</span>

@@ -69,16 +69,16 @@ PID: <pid>
 Direct URL: http://localhost:8003
 Proxy path: /ifess
 Proxy URL example: http://<main-dashboard-host>:3001/ifess
-API key: ptrj-rebinmas-air-ruak-parit-gunung-darul
+API key: See `IFESS_API_KEY` environment variable
 ```
 
 ### 2. Verify Proxy Route (IFESS Control Server Running)
 ```powershell
 # Direct to IFESS server (bypass proxy)
-curl -H "X-API-Key: ptrj-rebinmas-air-ruak-parit-gunung-darul" http://localhost:8003/health
+curl -H "X-API-Key: $IFESS_API_KEY" http://localhost:8003/health
 
 # Via Main Dashboard proxy
-curl -H "X-API-Key: ptrj-rebinmas-air-ruak-parit-gunung-darul" http://localhost:3001/ifess/health
+curl -H "X-API-Key: $IFESS_API_KEY" http://localhost:3001/ifess/health
 ```
 
 **Expected JSON Response:**
@@ -160,7 +160,7 @@ cd "D:\Gawean Rebinmas\Kerani_Super_App\IFESS.SuperApp\src\IFESS.SuperApp\bin\Re
 - If client is on remote machine, change `BaseUrl` to `http://<main-dashboard-ip>:3001/ifess`
 
 ### Issue: Health endpoint returns 401 Unauthorized
-- X-API-Key header is required. Must be `ptrj-rebinmas-air-ruak-parit-gunung-darul`
+- X-API-Key header is required. Check `IFESS_API_KEY` environment variable
 - Check API key matches between server (`IFESS_API_KEY`) and client (`ControlServer:ApiKey`)
 
 ### Issue: Client heartbeat works but commands don't dispatch
@@ -177,7 +177,7 @@ Set these if you want to override defaults:
 ```powershell
 $env:IFESS_PORT = "8003"              # Default: 8003
 $env:IFESS_HOST = "0.0.0.0"          # Default: 0.0.0.0
-$env:IFESS_API_KEY = "ptrj-rebinmas-air-ruak-parit-gunung-darul"
+$env:IFESS_API_KEY = "<your-api-key>"
 $env:IFESS_BASE_PATH = "/ifess"      # Default: /ifess
 ```
 

@@ -29,6 +29,8 @@ interface GatewayRouteConfig {
     target: string
     description?: string
     name?: string
+    servicePath?: string
+    serviceUrl?: string
     enabled?: boolean
     hidden?: boolean
     public?: boolean
@@ -70,11 +72,11 @@ function getFallbackServices(role: string): Service[] {
             serviceId: route.id,
             name: route.name || route.description || route.id,
             description: route.description,
-            serviceUrl: route.target,
+            serviceUrl: route.serviceUrl || route.target,
             targetUrl: route.target,
-            path: route.path,
+            path: route.servicePath || route.path,
             enabled: route.enabled !== false,
-            imagePath: route.image?.startsWith('/') ? route.image : null,
+            imagePath: route.image || null,
         }))
 }
 

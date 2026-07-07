@@ -49,7 +49,7 @@ export type IntelligenceModule = {
 export const intelligenceModules: IntelligenceModule[] = [
   {
     id: 'procurement',
-    route: '/report-center?module=procurement#modules',
+    route: '/report-center/procurement',
     name: 'Procurement',
     reportCount: liveInventoryReports.length,
     icon: Package,
@@ -91,7 +91,7 @@ export const intelligenceModules: IntelligenceModule[] = [
   },
   {
     id: 'financial',
-    route: '/report-center?module=financial#modules',
+    route: '/report-center/financial',
     name: 'Financial',
     reportCount: 16,
     icon: Wallet,
@@ -138,7 +138,7 @@ export const intelligenceModules: IntelligenceModule[] = [
   },
   {
     id: 'human-resources',
-    route: '/report-center?module=human-resources#modules',
+    route: '/report-center/human-resources',
     name: 'Human Resources',
     reportCount: 94,
     icon: Users,
@@ -188,7 +188,7 @@ export const intelligenceModules: IntelligenceModule[] = [
   },
   {
     id: 'budget',
-    route: '/report-center?module=budget#modules',
+    route: '/report-center/budget',
     name: 'Budget',
     reportCount: 12,
     icon: BarChart3,

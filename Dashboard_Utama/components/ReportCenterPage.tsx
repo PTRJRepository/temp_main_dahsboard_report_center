@@ -1,16 +1,14 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import Sidebar from '@/components/layout/Sidebar'
-import Topbar from '@/components/layout/Topbar'
+import { useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import GlobalSearch from '@/components/dashboard/GlobalSearch'
 import HeroBanner from '@/components/dashboard/HeroBanner'
 import ModuleCard, { MODULES } from '@/components/dashboard/ModuleCard'
-import GlobalSearch from '@/components/dashboard/GlobalSearch'
 import FavoritesPanel from '@/components/dashboard/FavoritesPanel'
 import RecentPanel from '@/components/dashboard/RecentPanel'
 import SystemInfoPanel from '@/components/dashboard/SystemInfoPanel'
 import { IntelligenceWidget } from '@/components/intelligence/IntelligenceWidget'
-import { useReportStore } from '@/store/reportStore'
 
 const MOCK_RECOMMENDATIONS = [
   { id: '1', reportName: 'Stok Persediaan per Gudang', module: 'Procurement / Inventory', reason: 'similar' as const, reasonText: 'Report Inventory live siap dibuka', confidence: 0.92, subtitle: 'Gudang PG1A' },
@@ -20,52 +18,65 @@ const MOCK_RECOMMENDATIONS = [
 ]
 
 export default function ReportCenterPage() {
-  const { sidebarCollapsed } = useReportStore()
+  const [insightsOpen, setInsightsOpen] = useState(false)
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar />
-        <motion.main
-          key={sidebarCollapsed ? 'collapsed' : 'expanded'}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="flex-1 overflow-y-auto"
-        >
-          <GlobalSearch />
-          <div className="mx-auto max-w-screen-xl px-4 pb-10 sm:px-6 lg:px-8">
-            <section className="pt-6">
-              <HeroBanner />
-            </section>
-            <section className="mb-8">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-slate-800">Modul Laporan</h2>
-                <span className="text-xs text-slate-400">4 modul utama</span>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {MODULES.map((mod) => (
-                  <ModuleCard key={mod.id} module={mod} className="h-full" />
-                ))}
-              </div>
-            </section>
-            <section className="mb-8">
+    <>
+      <GlobalSearch />
+      <div className="mx-auto max-w-screen-2xl space-y-5 px-4 pb-8 pt-5 sm:px-6 lg:px-8">
+        <HeroBanner />
+
+        <section id="modules" className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-amber-300">Report families</p>
+              <h2 className="mt-1 text-base font-bold text-[var(--rc-text)]">Modul Laporan Lengkap</h2>
+            </div>
+            <span className="rounded-full border border-[var(--rc-border)] px-3 py-1 text-xs font-semibold text-[var(--rc-text-muted)]">
+              {MODULES.length} modul utama
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {MODULES.map((mod) => (
+              <ModuleCard key={mod.id} module={mod} className="h-full" />
+            ))}
+          </div>
+        </section>
+
+        <section className="rc-panel overflow-hidden rounded-3xl">
+          <button
+            type="button"
+            onClick={() => setInsightsOpen((value) => !value)}
+            className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left hover:bg-white/5"
+            aria-expanded={insightsOpen}
+          >
+            <span>
+              <span className="block text-xs font-bold uppercase tracking-[0.24em] text-amber-300">Insight tambahan</span>
+              <span className="mt-1 block text-sm font-semibold text-[var(--rc-text)]">
+                Rekomendasi, favorit, recent, dan status sistem
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--rc-border)] px-3 py-1 text-xs font-bold text-[var(--rc-text-muted)]">
+              {insightsOpen ? 'Tutup' : 'Buka jika perlu'}
+              {insightsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </span>
+          </button>
+
+          {insightsOpen && (
+            <div className="grid grid-cols-1 gap-4 border-t border-[var(--rc-border)] p-4 xl:grid-cols-[1.45fr_1fr]">
               <IntelligenceWidget
                 recommendations={MOCK_RECOMMENDATIONS}
                 onSelect={(rec) => console.log('Selected:', rec.reportName)}
               />
-            </section>
-            <section>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div id="favorites" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
                 <FavoritesPanel />
                 <RecentPanel />
                 <SystemInfoPanel />
               </div>
-            </section>
-          </div>
-        </motion.main>
+            </div>
+          )}
+        </section>
       </div>
-    </div>
+    </>
   )
 }

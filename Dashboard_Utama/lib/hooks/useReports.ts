@@ -3,7 +3,7 @@
  * Thin, focused hook for fetching Report[] from the SQL Gateway API.
  * Falls back to mock data when the backend is unavailable.
  *
- * SQL Gateway: POST http://localhost:8001/v1/query
+ * SQL Gateway: POST http://10.0.0.110:3001/query/v1/query
  * Headers  : x-api-key: [REDACTED], Content-Type: application/json
  * DB       : db_ptrj_mill (READ-ONLY)
  */
@@ -33,7 +33,7 @@ async function fetchReportsFromApi(moduleId?: string): Promise<Report[]> {
     ? { query: 'SELECT TOP 50 * FROM reports WHERE module_id = @moduleId ORDER BY last_run DESC', params: [{ name: 'moduleId', value: moduleId }] }
     : { query: 'SELECT TOP 50 * FROM reports ORDER BY last_run DESC', params: [] }
 
-  const res = await fetch('http://localhost:8001/v1/query', {
+  const res = await fetch('http://10.0.0.110:3001/query/v1/query', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ export function useReport(id: string) {
     queryKey: ['report', id],
     queryFn: async () => {
       try {
-        const res = await fetch(`http://localhost:8001/v1/query`, {
+        const res = await fetch('http://10.0.0.110:3001/query/v1/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': '[REDACTED]' },
           body: JSON.stringify({

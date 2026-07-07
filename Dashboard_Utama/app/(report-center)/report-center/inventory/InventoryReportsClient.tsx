@@ -1118,8 +1118,8 @@ function AIInsightTile({
               className={[
                 'rounded-xl border px-3 py-2 text-left text-xs font-semibold leading-5 transition',
                 selectedQuestion === question
-                  ? 'border-emerald-200 bg-emerald-300/18 text-white'
-                  : 'border-white/10 bg-white/[0.06] text-emerald-50/85 hover:bg-white/12',
+                  ? 'border-emerald-200 bg-emerald-300/20 text-white'
+                  : 'border-white/10 bg-white/5 text-emerald-50/85 hover:bg-white/10',
               ].join(' ')}
             >
               {question}
@@ -1305,6 +1305,7 @@ export default function InventoryReportsClient() {
   const [aiDashboard, setAiDashboard] = useState<AiDashboardDefinition | null>(null)
   const [aiDashboardLoading, setAiDashboardLoading] = useState(false)
   const [aiDashboardError, setAiDashboardError] = useState<string | null>(null)
+  const [aiInsightVisible, setAiInsightVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { favorites, toggleFavorite, addRecent } = useReportStore()
@@ -1365,6 +1366,7 @@ export default function InventoryReportsClient() {
   }
 
   const selectSource = (source: ReportSource) => {
+    setAiInsightVisible(false)
     setSelectedSource(source)
     updateUrl(source, activeStage, selectedCatalogReport.reportCode)
   }
@@ -1376,12 +1378,14 @@ export default function InventoryReportsClient() {
         : selectedCatalogReport.flowStage === stage
         ? selectedCatalogReport
         : LIVE_INVENTORY_REPORT_CATALOG.find((report) => report.flowStage === stage) ?? selectedCatalogReport
+    setAiInsightVisible(false)
     setActiveStage(stage)
     setSelectedReportCode(nextReport.reportCode)
     updateUrl(selectedSource, stage, nextReport.reportCode)
   }
 
   const previewReport = (report: InventoryCatalogReport) => {
+    setAiInsightVisible(false)
     setSelectedReportCode(report.reportCode)
     addRecent(catalogReportId(report))
     updateUrl(selectedSource, activeStage, report.reportCode)
@@ -1454,7 +1458,7 @@ export default function InventoryReportsClient() {
   }, [linkedLiveReport, openableSelectedReport, selectedSource, staleFilter])
 
   useEffect(() => {
-    if (!payload) {
+    if (!aiInsightVisible || !payload) {
       setAiDashboard(null)
       setAiDashboardError(null)
       setAiDashboardLoading(false)
@@ -1507,10 +1511,10 @@ export default function InventoryReportsClient() {
       active = false
       window.clearTimeout(timer)
     }
-  }, [payload, selectedCatalogReport.description, selectedCatalogReport.name, selectedCatalogReport.reportCode, selectedSource, staleFilter])
+  }, [aiInsightVisible, payload, selectedCatalogReport.description, selectedCatalogReport.name, selectedCatalogReport.reportCode, selectedSource, staleFilter])
 
   return (
-    <main className="min-h-full bg-[#F6F8FB]">
+    <main className="min-h-full bg-transparent">
       <div className="mx-auto max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1552,7 +1556,7 @@ export default function InventoryReportsClient() {
           </div>
         </div>
 
-        <section className="overflow-hidden rounded-[18px] border border-emerald-900/20 bg-[#064E3B] p-[18px] text-white shadow-[0_16px_46px_rgba(6,78,59,0.22)]">
+        <section className="rc-panel rc-panel-active overflow-hidden rounded-[18px] p-[18px] text-white">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-200">Inventory Flow Monitor</p>
@@ -1562,19 +1566,19 @@ export default function InventoryReportsClient() {
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-[18px] border border-white/10 bg-white/12 p-4">
+              <div className="rounded-[18px] border border-white/10 bg-white/10 p-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">Sumber DB</p>
                 <p className="mt-2 truncate text-sm font-extrabold">{sourceTileValue}</p>
               </div>
-              <div className="rounded-[18px] border border-white/10 bg-white/12 p-4">
+              <div className="rounded-[18px] border border-white/10 bg-white/10 p-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">Safety</p>
                 <p className="mt-2 text-sm font-extrabold">Read-only SELECT</p>
               </div>
-              <div className="rounded-[18px] border border-white/10 bg-white/12 p-4">
+              <div className="rounded-[18px] border border-white/10 bg-white/10 p-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">Mode</p>
                 <p className="mt-2 text-sm font-extrabold">Live only</p>
               </div>
-              <div className="rounded-[18px] border border-white/10 bg-white/12 p-4">
+              <div className="rounded-[18px] border border-white/10 bg-white/10 p-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">Live</p>
                 <p className="mt-2 text-sm font-extrabold">{liveCount} report</p>
               </div>
@@ -1582,21 +1586,20 @@ export default function InventoryReportsClient() {
           </div>
         </section>
 
-        <section className="mt-5 grid gap-4 md:grid-cols-3">
-          {WORKSPACE_TILES.map((tile) => <WorkspaceTile key={tile.title} tile={tile} />)}
-        </section>
-
-        <section className="mt-5 rounded-[18px] border border-[#DDE6F0] bg-white p-[18px] shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Flow Filter</p>
-              <h2 className="mt-1 text-lg font-extrabold text-slate-950">Inventory Flow Tile Stepper</h2>
-            </div>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600">
-              Active: {selectedStage.stageName}
-            </span>
+        <details className="mt-5 overflow-hidden rounded-[18px] border border-[var(--rc-border)] bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/5">
+            Buka workspace tile tambahan
+          </summary>
+          <div className="grid gap-4 border-t border-[var(--rc-border)] p-4 md:grid-cols-3">
+            {WORKSPACE_TILES.map((tile) => <WorkspaceTile key={tile.title} tile={tile} />)}
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+        </details>
+
+        <details className="mt-5 overflow-hidden rounded-[18px] border border-[var(--rc-border)] bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/5">
+            Flow filter: {selectedStage.stageName}
+          </summary>
+          <div className="flex gap-3 overflow-x-auto border-t border-[var(--rc-border)] p-4">
             <FlowStageTile
               stage={stageInfo('all')}
               count={liveCount}
@@ -1613,15 +1616,40 @@ export default function InventoryReportsClient() {
               />
             ))}
           </div>
+        </details>
+
+        <details className="mt-5 overflow-hidden rounded-[18px] border border-[var(--rc-border)] bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/5">
+            Buka ringkasan KPI inventory
+          </summary>
+          <div className="grid grid-cols-2 gap-4 border-t border-[var(--rc-border)] p-4 lg:grid-cols-4">
+            <KpiTile label="Live Report" value={String(liveCount)} note="Bisa buka viewer/export" icon={CheckCircle2} color="#D99A00" />
+            <KpiTile label="Flow Live" value={String(stageCounts.size)} note="Hanya flow dengan report live" icon={Layers} color="#D99A00" />
+            <KpiTile label="Sumber DB" value={selectedSource === 'pabrik' ? 'Pabrik' : 'Estate'} note={sourceTileValue} icon={Database} color="#D99A00" />
+            <KpiTile label="Query Mode" value="Read-only" note="SELECT only" icon={ShieldCheck} color="#D99A00" />
+          </div>
+        </details>
+
+        <section className="mt-5 rounded-[18px] border border-emerald-200 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700">AI Insight</p>
+              <p className="mt-1 text-sm font-semibold text-slate-600">
+                Analisa payload disembunyikan dulu supaya halaman tetap bersih.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAiInsightVisible((current) => !current)}
+              className={aiInsightVisible ? 'inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-extrabold text-slate-700 hover:bg-white' : 'inline-flex h-11 items-center gap-2 rounded-2xl bg-[#167A3A] px-4 text-sm font-extrabold text-white hover:bg-[#0f6a30]'}
+            >
+              <Sparkles size={16} />
+              {aiInsightVisible ? 'Sembunyikan AI Insight' : 'Tampilkan AI Insight'}
+            </button>
+          </div>
         </section>
 
-        <section className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiTile label="Live Report" value={String(liveCount)} note="Bisa buka viewer/export" icon={CheckCircle2} color="#16A34A" />
-          <KpiTile label="Flow Live" value={String(stageCounts.size)} note="Hanya flow dengan report live" icon={Layers} color="#2563EB" />
-          <KpiTile label="Sumber DB" value={selectedSource === 'pabrik' ? 'Pabrik' : 'Estate'} note={sourceTileValue} icon={Database} color="#167A3A" />
-          <KpiTile label="Query Mode" value="Read-only" note="SELECT only" icon={ShieldCheck} color="#64748B" />
-        </section>
-
+        {aiInsightVisible && (
         <section className="mt-5">
           <AIInsightTile
             selectedReport={selectedCatalogReport}
@@ -1631,7 +1659,9 @@ export default function InventoryReportsClient() {
             error={error}
           />
         </section>
+        )}
 
+        {aiInsightVisible && (
         <section className="mt-5">
           <AiDynamicDashboard
             definition={aiDashboard}
@@ -1650,6 +1680,7 @@ export default function InventoryReportsClient() {
             error={aiDashboardError}
           />
         </section>
+        )}
 
         <section className="mt-5 rounded-[18px] border border-[#DDE6F0] bg-white p-[18px] shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
           <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.4fr)_180px_190px_auto]">
@@ -1669,7 +1700,10 @@ export default function InventoryReportsClient() {
             {selectedCatalogReport.existingReportId === 'item-movement-update-tracking' ? (
               <select
                 value={staleFilter}
-                onChange={(event) => setStaleFilter(event.target.value)}
+                onChange={(event) => {
+                  setAiInsightVisible(false)
+                  setStaleFilter(event.target.value)
+                }}
                 className="h-11 rounded-2xl border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-800"
               >
                 {STALE_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

@@ -13,16 +13,17 @@ export default function ReportCenterShell({
   const { sidebarCollapsed } = useReportStore()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="report-center-dark flex h-screen overflow-hidden bg-[var(--rc-bg)] text-[var(--rc-text)]">
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_0%,rgba(245,158,11,0.1),transparent_28rem)]" />
         <Topbar />
         <motion.main
           key={sidebarCollapsed ? 'collapsed' : 'expanded'}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="flex-1 overflow-y-auto"
+          className="relative flex-1 overflow-y-auto"
         >
           {children}
         </motion.main>

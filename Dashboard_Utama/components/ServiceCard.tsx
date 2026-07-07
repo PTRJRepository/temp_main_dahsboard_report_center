@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import Image from 'next/image'
 import * as LucideIcons from 'lucide-react'
 
@@ -16,7 +15,7 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
     const IconComponent = (icon && LucideIcons[icon as keyof typeof LucideIcons] ? LucideIcons[icon as keyof typeof LucideIcons] : LucideIcons.HelpCircle) as any
 
     return (
-        <Link href={routeUrl} className="group block h-full">
+        <a href={routeUrl} className="group block h-full">
             <div className="h-full bg-white rounded-xl shadow-sm hover:shadow-xl border border-gray-100/50 hover:border-palm-green/20 overflow-hidden transition-all duration-300 relative">
                 {/* Banner Image Area */}
                 <div className="h-40 relative w-full bg-gray-50 overflow-hidden">
@@ -59,6 +58,6 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
                     )}
                 </div>
             </div>
-        </Link>
+        </a>
     )
 }

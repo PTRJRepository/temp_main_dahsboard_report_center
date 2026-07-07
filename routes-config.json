@@ -93,6 +93,64 @@
     "rewriteContent": false
   },
   {
+    "id": "server-monitor",
+    "path": "/server-monitor",
+    "servicePath": "/server-monitor/servers",
+    "serviceUrl": "http://localhost:3001/server-monitor/servers",
+    "target": "http://localhost:3000",
+    "name": "Server Monitor",
+    "description": "Monitoring kesehatan server fisik dan virtual",
+    "enabled": true,
+    "rewriteContent": true,
+    "rewritePath": false,
+    "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSN1vftvyItd3fdfM2j7rZAI9cUJMT6Xwkvt56n2NMw_g&s=10"
+  },
+  {
+    "id": "network-monitor",
+    "path": "/network-monitor",
+    "servicePath": "/network-monitor/",
+    "serviceUrl": "http://localhost:3001/network-monitor/",
+    "target": "static://network-monitor",
+    "staticSiteDir": "Module Services/Wifi_LAN_Monitor/reference-design",
+    "name": "Network Monitor",
+    "description": "Monitoring perangkat jaringan, switch, router, firewall, dan access point",
+    "enabled": true,
+    "rewriteContent": false,
+    "image": "https://myfirstblog123.hashnode.dev/_next/image?url=https%3A%2F%2Fcdn.hashnode.com%2Fres%2Fhashnode%2Fimage%2Fupload%2Fv1727268180677%2Ff42f8ec4-32c9-4494-af41-c93c68aacf22.jpeg&w=3840&q=75"
+  },
+  {
+    "id": "report-center",
+    "path": "/report-center",
+    "servicePath": "/report-center",
+    "serviceUrl": "http://localhost:3001/report-center",
+    "target": "http://127.0.0.1:3100",
+    "name": "Report Center",
+    "description": "Dashboard laporan inventaris, analisis stok, dan pergerakan barang",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false,
+    "image": "/assets/kebun sawit.webp"
+  },
+  {
+    "id": "report-center-assets",
+    "path": "/report-center-assets",
+    "target": "http://localhost:3200",
+    "description": "Static assets for Report Center service",
+    "enabled": false,
+    "rewriteContent": false,
+    "hidden": true
+  },
+  {
+    "id": "backend-report-center",
+    "path": "/api/reports",
+    "target": "http://localhost:3200",
+    "description": "Report Center API",
+    "enabled": false,
+    "rewriteContent": false,
+    "rewritePath": false,
+    "hidden": true
+  },
+  {
     "id": "query",
     "path": "/query",
     "target": "http://localhost:8001",

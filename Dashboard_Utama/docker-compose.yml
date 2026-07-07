@@ -13,6 +13,7 @@ services:
     volumes:
       - ./prisma:/app/prisma
       - ./keys:/app/keys
+      - ./.next/static:/app/.next/static:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -30,6 +31,8 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./.next/static:/var/www/dashboard/_next/static:ro
+      - ./public:/var/www/dashboard/public:ro
     depends_on:
       - app
     networks:

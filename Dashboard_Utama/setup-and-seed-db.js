@@ -9,6 +9,8 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config({ path: './.env' });
 
 const DB_NAME = process.env.MSSQL_DATABASE || 'extend_db_ptrj';
+const SERVER_MONITOR_IMAGE = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSN1vftvyItd3fdfM2j7rZAI9cUJMT6Xwkvt56n2NMw_g&s=10';
+const NETWORK_MONITOR_IMAGE = 'https://myfirstblog123.hashnode.dev/_next/image?url=https%3A%2F%2Fcdn.hashnode.com%2Fres%2Fhashnode%2Fimage%2Fupload%2Fv1727268180677%2Ff42f8ec4-32c9-4494-af41-c93c68aacf22.jpeg&w=3840&q=75';
 
 const configs = [
     {
@@ -72,7 +74,7 @@ const servicesToSeed = [
         serviceId: 'upah',
         name: 'Sistem Penggajian',
         description: 'Sistem Penggajian/Payroll',
-        serviceUrl: 'http://10.0.0.110:5175',
+        serviceUrl: 'http://localhost:3001/upah',
         path: '/upah',
         enabled: true,
         imagePath: '/assets/payroll_banner.webp'
@@ -81,7 +83,7 @@ const servicesToSeed = [
         serviceId: 'absen',
         name: 'Sistem Absensi',
         description: 'Sistem Absensi Karyawan',
-        serviceUrl: 'http://10.0.0.110:5176',
+        serviceUrl: 'http://localhost:3001/absen',
         path: '/absen',
         enabled: true,
         imagePath: '/assets/absen_monitoring.webp'
@@ -90,16 +92,43 @@ const servicesToSeed = [
         serviceId: 'monitoring-beras',
         name: 'Monitoring Beras',
         description: 'Monitoring Distribusi Beras',
-        serviceUrl: 'http://10.0.0.110:5177',
+        serviceUrl: 'http://localhost:3001/monitoring-beras',
         path: '/monitoring-beras',
         enabled: true,
         imagePath: '/assets/monitoring_beras_banner.webp'
     },
     {
+        serviceId: 'server-monitor',
+        name: 'Server Monitor',
+        description: 'Monitoring kesehatan server fisik dan virtual',
+        serviceUrl: 'http://localhost:3001/server-monitor/servers',
+        path: '/server-monitor/servers',
+        enabled: true,
+        imagePath: SERVER_MONITOR_IMAGE
+    },
+    {
+        serviceId: 'network-monitor',
+        name: 'Network Monitor',
+        description: 'Monitoring perangkat jaringan, switch, router, firewall, dan access point',
+        serviceUrl: 'http://localhost:3001/network-monitor/',
+        path: '/network-monitor/',
+        enabled: true,
+        imagePath: NETWORK_MONITOR_IMAGE
+    },
+    {
+        serviceId: 'report-center',
+        name: 'Report Center',
+        description: 'Dashboard laporan inventaris, analisis stok, dan pergerakan barang',
+        serviceUrl: 'http://localhost:3001/report-center',
+        path: '/report-center',
+        enabled: true,
+        imagePath: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop'
+    },
+    {
         serviceId: 'query',
         name: 'SQL Gateway',
         description: 'SQL Gateway API',
-        serviceUrl: 'http://localhost:8001',
+        serviceUrl: 'http://localhost:3001/query',
         path: '/query',
         enabled: true,
         imagePath: null
@@ -152,9 +181,10 @@ async function setupAndSeed() {
                 await pool.request().query("SELECT imagePath FROM service_ptrj");
             } catch (e) {
                 console.log("Column 'imagePath' missing. Adding it...");
-                await pool.request().query("ALTER TABLE service_ptrj ADD imagePath NVARCHAR(255)");
+                await pool.request().query("ALTER TABLE service_ptrj ADD imagePath NVARCHAR(500)");
                 console.log("Column 'imagePath' added.");
             }
+            await pool.request().query("ALTER TABLE service_ptrj ALTER COLUMN imagePath NVARCHAR(500)");
         } catch (e) {
             // Table doesn't exist
         }
@@ -168,7 +198,7 @@ async function setupAndSeed() {
                     serviceUrl NVARCHAR(255) NOT NULL,
                     path NVARCHAR(100),
                     enabled BIT DEFAULT 1,
-                    imagePath NVARCHAR(255),
+                    imagePath NVARCHAR(500),
                     createdAt DATETIME DEFAULT GETDATE(),
                     updatedAt DATETIME DEFAULT GETDATE()
                 );

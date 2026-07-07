@@ -59,7 +59,7 @@ TARGET_PORT = 1433         # Port SQL Server asli
 server = "localhost"
 port = 3001          # Port proxy
 username = "sa"
-password = "ptrj@123"
+password = os.getenv("SQL_PASSWORD")  # Set via environment variable
 ```
 
 ## Penggunaan dalam Kode Anda

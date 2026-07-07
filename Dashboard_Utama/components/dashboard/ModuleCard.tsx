@@ -31,32 +31,31 @@ export default function ModuleCard({
     <article
       onMouseEnter={() => onPreview?.(module)}
       className={[
-        'group relative flex h-full min-h-[274px] flex-col overflow-hidden rounded-3xl border bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] transition',
+        'group relative flex h-full min-h-[210px] flex-col overflow-hidden rounded-2xl border p-4 transition',
         active
-          ? 'border-emerald-300 ring-4 ring-emerald-500/10'
-          : 'border-slate-200 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-[0_24px_55px_rgba(15,23,42,0.12)]',
+          ? 'rc-panel-active'
+          : 'rc-panel hover:-translate-y-0.5 hover:border-[var(--rc-border-strong)]',
         className,
       ].join(' ')}
     >
-      <div className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: module.accent }} />
+      <div className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-[var(--rc-accent)] opacity-60" />
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <button
           type="button"
           onClick={() => onPreview?.(module)}
-          className="grid h-14 w-14 place-items-center rounded-2xl text-white shadow-lg"
-          style={{ backgroundColor: module.accent }}
+          className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 bg-white/10 text-amber-300"
           aria-label={`Lihat monitoring ${module.name}`}
         >
-          <Icon size={27} strokeWidth={1.8} />
+          <Icon size={22} strokeWidth={1.8} />
         </button>
         <div className="flex items-center gap-2">
           <span
             className={[
               'rounded-full border px-2.5 py-1 text-xs font-semibold',
               module.available
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-slate-200 bg-slate-50 text-slate-500',
+                ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-300'
+                : 'border-slate-400/20 bg-white/5 text-[var(--rc-text-muted)]',
             ].join(' ')}
           >
             {module.available ? 'Live' : 'Katalog'}
@@ -67,8 +66,8 @@ export default function ModuleCard({
             className={[
               'grid h-8 w-8 place-items-center rounded-xl border transition',
               pinned
-                ? 'border-amber-200 bg-amber-50 text-amber-600'
-                : 'border-slate-200 bg-white text-slate-400 hover:text-amber-600',
+                ? 'border-amber-300/30 bg-amber-400/10 text-amber-300'
+                : 'border-white/10 bg-white/5 text-[var(--rc-text-faint)] hover:text-amber-300',
             ].join(' ')}
             aria-label={pinned ? 'Unpin module' : 'Pin module'}
           >
@@ -77,38 +76,34 @@ export default function ModuleCard({
         </div>
       </div>
 
-      <button type="button" onClick={() => onPreview?.(module)} className="mt-5 min-w-0 flex-1 text-left">
+      <button type="button" onClick={() => onPreview?.(module)} className="mt-4 min-w-0 flex-1 text-left">
         <div className="flex items-end gap-2">
-          <h3 className="truncate text-xl font-semibold text-slate-950">{module.name}</h3>
-          <span className="pb-0.5 text-sm font-semibold text-slate-400">{module.reportCount} laporan</span>
+          <h3 className="truncate text-lg font-bold text-[var(--rc-text)]">{module.name}</h3>
+          <span className="pb-0.5 text-xs font-semibold text-[var(--rc-text-faint)]">{module.reportCount} laporan</span>
         </div>
-        <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{module.description}</p>
+        <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--rc-text-muted)]">{module.description}</p>
       </button>
 
-      <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 opacity-100 transition group-hover:border-emerald-100 group-hover:bg-emerald-50/60">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-          <BarChart3 size={14} style={{ color: module.accent }} />
+      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">
+          <BarChart3 size={13} className="text-amber-300" />
           Primary chart
         </div>
-        <p className="mt-1 truncate text-sm font-semibold text-slate-800">{module.primaryChart.replace(/_/g, ' ')}</p>
-        <p className="mt-1 text-xs leading-5 text-slate-500">
-          Hover summary: {module.insight.summary}
-        </p>
+        <p className="mt-1 truncate text-sm font-semibold text-[var(--rc-text)]">{module.primaryChart.replace(/_/g, ' ')}</p>
       </div>
 
-      <div className="mt-4 grid grid-cols-[1fr_auto] gap-2 border-t border-slate-100 pt-4">
-        <button
-          type="button"
-          onClick={() => onPreview?.(module)}
-          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Monitoring
-        </button>
+      <div className="mt-3 grid grid-cols-[1fr_auto] gap-2 border-t border-white/10 pt-3">
         <Link
           href={module.route}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#167A3A] px-3 py-2.5 text-sm font-semibold text-white hover:bg-[#0f6a30]"
+          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center text-sm font-semibold text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
         >
-          Buka Modul
+          Detail Modul
+        </Link>
+        <Link
+          href={module.route}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--rc-accent)] px-3 py-2 text-sm font-bold text-slate-950 hover:bg-amber-400"
+        >
+          Buka
           <ArrowRight size={15} />
         </Link>
       </div>

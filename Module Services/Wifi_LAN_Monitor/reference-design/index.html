@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rebinmas Jaya - Network Monitor</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">RJ</div><div><div class="brand-title">Rebinmas Jaya</div><div class="brand-sub">Network Intelligence</div></div></div>
+    <button class="site-switch"><span><small>ACTIVE HOST</small><b>Loading gateway host...</b></span><span>LIVE</span></button>
+    <div class="nav-label">Operations</div>
+    <nav class="nav">
+      <a data-nav class="active" href="index.html"><span class="nav-icon">◈</span>Overview</a>
+      <a data-nav href="#live-events"><span class="nav-icon">◔</span>Runtime Events <span class="nav-count">0</span></a>
+      <a data-nav href="#interfaces"><span class="nav-icon">▦</span>Discovered Devices</a>
+      <a data-nav href="#resources"><span class="nav-icon">▤</span>Host Resources</a>
+    </nav>
+    <div class="nav-label">Source</div>
+    <nav class="nav">
+      <a data-nav href="#interfaces"><span class="nav-icon">◫</span>Agentless Inventory</a>
+      <a data-nav href="#live-events"><span class="nav-icon">!</span>Threshold Alerts</a>
+    </nav>
+    <div class="sidebar-bottom"><small>COLLECTOR - WAITING</small><div class="user-mini"><div class="avatar">GW</div><div><b>Gateway</b><br><small>Runtime Snapshot</small></div></div></div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="breadcrumb"><b>Network Monitor</b><span>Gateway / agentless LAN discovery</span></div>
+      <label class="global-search"><span>⌕</span><input placeholder="Cari interface, IP, MAC, hostname..." data-filter-input><kbd>Enter</kbd></label>
+      <div class="top-actions"><button class="icon-btn" data-last-updated>Loading...</button><button class="btn primary" data-refresh><span class="live-dot"></span>Scan ulang</button></div>
+    </header>
+    <section class="page">
+      <div class="page-head"><div><h1>Agentless LAN discovery</h1><p>Data diambil langsung dari host gateway port 3001 melalui ARP, ICMP, DNS, NetBIOS, multicast discovery, dan port fingerprinting.</p></div><div class="view-controls"><button class="btn" data-refresh-secondary>Force discovery</button></div></div>
+      <div class="intel-tabs" data-intel-tabs>
+        <button class="tab-btn active" data-tab="overview">Overview</button>
+        <button class="tab-btn" data-tab="topology">Topology Map</button>
+        <button class="tab-btn" data-tab="latency">Latency & Jitter</button>
+        <button class="tab-btn" data-tab="connections">Connections</button>
+        <button class="tab-btn" data-tab="inventory">Inventory</button>
+      </div>
+      <div class="grid kpis">
+        <article class="kpi"><div class="kpi-title">Reachable devices <span class="status info">Loading</span></div><div class="kpi-val">-</div><div class="kpi-foot">Waiting for snapshot</div></article>
+        <article class="kpi"><div class="kpi-title">Discovery methods <span class="muted">agentless</span></div><div class="kpi-val">-</div><div class="kpi-foot">Waiting for snapshot</div></article>
+        <article class="kpi"><div class="kpi-title">Primary IP <span class="muted">gateway</span></div><div class="kpi-val">-</div><div class="kpi-foot">Waiting for snapshot</div></article>
+        <article class="kpi"><div class="kpi-title">Traffic RX / TX <span class="muted">gateway</span></div><div class="kpi-val">-</div><div class="kpi-foot">Waiting for snapshot</div></article>
+        <article class="kpi"><div class="kpi-title">Open incidents <span class="status info">Live</span></div><div class="kpi-val">-</div><div class="kpi-foot">Waiting for snapshot</div></article>
+      </div>
+      <section class="panel tab-panel active" data-tab-panel="overview" style="margin-top:14px">
+        <div class="panel-head"><div class="panel-title">Intelligence summary <span class="panel-sub">Total traffic, health, device mix</span></div></div>
+        <div class="panel-body">
+          <div class="intel-grid">
+            <div class="chart-card wide"><div class="chart-head"><span>Total traffic trend</span><b data-total-traffic-label>0 B/s</b></div><svg class="line-chart tall" viewBox="0 0 620 190" data-total-traffic-chart></svg></div>
+            <div class="donut-card"><div class="chart-head"><span>Device status</span><b data-status-total>0</b></div><div class="donut" data-status-donut></div><div class="stack-list" data-status-stack></div></div>
+            <div class="donut-card"><div class="chart-head"><span>Device type mix</span><b data-type-total>0</b></div><div class="bar-stack" data-type-bars></div></div>
+          </div>
+          <div class="client-summary">
+            <div class="section-title"><div><b>Client intelligence matrix</b><span>Ringkasan banyak client dari discovery, latency, port, subnet, dan sesi TCP yang terlihat gateway</span></div><strong data-client-summary-total>0 clients</strong></div>
+            <div class="client-summary-grid">
+              <div class="chart-card"><div class="chart-head"><span>Top active clients</span><b data-client-connections-total>0 TCP</b></div><div class="hbar-list" data-top-client-connections></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Highest delay</span><b data-client-latency-total>-</b></div><div class="hbar-list" data-top-client-latency></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Open port exposure</span><b data-client-openports-total>0 ports</b></div><div class="hbar-list" data-top-client-openports></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Client risk score</span><b data-client-risk-total>-</b></div><div class="rank-list" data-client-risk-list></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Hostname coverage</span><b data-hostname-coverage-total>-</b></div><div class="mini-donut-wrap"><div class="mini-donut" data-hostname-coverage></div><div class="stack-list" data-hostname-coverage-list></div></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Subnet distribution</span><b data-subnet-total>-</b></div><div class="hbar-list" data-subnet-distribution></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Service footprint</span><b data-service-total>-</b></div><div class="hbar-list" data-service-distribution></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Destination scope</span><b data-destination-total>-</b></div><div class="mini-donut-wrap"><div class="mini-donut" data-destination-scope></div><div class="stack-list" data-destination-scope-list></div></div></div>
+            </div>
+          </div>
+          <div class="overview-map-block">
+            <div class="section-title"><div><b>Connection topology map</b><span>Peta client, gateway, subnet, dan tujuan koneksi dari snapshot gateway</span></div><strong data-map-node-count>0 nodes</strong></div>
+            <div class="overview-map-grid">
+              <div class="topology-map overview" data-overview-topology-map></div>
+              <aside class="topology-side overview-side">
+                <div class="side-section"><h4>Selected node</h4><div data-map-selected class="map-selected"><span class="muted">No node selected.</span></div></div>
+                <div class="side-section"><h4>Hot clients</h4><div data-overview-topology-hot-list class="detail-list"></div></div>
+                <div class="side-section"><h4>Connection destinations</h4><div data-overview-topology-destination-list class="detail-list"></div></div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div class="split-7-5" style="margin-top:14px">
+        <section class="panel" id="traffic-graphs">
+          <div class="panel-head"><div class="panel-title">Network traffic <span class="panel-sub">Gateway RX / TX and active connections</span></div><div><button class="btn" data-refresh-tertiary>Refresh</button></div></div>
+          <div class="panel-body">
+            <div class="chart-grid">
+              <div class="chart-card"><div class="chart-head"><span>Throughput</span><b data-chart-throughput>0 B/s</b></div><svg class="line-chart" viewBox="0 0 420 150" data-traffic-chart></svg><div class="legend"><span><i class="a"></i>RX</span><span><i class="b"></i>TX</span></div></div>
+              <div class="chart-card"><div class="chart-head"><span>Connections</span><b data-chart-connections>0 TCP</b></div><svg class="line-chart" viewBox="0 0 420 150" data-connection-chart></svg><div class="legend"><span><i class="a"></i>Active TCP</span><span><i class="b"></i>LAN TCP</span></div></div>
+            </div>
+            <div class="interface-grid" data-interface-grid>
+              <div class="metric"><span>Waiting for usage collector</span><b>-</b></div>
+            </div>
+          </div>
+        </section>
+        <section class="panel" id="client-detail">
+          <div class="panel-head"><div class="panel-title">Client detail <span class="panel-sub" data-detail-subtitle>Select a device</span></div></div>
+          <div class="panel-body">
+            <div class="client-identity">
+              <div class="client-mark" data-detail-initial>?</div>
+              <div><h3 data-detail-name>Choose a client</h3><div class="muted mono" data-detail-ip>-</div></div>
+            </div>
+            <div class="metric-row" style="margin-top:12px">
+              <div class="metric"><span>Status</span><b data-detail-status>-</b></div>
+              <div class="metric"><span>Active TCP</span><b data-detail-active-tcp>-</b></div>
+              <div class="metric"><span>Type</span><b data-detail-type>-</b></div>
+            </div>
+            <div class="side-section"><h4>Identity</h4><div data-detail-identity class="detail-list"><span class="muted">Click a row in the device table.</span></div></div>
+            <div class="side-section"><h4>Ports and connections</h4><div data-detail-ports class="detail-list"><span class="muted">-</span></div></div>
+            <div class="side-section"><h4>Evidence</h4><div data-detail-evidence class="detail-list"><span class="muted">-</span></div></div>
+          </div>
+        </section>
+      </div>
+      <div class="split-7-5" style="margin-top:14px">
+        <section class="panel" id="live-events">
+          <div class="panel-head"><div class="panel-title">Runtime network events <span class="panel-sub">Gateway thresholds</span></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Severity</th><th>Event</th><th>Source</th><th>Runtime</th><th>Evidence</th><th>Time</th></tr></thead>
+            <tbody>
+              <tr><td><span class="status info">Loading</span></td><td><b>Waiting for gateway snapshot</b><br><span class="muted">No sample event is rendered.</span></td><td><span class="muted">-</span></td><td><span class="mono muted">-</span></td><td><span class="badge cyan">API</span></td><td class="muted">-</td></tr>
+            </tbody></table></div>
+        </section>
+        <section class="panel" id="resources">
+          <div class="panel-head"><div class="panel-title">Gateway interfaces <span class="panel-sub">Counters / errors</span></div></div>
+          <div class="panel-body">
+            <div class="event-list" data-resource-list>
+              <div class="event"><i class="event-line"></i><div><div class="event-title">Waiting for snapshot</div><div class="event-desc">The gateway will fill this panel from runtime metrics.</div></div><div class="event-time">-</div></div>
+            </div>
+            <div class="empty-strip" data-snapshot-source>Source: /api/monitoring/snapshot</div>
+          </div>
+        </section>
+      </div>
+      <section class="panel tab-panel" data-tab-panel="topology" style="margin-top:14px">
+        <div class="panel-head"><div class="panel-title">Topology map <span class="panel-sub">Peta node client, subnet, gateway, dan koneksi yang terlihat</span></div><div class="map-stats"><span data-map-node-count>0 nodes</span><span data-map-edge-count>0 links</span></div></div>
+        <div class="topology-intel">
+          <div class="topology-map" data-topology-map></div>
+          <aside class="topology-side">
+            <div class="side-section"><h4>Selected node</h4><div data-map-selected class="map-selected"><span class="muted">No node selected.</span></div></div>
+            <div class="side-section"><h4>Map legend</h4><div class="legend"><span><i class="a"></i>Gateway</span><span><i class="b"></i>Active/named client</span><span><i class="c"></i>Warning/offline</span><span><i class="d"></i>External destination</span></div></div>
+            <div class="side-section"><h4>Hot clients</h4><div data-topology-hot-list class="detail-list"></div></div>
+            <div class="side-section"><h4>Connection destinations</h4><div data-topology-destination-list class="detail-list"></div></div>
+          </aside>
+        </div>
+      </section>
+      <section class="panel tab-panel" data-tab-panel="latency" style="margin-top:14px">
+        <div class="panel-head"><div class="panel-title">Latency and jitter <span class="panel-sub">ICMP RTT sample from gateway</span></div></div>
+        <div class="panel-body">
+          <div class="chart-grid">
+            <div class="chart-card"><div class="chart-head"><span>Average delay</span><b data-latency-label>-</b></div><svg class="line-chart" viewBox="0 0 420 150" data-latency-chart></svg></div>
+            <div class="chart-card"><div class="chart-head"><span>Jitter</span><b data-jitter-label>-</b></div><svg class="line-chart" viewBox="0 0 420 150" data-jitter-chart></svg></div>
+          </div>
+          <div class="latency-list" data-latency-list></div>
+        </div>
+      </section>
+      <section class="panel tab-panel" data-tab-panel="connections" style="margin-top:14px">
+        <div class="panel-head"><div class="panel-title">Connections to where <span class="panel-sub">Active TCP sessions visible from gateway</span></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Scope</th><th>Local</th><th>Remote</th><th>Service</th><th>State</th><th>Process</th></tr></thead><tbody data-connection-rows><tr><td colspan="6" class="muted">Waiting for snapshot...</td></tr></tbody></table></div>
+      </section>
+      <div class="split-2-1" style="margin-top:14px">
+        <section class="panel" id="interfaces"><div class="panel-head"><div class="panel-title">Discovered LAN devices <span class="panel-sub">ARP / DNS / multicast / ports / connections</span></div></div><div class="table-wrap"><table><thead><tr><th>Device / Hostname</th><th>Status</th><th>Type</th><th>IP Address</th><th>MAC / Vendor</th><th>Open Ports</th><th>Active Connections</th><th>Sources</th><th>Evidence</th></tr></thead><tbody data-network-devices><tr><td colspan="9" class="muted">Waiting for gateway snapshot...</td></tr></tbody></table></div></section>
+        <section class="panel"><div class="panel-head"><div class="panel-title">Discovery source</div></div><div class="panel-body"><div class="info-row"><span>Collector</span><b>server_bun.js</b></div><div class="info-row"><span>Endpoint</span><b>/api/monitoring/snapshot</b></div><div class="info-row"><span>Scope</span><b>Gateway host + local LAN subnet</b></div><div class="info-row"><span>Cache status</span><b data-cache-status>-</b></div><div class="info-row"><span>Cache age</span><b data-cache-age>-</b></div><div class="info-row"><span>Refresh interval</span><b data-refresh-interval>-</b></div><div class="info-row"><span>Last scan duration</span><b data-discovery-duration>-</b></div><div class="info-row"><span>Subnets</span><b data-discovery-subnets>-</b></div><div class="info-row"><span>Targets scanned</span><b data-discovery-targets>-</b></div><div class="info-row"><span>Target limit</span><b data-discovery-limit>-</b></div><div class="method-list" data-discovery-method-list><span class="muted">Waiting for discovery metadata</span></div><div class="footer-note">UI membaca cache statis agar cepat. Scan penuh berjalan background lewat interval atau tombol Scan ulang. Switch port fisik, traffic counter, CRC error, dan topologi kabel tetap butuh SNMP, controller API, router admin, atau agent.</div></div></section>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

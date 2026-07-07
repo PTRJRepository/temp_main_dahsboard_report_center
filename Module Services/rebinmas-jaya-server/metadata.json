@@ -1,0 +1,6 @@
+{
+  "name": "Rebinmas Jaya Server",
+  "description": "Unified Server & Network Monitoring Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
