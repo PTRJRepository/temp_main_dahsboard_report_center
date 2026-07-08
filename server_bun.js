@@ -399,6 +399,7 @@ const DISCOVERY_PORT_TIMEOUT_MS = parseInt(process.env.LAN_DISCOVERY_PORT_TIMEOU
 const DISCOVERY_HOST_TIMEOUT_MS = parseInt(process.env.LAN_DISCOVERY_HOST_TIMEOUT_MS || '650');
 const DISCOVERY_ALLOW_PUBLIC = process.env.LAN_DISCOVERY_ALLOW_PUBLIC === 'true';
 const DISCOVERY_CACHE_FILE = `${ROOT_DIR}/data/monitoring/network-discovery-cache.json`;
+const HOST_LABELS_FILE = `${ROOT_DIR}/data/monitoring/network-host-labels.json`;
 const NETWORK_USAGE_CACHE_FILE = `${ROOT_DIR}/data/monitoring/network-usage-last.json`;
 const DISCOVERY_PORTS = (process.env.LAN_DISCOVERY_PORTS || '22,53,80,135,139,443,445,554,631,3389,5000,5001,5357,5900,8000,8080,8443,9100')
     .split(',')
@@ -2090,6 +2091,234 @@ function ensureMonitoringDataDir() {
     }
 }
 
+function normalizeHostIpAddress(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return text && ipToInt(text) !== null ? text : null;
+}
+
+function normalizeHostMacAddress(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const hex = raw.replace(/[^0-9a-f]/gi, '').toUpperCase();
+    if (hex.length !== 12) return null;
+    return hex.match(/.{1,2}/g).join(':');
+}
+
+function getHostLabelKey(input) {
+    const macAddress = normalizeHostMacAddress(input?.macAddress);
+    const ipAddress = normalizeHostIpAddress(input?.ipAddress);
+    if (macAddress) return `mac:${macAddress}`;
+    if (ipAddress) return `ip:${ipAddress}`;
+    return null;
+}
+
+function normalizeHostLabelInput(input, user = null) {
+    const key = getHostLabelKey(input);
+    if (!key) return { error: 'valid ipAddress or macAddress is required' };
+
+    const displayName = String(input?.displayName || '').trim();
+    const alias = String(input?.alias || '').trim();
+    if (!displayName && !alias) return { error: 'displayName or alias is required' };
+
+    const ipAddress = normalizeHostIpAddress(input?.ipAddress);
+    const macAddress = normalizeHostMacAddress(input?.macAddress);
+    const updatedAt = new Date().toISOString();
+    return {
+        label: {
+            key,
+            ipAddress,
+            macAddress,
+            displayName: displayName || alias,
+            alias: alias || displayName,
+            updatedAt,
+            updatedBy: user?.email || user?.name || user?.sub || 'authenticated-user',
+            source: String(input?.source || 'manual').trim() || 'manual',
+        },
+    };
+}
+
+function loadHostLabels() {
+    if (!existsSync(HOST_LABELS_FILE)) return { version: 1, updatedAt: null, labels: {} };
+    try {
+        const payload = JSON.parse(readFileSync(HOST_LABELS_FILE, 'utf8'));
+        const labels = payload?.labels && typeof payload.labels === 'object' ? payload.labels : {};
+        return { version: 1, updatedAt: payload?.updatedAt || null, labels };
+    } catch {
+        return { version: 1, updatedAt: null, labels: {} };
+    }
+}
+
+function saveHostLabels(labels) {
+    ensureMonitoringDataDir();
+    const payload = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        labels: labels && typeof labels === 'object' ? labels : {},
+    };
+    writeFileSync(HOST_LABELS_FILE, JSON.stringify(payload, null, 2), 'utf8');
+    return payload;
+}
+
+function getHostLabelsMap(hostLabelStore) {
+    if (hostLabelStore?.labels && typeof hostLabelStore.labels === 'object') return hostLabelStore.labels;
+    return hostLabelStore && typeof hostLabelStore === 'object' ? hostLabelStore : {};
+}
+
+function getHostLabelForItem(hostLabelStore, item) {
+    const labels = getHostLabelsMap(hostLabelStore);
+    const keys = [
+        getHostLabelKey({ macAddress: item?.macAddress }),
+        getHostLabelKey({ ipAddress: item?.ipAddress || item?.remoteAddress }),
+    ].filter(Boolean);
+    return keys.map(key => labels[key]).find(label => label && typeof label === 'object') || null;
+}
+
+function getDisplayNameFallback(item) {
+    return item?.displayName || item?.hostname || item?.name || item?.ipAddress || item?.remoteAddress || item?.macAddress || item?.id || 'Unknown device';
+}
+
+function applyHostLabels(items, hostLabelStore) {
+    return asArray(items).map(item => {
+        if (!item || typeof item !== 'object') return item;
+        const label = getHostLabelForItem(hostLabelStore, item);
+        const manualAlias = label ? String(label.displayName || label.alias || '').trim() || null : null;
+        return {
+            ...item,
+            displayName: manualAlias || getDisplayNameFallback(item),
+            manualAlias,
+        };
+    });
+}
+
+function summarizeTcpConnections(networkUsage, devices = []) {
+    const activeConnections = asArray(networkUsage?.activeConnections);
+    const deviceConnections = asArray(networkUsage?.deviceConnections);
+    const summary = networkUsage?.summary || {};
+    const devicesByIp = new Map(asArray(devices).filter(item => item?.ipAddress).map(item => [item.ipAddress, item]));
+    const deviceConnectionsByIp = new Map(deviceConnections.filter(item => item?.ipAddress).map(item => [item.ipAddress, item]));
+    const groups = new Map();
+    const byState = {};
+    const remotePortCounts = new Map();
+
+    const getGroup = ipAddress => {
+        const device = devicesByIp.get(ipAddress) || deviceConnectionsByIp.get(ipAddress) || {};
+        const group = groups.get(ipAddress) || {
+            remoteAddress: ipAddress,
+            displayName: getDisplayNameFallback({ ...device, ipAddress }),
+            manualAlias: device.manualAlias || null,
+            connectionCount: 0,
+            establishedTcp: 0,
+            localLanTcp: 0,
+            states: {},
+            ports: new Map(),
+        };
+        groups.set(ipAddress, group);
+        return group;
+    };
+
+    for (const connection of activeConnections) {
+        const remoteAddress = connection?.remoteAddress || connection?.ipAddress;
+        if (!remoteAddress) continue;
+        const state = connection.state || 'Unknown';
+        const remotePort = Number(connection.remotePort || 0);
+        const service = connection.service || portServiceName(remotePort);
+        const portKey = `${remotePort}/${service}`;
+        const group = getGroup(remoteAddress);
+
+        group.connectionCount += 1;
+        if (String(state).toLowerCase() === 'established') group.establishedTcp += 1;
+        if (connection.isLocalLan) group.localLanTcp += 1;
+        group.states[state] = (group.states[state] || 0) + 1;
+        byState[state] = (byState[state] || 0) + 1;
+        group.ports.set(portKey, {
+            port: remotePort,
+            service,
+            count: (group.ports.get(portKey)?.count || 0) + 1,
+        });
+        remotePortCounts.set(portKey, {
+            port: remotePort,
+            service,
+            count: (remotePortCounts.get(portKey)?.count || 0) + 1,
+        });
+    }
+
+    for (const deviceConnection of deviceConnections) {
+        if (!deviceConnection?.ipAddress || groups.has(deviceConnection.ipAddress)) continue;
+        const group = getGroup(deviceConnection.ipAddress);
+        group.connectionCount = Number(deviceConnection.activeTcp || 0);
+        group.establishedTcp = Number(deviceConnection.establishedTcp || 0);
+        group.states = { ...(deviceConnection.states || {}) };
+        for (const portText of asArray(deviceConnection.ports)) {
+            const [portValue, service = portServiceName(Number(portValue || 0))] = String(portText).split('/');
+            const port = Number(portValue || 0);
+            const portKey = `${port}/${service}`;
+            group.ports.set(portKey, { port, service, count: 1 });
+        }
+    }
+
+    const topRemoteGroups = [...groups.values()]
+        .map(group => ({
+            ...group,
+            ports: [...group.ports.values()].sort((a, b) => b.count - a.count).slice(0, 8),
+        }))
+        .sort((a, b) => b.connectionCount - a.connectionCount)
+        .slice(0, 10);
+
+    const narratives = topRemoteGroups.slice(0, 5).map(group => {
+        const port = group.ports[0];
+        const countLabel = `${group.connectionCount} active TCP connection${group.connectionCount === 1 ? '' : 's'}`;
+        const portLabel = port?.port ? ` to port ${port.port} (${port.service})` : '';
+        const lanLabel = group.localLanTcp > 0 ? ' on local LAN' : '';
+        return `${group.displayName} has ${countLabel}${portLabel}${lanLabel}.`;
+    });
+
+    return {
+        total: summary.activeTcp ?? activeConnections.length,
+        established: summary.establishedTcp ?? activeConnections.filter(item => String(item?.state).toLowerCase() === 'established').length,
+        localLan: summary.localLanTcp ?? activeConnections.filter(item => item?.isLocalLan).length,
+        listening: summary.listeningTcp ?? activeConnections.filter(item => String(item?.state).toLowerCase() === 'listen').length,
+        topRemoteGroups,
+        topRemotePorts: [...remotePortCounts.values()].sort((a, b) => b.count - a.count).slice(0, 10),
+        byState,
+        narratives,
+    };
+}
+
+function detectDownDevices(devices, nowIso = new Date().toISOString()) {
+    const nowMs = Date.parse(nowIso);
+    const suddenWindowMs = 24 * 60 * 60 * 1000;
+    const downDevices = asArray(devices)
+        .filter(device => device && (device.status === 'offline' || device.inventoryStale === true) && device.lastSeen)
+        .map(device => {
+            const offline = device.status === 'offline';
+            const stale = device.inventoryStale === true;
+            return {
+                id: device.id || device.ipAddress || device.macAddress || device.name,
+                ipAddress: device.ipAddress || null,
+                macAddress: device.macAddress || null,
+                displayName: getDisplayNameFallback(device),
+                manualAlias: device.manualAlias || null,
+                lastSeen: device.lastSeen,
+                lastCheck: device.lastCheck || null,
+                status: device.status || null,
+                inventoryStale: stale,
+                downReason: offline && stale
+                    ? 'Possibly down: offline and stale from previous discovery cache'
+                    : offline
+                        ? 'Possibly offline in latest discovery data'
+                        : 'Possibly down: stale inventory entry from previous discovery cache',
+            };
+        })
+        .sort((a, b) => (Date.parse(b.lastSeen) || 0) - (Date.parse(a.lastSeen) || 0));
+
+    const suddenlyDown = downDevices.filter(device => {
+        const lastSeenMs = Date.parse(device.lastSeen);
+        return Number.isFinite(nowMs) && Number.isFinite(lastSeenMs) && nowMs - lastSeenMs <= suddenWindowMs;
+    });
+
+    return { downDevices, suddenlyDown };
+}
+
 function getDiscoveryTimestampMs(discovery, savedAt = null) {
     const value = discovery?.completedAt || discovery?.startedAt || savedAt;
     const timestamp = value ? Date.parse(value) : NaN;
@@ -2491,10 +2720,26 @@ async function getMonitoringSnapshot(options = {}) {
         force: options.forceDiscovery,
         waitForFresh: options.waitDiscovery,
     });
-    const discoveredDevices = discovery.devices.length > 0 ? discovery.devices : interfaceDevices;
+    const hostLabels = loadHostLabels();
+    const discoveredDevices = applyHostLabels(discovery.devices.length > 0 ? discovery.devices : interfaceDevices, hostLabels);
     const usage = await collectNetworkUsage(nowIso, interfaceDevices, discoveredDevices);
+    const labeledDeviceConnections = applyHostLabels(usage.deviceConnections || [], hostLabels);
+    const labeledActiveConnections = applyHostLabels(usage.activeConnections || [], hostLabels);
+    const enrichedUsage = {
+        ...usage,
+        activeConnections: labeledActiveConnections,
+        deviceConnections: labeledDeviceConnections,
+    };
     const latency = await collectLatencyMetrics(nowIso, discoveredDevices);
-    const networkDevices = attachUsageToDevices(discoveredDevices, usage, latency);
+    const networkDevices = attachUsageToDevices(discoveredDevices, enrichedUsage, latency);
+    const tcpSummary = summarizeTcpConnections(enrichedUsage, networkDevices);
+    const { downDevices, suddenlyDown } = detectDownDevices(networkDevices, nowIso);
+    const networkUsage = {
+        ...enrichedUsage,
+        tcpSummary,
+        connectionNarratives: tcpSummary.narratives,
+        connectionNarrative: tcpSummary.narratives,
+    };
     const cpuUsage = readCpuUsagePercent();
     const totalMemory = totalmem();
     const freeMemory = freemem();
@@ -2546,7 +2791,9 @@ async function getMonitoringSnapshot(options = {}) {
         servers: [server],
         interfaces: interfaceDevices,
         networkDevices,
-        networkUsage: usage,
+        networkUsage,
+        downDevices,
+        suddenlyDown,
         networkLatency: latency,
         networkDiscovery: {
             startedAt: discovery.startedAt,
@@ -3889,6 +4136,55 @@ server = Bun.serve({
             return handleQueryGateway(req, reqPath);
         }
         // Runtime monitoring snapshot for Server Monitor and Network Monitor.
+        if (reqPath === '/api/monitoring/host-labels') {
+            const monitoringToken = extractToken(req.headers.get('cookie') || '');
+            const monitoringUser = monitoringToken ? verifyJWT(monitoringToken) : null;
+            if (!monitoringUser) return redirectToLogin(req, reqPath, url.search);
+
+            if (req.method === 'GET') {
+                const store = loadHostLabels();
+                const key = getHostLabelKey({
+                    ipAddress: url.searchParams.get('ipAddress') || url.searchParams.get('ip'),
+                    macAddress: url.searchParams.get('macAddress') || url.searchParams.get('mac'),
+                });
+                return jsonResp(200, key
+                    ? { success: true, label: store.labels[key] || null }
+                    : { success: true, labels: store.labels });
+            }
+
+            if (req.method === 'POST') {
+                const data = await req.json().catch(() => null);
+                if (!data || typeof data !== 'object') return jsonResp(400, { success: false, error: 'Invalid JSON body' });
+                const normalized = normalizeHostLabelInput(data, monitoringUser);
+                if (normalized.error) return jsonResp(400, { success: false, error: normalized.error });
+                const store = loadHostLabels();
+                store.labels[normalized.label.key] = normalized.label;
+                const saved = saveHostLabels(store.labels);
+                return jsonResp(200, { success: true, label: normalized.label, labels: saved.labels });
+            }
+
+            return jsonResp(405, { success: false, error: 'Method not allowed' });
+        }
+
+        if (reqPath === '/api/monitoring/host-labels/delete') {
+            const monitoringToken = extractToken(req.headers.get('cookie') || '');
+            const monitoringUser = monitoringToken ? verifyJWT(monitoringToken) : null;
+            if (!monitoringUser) return redirectToLogin(req, reqPath, url.search);
+            if (req.method !== 'DELETE') return jsonResp(405, { success: false, error: 'Method not allowed' });
+
+            const data = await req.json().catch(() => ({}));
+            const key = getHostLabelKey({
+                ipAddress: data?.ipAddress || url.searchParams.get('ipAddress') || url.searchParams.get('ip'),
+                macAddress: data?.macAddress || url.searchParams.get('macAddress') || url.searchParams.get('mac'),
+            });
+            if (!key) return jsonResp(400, { success: false, error: 'ipAddress or macAddress is required' });
+            const store = loadHostLabels();
+            const label = store.labels[key] || null;
+            delete store.labels[key];
+            const saved = saveHostLabels(store.labels);
+            return jsonResp(200, { success: true, label, labels: saved.labels });
+        }
+
         if (reqPath === '/api/monitoring/discovery/refresh') {
             const monitoringToken = extractToken(req.headers.get('cookie') || '');
             const monitoringUser = monitoringToken ? verifyJWT(monitoringToken) : null;

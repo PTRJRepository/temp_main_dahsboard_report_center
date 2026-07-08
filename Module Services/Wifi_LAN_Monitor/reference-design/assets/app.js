@@ -164,11 +164,16 @@
 
   function deviceName(device) {
     if (!device) return 'Unknown device';
-    return device.hostname || device.name || device.ipAddress || device.macAddress || 'Unknown device';
+    return device.displayName || device.manualAlias || device.hostname || device.name || device.ipAddress || device.macAddress || 'Unknown device';
+  }
+
+  function rawDeviceName(device) {
+    if (!device) return null;
+    return device.hostname || device.name || null;
   }
 
   function hasResolvedName(device) {
-    var name = device && (device.hostname || device.name);
+    var name = device && (device.displayName || device.manualAlias || device.hostname || device.name);
     return Boolean(name && name !== device.ipAddress && !isIpv4(name));
   }
 
@@ -283,6 +288,34 @@
     return (snapshot.networkUsage && snapshot.networkUsage.activeConnections || []).filter(function (item) {
       return item.remoteAddress === ip || item.localAddress === ip;
     });
+  }
+
+  function renderNodePopup(device, position, snapshot) {
+    if (!device || !position) return '';
+    var name = deviceName(device);
+    var latency = getDeviceLatency(device);
+    var relatedConnections = relatedConnectionsForDevice(device, snapshot);
+    var ports = (device.openPorts || []).map(function (port) { return port.port + '/' + (port.service || 'TCP'); }).slice(0, 6);
+    var sources = (device.sources || []).slice(0, 5);
+    var connectionPreview = relatedConnections.slice(0, 3).map(function (connection) {
+      return '<div class="popup-flow"><span class="mono">' + escapeHtml(connection.localAddress) + ':' + escapeHtml(connection.localPort) + '</span><b>to</b><span class="mono">' + escapeHtml(connection.remoteAddress) + ':' + escapeHtml(connection.remotePort) + '</span></div>';
+    }).join('');
+    var xClass = position.x > 68 ? ' left' : '';
+    var yClass = position.y > 64 ? ' up' : '';
+
+    return '<div class="node-popup' + xClass + yClass + '" style="left:' + position.x + '%;top:' + position.y + '%">' +
+      '<button class="popup-close" data-close-node-popup title="Close">x</button>' +
+      '<div class="popup-title"><span class="status ' + statusClass(device.status) + '">' + statusLabel(device.status) + '</span><b>' + escapeHtml(name) + '</b></div>' +
+      '<div class="popup-ip mono">' + escapeHtml(device.ipAddress || '-') + '</div>' +
+      '<div class="popup-kpis">' +
+        '<div><span>Type</span><b>' + escapeHtml(device.type || 'Unknown') + '</b></div>' +
+        '<div><span>TCP</span><b>' + escapeHtml(device.activeTcpConnections || 0) + '</b></div>' +
+        '<div><span>Latency</span><b>' + (latency === null ? '-' : escapeHtml(latency + ' ms')) + '</b></div>' +
+      '</div>' +
+      '<div class="popup-section"><span>Open ports</span>' + (ports.length ? renderBadges(ports, 'cyan') : '<small class="muted">No open TCP probe</small>') + '</div>' +
+      '<div class="popup-section"><span>Discovery sources</span>' + (sources.length ? renderBadges(sources, 'purple') : '<small class="muted">-</small>') + '</div>' +
+      '<div class="popup-section"><span>Visible sessions</span>' + (connectionPreview || '<small class="muted">No TCP session visible from gateway.</small>') + '</div>' +
+    '</div>';
   }
 
   function connectionScope(connection, deviceIps) {
@@ -492,9 +525,118 @@
     }
   }
 
+  function clearChildren(target) {
+    while (target && target.firstChild) target.removeChild(target.firstChild);
+  }
+
+  function addText(parent, tagName, textValue, className) {
+    var el = document.createElement(tagName);
+    if (className) el.className = className;
+    el.textContent = textValue === null || textValue === undefined ? '-' : String(textValue);
+    parent.appendChild(el);
+    return el;
+  }
+
+  function ensurePanelBefore(anchor, className) {
+    if (!anchor) return null;
+    var panel = document.querySelector('.' + className);
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = className;
+      anchor.parentNode.insertBefore(panel, anchor);
+    }
+    clearChildren(panel);
+    return panel;
+  }
+
+  function renderTcpSummary(snapshot, tbody) {
+    var table = tbody && tbody.closest('table');
+    var target = ensurePanelBefore(table, 'tcp-summary-panel');
+    if (!target) return;
+    var usage = snapshot.networkUsage || {};
+    var summary = usage.tcpSummary || {};
+    var cards = document.createElement('div');
+    cards.className = 'tcp-summary-cards';
+    [
+      ['Active TCP', summary.total || 0],
+      ['Established', summary.established || 0],
+      ['LAN', summary.localLan || 0],
+      ['Listening', summary.listening || 0]
+    ].forEach(function (item) {
+      var card = document.createElement('div');
+      card.className = 'tcp-summary-card';
+      addText(card, 'span', item[0]);
+      addText(card, 'b', item[1]);
+      cards.appendChild(card);
+    });
+    target.appendChild(cards);
+
+    var narratives = usage.connectionNarratives || usage.connectionNarrative || summary.narratives || [];
+    var narrativeList = document.createElement('div');
+    narrativeList.className = 'tcp-narratives';
+    (narratives.length ? narratives.slice(0, 5) : ['No compact TCP narrative available from gateway snapshot.']).forEach(function (line) {
+      addText(narrativeList, 'p', line);
+    });
+    target.appendChild(narrativeList);
+
+    var groups = summary.topRemoteGroups || [];
+    if (groups.length) {
+      var list = document.createElement('div');
+      list.className = 'tcp-top-groups';
+      groups.slice(0, 10).forEach(function (group) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'detail-row map-list-btn';
+        row.dataset.rowFocus = group.displayName || group.remoteAddress || 'TCP peer';
+        row.dataset.deviceId = group.remoteAddress || '';
+        addText(row, 'span', (group.displayName || group.remoteAddress || 'TCP peer') + ' · ' + (group.remoteAddress || '-'));
+        addText(row, 'b', (group.connectionCount || 0) + ' TCP');
+        list.appendChild(row);
+      });
+      target.appendChild(list);
+    }
+  }
+
+  function renderDownDevicePanel(snapshot) {
+    var tbody = document.querySelector('[data-network-devices]') || document.querySelector('[data-network-interfaces]');
+    var table = tbody && tbody.closest('table');
+    var target = ensurePanelBefore(table, 'down-device-panel');
+    if (!target) return;
+    var downDevices = (snapshot.suddenlyDown && snapshot.suddenlyDown.length ? snapshot.suddenlyDown : snapshot.downDevices) || [];
+    var head = document.createElement('div');
+    head.className = 'down-panel-head';
+    addText(head, 'b', 'Possibly down IPs');
+    addText(head, 'span', downDevices.length + ' offline/stale from latest snapshot');
+    var filterButton = document.createElement('button');
+    filterButton.type = 'button';
+    filterButton.className = 'btn';
+    filterButton.dataset.filterDownDevices = '1';
+    filterButton.textContent = 'Focus down';
+    head.appendChild(filterButton);
+    target.appendChild(head);
+
+    if (!downDevices.length) {
+      addText(target, 'p', 'No offline/stale IP detected from existing discovery cache.', 'muted');
+      return;
+    }
+
+    downDevices.slice(0, 10).forEach(function (device) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'down-device-row';
+      row.dataset.rowFocus = device.displayName || device.ipAddress || 'Possibly down device';
+      row.dataset.deviceId = device.id || device.ipAddress || device.macAddress || '';
+      addText(row, 'b', device.displayName || device.ipAddress || 'Possibly down device');
+      addText(row, 'span', (device.ipAddress || '-') + (device.macAddress ? ' · ' + device.macAddress : ''));
+      addText(row, 'small', (device.lastSeen || '-') + ' · ' + (device.downReason || device.status || 'possibly down'));
+      target.appendChild(row);
+    });
+  }
+
   function renderConnectionsTable(snapshot) {
     var tbody = document.querySelector('[data-connection-rows]');
     if (!tbody) return;
+    renderTcpSummary(snapshot, tbody);
     var rows = (snapshot.networkUsage && snapshot.networkUsage.activeConnections || []).slice(0, 120);
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="muted">No active TCP connections visible from gateway.</td></tr>';
@@ -502,7 +644,8 @@
     }
     tbody.innerHTML = rows.map(function (item) {
       var scope = item.isLocalLan ? 'LAN' : 'Public';
-      return '<tr><td><span class="badge ' + (item.isLocalLan ? 'cyan' : 'purple') + '">' + scope + '</span></td><td class="mono">' + escapeHtml(item.localAddress) + ':' + escapeHtml(item.localPort) + '</td><td class="mono">' + escapeHtml(item.remoteAddress) + ':' + escapeHtml(item.remotePort) + '</td><td>' + escapeHtml(item.service || '-') + '</td><td>' + escapeHtml(item.state || '-') + '</td><td class="mono">' + escapeHtml(item.owningProcess || '-') + '</td></tr>';
+      var remoteName = item.displayName || item.manualAlias || item.remoteAddress;
+      return '<tr><td><span class="badge ' + (item.isLocalLan ? 'cyan' : 'purple') + '">' + scope + '</span></td><td class="mono">' + escapeHtml(item.localAddress) + ':' + escapeHtml(item.localPort) + '</td><td><b>' + escapeHtml(remoteName || '-') + '</b><br><span class="mono muted">' + escapeHtml(item.remoteAddress) + ':' + escapeHtml(item.remotePort) + '</span></td><td>' + escapeHtml(item.service || '-') + '</td><td>' + escapeHtml(item.state || '-') + '</td><td class="mono">' + escapeHtml(item.owningProcess || '-') + '</td></tr>';
     }).join('');
   }
 
@@ -605,13 +748,15 @@
       var y = clamp(centerY + Math.sin(angle) * 36, 10, 90);
       return '<div class="subnet-label" style="left:' + x + '%;top:' + y + '%"><b>' + escapeHtml(entry[0]) + '</b><span>' + entry[1] + ' clients</span></div>';
     }).join('');
+    var selectedDevice = selectedDeviceId ? ordered.find(function (device) { return deviceKey(device) === selectedDeviceId; }) : null;
+    var selectedPopup = selectedDevice ? renderNodePopup(selectedDevice, positions[selectedDevice.ipAddress], snapshot) : '';
 
     target.innerHTML =
       '<svg class="topo-svg" viewBox="0 0 100 100" preserveAspectRatio="none">' + deviceEdges + destinationEdges + '</svg>' +
       '<div class="topo-ring ring-active"><span>active</span></div><div class="topo-ring ring-named"><span>named</span></div><div class="topo-ring ring-unknown"><span>unknown</span></div>' +
       subnetLabels +
       '<div class="topo-center"><b>Gateway</b><span>' + escapeHtml(gateway.ipAddress || snapshot.host && snapshot.host.hostname || '-') + '</span></div>' +
-      nodes + externalNodes;
+      nodes + externalNodes + selectedPopup;
 
     text('[data-map-node-count]', (devices.length + Object.keys(externalCounts).slice(0, 18).length) + ' nodes');
     text('[data-map-edge-count]', (devices.length + Math.min(Object.keys(externalCounts).length, 18)) + ' links');
@@ -702,8 +847,8 @@
     }
 
     tbody.innerHTML = devices.map(function (device) {
-      var title = device.hostname || device.name || device.ipAddress || device.macAddress || 'Unknown device';
-      var subtitle = device.inventoryStale ? 'Previous cache - not seen in latest scan' : (device.httpTitle || device.httpServer || device.addressFamily || device.branch || '-');
+      var title = deviceName(device);
+      var subtitle = device.inventoryStale ? 'Previous cache - not seen in latest scan' : (device.httpTitle || device.httpServer || rawDeviceName(device) || device.addressFamily || device.branch || '-');
       var macVendor = [
         device.macAddress ? '<span class="mono">' + escapeHtml(device.macAddress) + '</span>' : '<span class="muted">MAC unknown</span>',
         device.vendor ? '<span class="muted">' + escapeHtml(device.vendor) + '</span>' : ''
@@ -752,9 +897,56 @@
     }).join('') + '</div>';
   }
 
+  function saveHostLabel(device) {
+    if (!device || (!device.ipAddress && !device.macAddress)) return;
+    var current = device.manualAlias || device.displayName || rawDeviceName(device) || '';
+    var displayName = window.prompt('Nama hostname/perangkat untuk ' + (device.ipAddress || device.macAddress) + ':', current);
+    if (displayName === null) return;
+    displayName = displayName.trim();
+    if (!displayName) return window.alert('Nama tidak boleh kosong.');
+
+    fetch('/api/monitoring/host-labels', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        ipAddress: device.ipAddress || null,
+        macAddress: device.macAddress || null,
+        displayName: displayName,
+        source: 'network-monitor-ui'
+      })
+    }).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    }).then(function () {
+      loadMonitoringSnapshot(false);
+    }).catch(function (error) {
+      window.alert('Gagal menyimpan hostname: ' + error.message);
+    });
+  }
+
+  function deleteHostLabel(device) {
+    if (!device || (!device.ipAddress && !device.macAddress) || !device.manualAlias) return;
+    if (!window.confirm('Hapus nama manual untuk ' + deviceName(device) + '?')) return;
+    fetch('/api/monitoring/host-labels/delete', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ ipAddress: device.ipAddress || null, macAddress: device.macAddress || null })
+    }).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    }).then(function () {
+      loadMonitoringSnapshot(false);
+    }).catch(function (error) {
+      window.alert('Gagal menghapus hostname manual: ' + error.message);
+    });
+  }
+
   function renderClientDetail(device) {
     if (!device) return;
-    var name = device.hostname || device.name || device.ipAddress || 'Unknown device';
+    var name = deviceName(device);
+    var rawName = rawDeviceName(device);
     var relatedConnections = relatedConnectionsForDevice(device, latestSnapshot);
     var latency = getDeviceLatency(device);
     text('[data-detail-name]', name);
@@ -775,6 +967,40 @@
         ['CIDR / netmask', device.cidr || device.netmask || '-'],
         ['Last seen', device.lastSeen || device.lastCheck || '-']
       ]);
+      [
+        ['Display name', name],
+        ['Manual label', device.manualAlias || '-'],
+        ['Raw hostname', rawName || '-']
+      ].forEach(function (item) {
+        var row = document.createElement('div');
+        row.className = 'detail-row';
+        var label = document.createElement('span');
+        label.textContent = item[0];
+        var value = document.createElement('b');
+        value.textContent = item[1] || '-';
+        row.appendChild(label);
+        row.appendChild(value);
+        identity.appendChild(row);
+      });
+      var actions = document.createElement('div');
+      actions.className = 'label-actions';
+      var editButton = document.createElement('button');
+      editButton.className = 'btn';
+      editButton.type = 'button';
+      editButton.dataset.editHostLabel = '1';
+      editButton.dataset.deviceId = deviceKey(device);
+      editButton.textContent = 'Edit hostname';
+      actions.appendChild(editButton);
+      if (device.manualAlias) {
+        var clearButton = document.createElement('button');
+        clearButton.className = 'icon-btn';
+        clearButton.type = 'button';
+        clearButton.dataset.deleteHostLabel = '1';
+        clearButton.dataset.deviceId = deviceKey(device);
+        clearButton.textContent = 'Clear';
+        actions.appendChild(clearButton);
+      }
+      identity.appendChild(actions);
     }
 
     var ports = document.querySelector('[data-detail-ports]');
@@ -890,6 +1116,7 @@
 
     renderLiveEvents(snapshot);
     renderDeviceRows(devices);
+    renderDownDevicePanel(snapshot);
     renderCharts(snapshot);
     renderLatency(snapshot);
     renderConnectionsTable(snapshot);
@@ -941,6 +1168,39 @@
   }
 
   document.addEventListener('click', function (event) {
+    var closePopup = event.target.closest('[data-close-node-popup]');
+    if (closePopup) {
+      selectedDeviceId = null;
+      if (latestSnapshot) renderTopology(latestSnapshot);
+      return;
+    }
+
+    var editLabel = event.target.closest('[data-edit-host-label]');
+    if (editLabel) {
+      var editId = editLabel.getAttribute('data-device-id');
+      var editDevice = latestSnapshot && (latestSnapshot.networkDevices || []).find(function (device) { return deviceKey(device) === editId; });
+      saveHostLabel(editDevice);
+      return;
+    }
+
+    var deleteLabel = event.target.closest('[data-delete-host-label]');
+    if (deleteLabel) {
+      var deleteId = deleteLabel.getAttribute('data-device-id');
+      var deleteDevice = latestSnapshot && (latestSnapshot.networkDevices || []).find(function (device) { return deviceKey(device) === deleteId; });
+      deleteHostLabel(deleteDevice);
+      return;
+    }
+
+    var downFilter = event.target.closest('[data-filter-down-devices]');
+    if (downFilter && latestSnapshot) {
+      var downIds = new Set(((latestSnapshot.downDevices || []).map(function (device) { return device.id || device.ipAddress || device.macAddress; })));
+      document.querySelectorAll('[data-network-devices] tr').forEach(function (tr) {
+        var id = tr.getAttribute('data-device-id');
+        tr.style.display = downIds.has(id) ? '' : 'none';
+      });
+      return;
+    }
+
     var row = event.target.closest('[data-row-focus]');
     var topoNode = event.target.closest('.topo-node');
     var clickable = row || topoNode;
@@ -951,6 +1211,7 @@
     document.querySelectorAll('tbody tr').forEach(function (tr) { tr.style.background = ''; });
     if (row) row.style.background = 'rgba(55,212,233,.10)';
     renderSelectedDetail();
+    if (latestSnapshot) renderTopology(latestSnapshot);
   });
 
   document.querySelectorAll('[data-tab]').forEach(function (button) {
