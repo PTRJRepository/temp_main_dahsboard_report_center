@@ -298,13 +298,18 @@ FB_PASS=masterkey
 
 Before Phase 1 begins, these must be completed:
 
-- [ ] **R-04**: Create at least 3 smoke tests for gateway routes (route 200, auth redirect, IFESS health)
-- [ ] **R-04**: Create Firebird `parseIsqlOutput` golden test with multi-page isql output
-- [ ] **R-04**: Create `isReadOnlySql` corpus test (validates rejection of write SQL)
+- [x] **R-04**: Create gateway route smoke tests — `tests/baseline/gateway-routes.test.mjs` (8 tests, runs with `node`)
+- [x] **R-04**: Create Firebird `parseIsqlOutput` golden test — `tests/baseline/firebird-parse-isql.test.js` (5 tests, all pass)
+  - Bug fixed: `colsFromSep()` now derives boundaries from both header + separator lines (server_bun.js)
+  - Known residual: single-row wide header with single "=" separator still returns 1 column
+- [x] **R-04**: Create `isReadOnlySql` corpus test — `tests/baseline/firebird-readonly-validator.test.js` (41 tests)
+  - 2 known false positives (documented): `SELECT UPDATE FROM EMP`, `LIKE '%DROP%'`
 - [ ] **R-05**: Create ADR-001 marking `Module Services/report-center` as deprecated
 - [ ] **R-01, R-02, R-03, R-08**: Document credential rotation plan (separate from refactor)
-- [ ] Verify `npm run build:dashboard` from root passes (or document pre-existing failures)
-- [ ] Verify `npx tsc --noEmit` in `Dashboard_Utama/` passes (or document pre-existing failures)
+- [ ] Verify `npm run build:dashboard` from root passes
+- [ ] Verify `npx tsc --noEmit` in `Dashboard_Utama/` passes
+
+> Exit gate: 3/7 items complete. Remaining: ADR-001, credential rotation, build verification.
 
 ---
 
@@ -330,4 +335,4 @@ Before Phase 1 begins, these must be completed:
 
 ---
 
-*Phase 0 artifacts: route inventory ✓, dependency matrix ✓, embedded handlers ✓, secret scan ✓, Report Center ADR ✓, baseline tests ✗ (blocked), startup inventory ✓.*
+*Phase 0 artifacts: route inventory ✓, dependency matrix ✓, embedded handlers ✓, secret scan ✓, Report Center ADR ✓, baseline tests ✓ (3/3 pass), startup inventory ✓, exit gate 3/7.*
