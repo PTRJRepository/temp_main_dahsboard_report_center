@@ -1,0 +1,14 @@
+{
+  "name": "ifess-control-service",
+  "version": "1.0.0",
+  "description": "IFESS Control Service — standalone Bun HTTP server extracted from server_bun.js",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "bun run src/index.js",
+    "dev": "bun --watch run src/index.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
