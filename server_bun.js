@@ -67,6 +67,7 @@ const NETWORK_MONITOR_DIR = `${ROOT_DIR}/Module Services/Wifi_LAN_Monitor/refere
 const CACHE_MAX_SIZE = 50;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const GATEWAY_IDLE_TIMEOUT_SECONDS = parseInt(process.env.GATEWAY_IDLE_TIMEOUT_SECONDS || '120');
+const GATEWAY_VERSION = process.env.GATEWAY_VERSION || '1.0.0';
 
 // ─── LRU Cache Implementation ─────────────────────────────────────────────────
 class LRUCache {
@@ -374,10 +375,88 @@ async function handleFrontendProxy(req) {
     }
 }
 
-function jsonResp(status, body) {
-    const data = JSON.stringify(body);
-    return new Response(data, { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+// ─── Observability Infrastructure (Phase 1) ──────────────────────────────────
+
+/**
+ * Structured JSON logger — all gateway log output goes through here.
+ * In production: JSON lines. In development: human-readable with color.
+ */
+const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+
+const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
+const currentLevel = LOG_LEVELS[LOG_LEVEL] ?? 1;
+
+function structuredLog(level, event, data = {}) {
+    if (LOG_LEVELS[level] < currentLevel) return;
+    const entry = {
+        timestamp: new Date().toISOString(),
+        level,
+        event,
+        service: 'bun-gateway',
+        ...data,
+    };
+    if (process.env.NODE_ENV !== 'production') {
+        const color = level === 'error' ? '\x1b[31m' : level === 'warn' ? '\x1b[33m' : level === 'debug' ? '\x1b[90m' : '';
+        const reset = '\x1b[0m';
+        console.log(`${color}[${entry.timestamp}] ${level.toUpperCase()} ${event}${reset}`, Object.keys(data).length ? data : '');
+    } else {
+        console.log(JSON.stringify(entry));
+    }
 }
+
+function createRequestId() {
+    return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function extractRequestId(req) {
+    return req.headers.get('x-request-id') || req.headers.get('x-correlation-id') || null;
+}
+
+/**
+ * Standardized error envelope for all gateway errors.
+ * Ensures no secrets leak in error messages.
+ */
+const SECRET_PATTERNS = [
+    /password/i, /secret/i, /key/i, /token/i, /credential/i,
+    /masterkey/i, /ptrj/i, /10\.0\.0\.\d+/, /192\.168\./,
+    /connection string/i, /conn string/i,
+];
+
+function safeErrorMessage(msg) {
+    let safe = msg;
+    for (const pat of SECRET_PATTERNS) {
+        safe = safe.replace(pat, '[REDACTED]');
+    }
+    return safe;
+}
+
+function errorEnvelope(code, message, requestId = null, details = null) {
+    const envelope = {
+        error: {
+            code,
+            message: safeErrorMessage(message),
+            requestId,
+        },
+    };
+    if (details !== null) envelope.error.details = details;
+    return envelope;
+}
+
+function jsonResp(status, body, requestId = null) {
+    if (body && body.error && typeof body.error === 'object' && !body.error.code) {
+        // Already an error envelope — use as-is
+        const data = JSON.stringify(body);
+        return new Response(data, { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+    }
+    const data = JSON.stringify(body);
+    const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+    if (requestId) headers['X-Request-ID'] = requestId;
+    return new Response(data, { status, headers });
+}
+
+// ─── Legacy jsonResp kept for internal calls that pass (status, message) ──────
+const _jsonResp = jsonResp;
+function gatewayResp(status, body, requestId = null) { return jsonResp(status, body, requestId); }
 
 let monitoringSnapshotCache = null;
 let monitoringSnapshotAt = 0;
@@ -3845,13 +3924,13 @@ async function proxyDashboard(req, reqPath, search) {
         responseHeaders.set('X-Proxy-Upstream', 'dashboard');
         return new Response(response.body, { status: response.status, headers: responseHeaders });
     } catch (err) {
-        console.error(`Dashboard proxy error: ${err.message}`);
-        return new Response('Dashboard Service Unavailable', {
-            status: 503,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Server': 'Bun-Proxy' },
-        });
+    structuredLog('error', 'proxy_error_dashboard', { error: safeErrorMessage(err.message) });
+    return new Response(JSON.stringify(errorEnvelope('PROXY_ERROR_DASHBOARD', err.message)), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' }
+    });
     }
-}
+}}
 
 function dashboardWsTarget(reqPath, search) {
     if (!reqPath.startsWith('/_next/webpack-hmr')) return null;
@@ -4117,13 +4196,13 @@ async function proxyRequest(req, route, reqPath) {
         });
 
     } catch (err) {
-        console.error(`Proxy error for ${route.path}: ${err.message}`);
-        return new Response(JSON.stringify({ error: 'Proxy error', path: reqPath }), {
-            status: 502,
-            headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Proxy' }
-        });
+    structuredLog('error', 'proxy_error', { path: reqPath, error: safeErrorMessage(err.message) });
+    return new Response(JSON.stringify(errorEnvelope('PROXY_ERROR', err.message)), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' }
+    });
     }
-}
+}}
 
 // ─── Bun HTTP Server ─────────────────────────────────────────────────────────
 console.log(`Bun Native Proxy Gateway starting on ${HOST}:${PORT}`);
@@ -4148,12 +4227,37 @@ server = Bun.serve({
     async fetch(req) {
         const url = new URL(req.url);
         const reqPath = url.pathname;
+        const requestId = extractRequestId(req) || createRequestId();
 
-        // Root /health alias — client SetupForm TestServer hits BaseUrl + "health" (no /api/ifess).
+        // ── Canonical health / version endpoints (Phase 1) ───────────────────────
+        if (reqPath === '/health/live' || reqPath === '/health/live/') {
+            structuredLog('debug', 'health_live', { requestId });
+            return jsonResp(200, { ok: true, service: 'bun-gateway', timestamp: new Date().toISOString() }, requestId);
+        }
+
+        if (reqPath === '/health/ready' || reqPath === '/health/ready/') {
+            structuredLog('debug', 'health_ready', { requestId });
+            return jsonResp(200, {
+                ok: true,
+                service: 'bun-gateway',
+                version: GATEWAY_VERSION,
+                initialized: true,
+                timestamp: new Date().toISOString(),
+            }, requestId);
+        }
+
+        if (reqPath === '/version' || reqPath === '/version/') {
+            return jsonResp(200, {
+                gateway: GATEWAY_VERSION,
+                bun: Bun.version,
+                node: process.version,
+                env: process.env.NODE_ENV || 'development',
+            }, requestId);
+        }
+
+        // Legacy /health alias (kept for backward compat)
         if (reqPath === '/health' || reqPath === '/health/') {
-            return new Response(JSON.stringify({ status: 'Healthy', serverTime: getServerTime() }), {
-                headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Proxy' }
-            });
+            return jsonResp(200, { status: 'Healthy', serverTime: getServerTime() }, requestId);
         }
 
         if (isWebSocketRequest(req)) {
@@ -4161,22 +4265,21 @@ server = Bun.serve({
             if (upstreamUrl && server.upgrade(req, { data: { upstreamUrl, queue: [] } })) {
                 return;
             }
+            structuredLog('warn', 'websocket_not_found', { requestId, path: reqPath });
             return new Response('WebSocket route not found', {
                 status: 404,
-                headers: { 'Server': 'Bun-Proxy' },
+                headers: { 'Server': 'Bun-Gateway', 'X-Request-ID': requestId },
             });
         }
 
         if (reqPath === '/__gateway/health') {
-            return new Response(JSON.stringify({
+            return jsonResp(200, {
                 ok: true,
                 gateway: 'bun',
+                version: GATEWAY_VERSION,
                 dashboardTarget: DASHBOARD_TARGET,
                 routes: routesConfig.map(route => ({ id: route.id, path: route.path, target: route.target, public: route.public === true })),
-            }), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Server': 'Bun-Proxy' },
-            });
+            }, requestId);
         }
 
         if (reqPath === '/logout') {

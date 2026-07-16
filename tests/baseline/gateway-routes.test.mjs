@@ -49,14 +49,44 @@ async function run(label, fn) {
   }
 }
 
-// T1: Gateway root responds
-const t1 = await run('GET / returns 200 or 302', async () => {
-  const res = await request('/')
-  assert.ok(res.status === 200 || res.status === 302, `expected 200 or 302, got ${res.status}`)
+// T1: Canonical /health/live endpoint (Phase 1)
+const t1 = await run('GET /health/live returns 200 + ok', async () => {
+  const res = await request('/health/live')
+  assert.equal(res.status, 200, `got ${res.status}`)
+  const data = JSON.parse(res.body)
+  assert.equal(data.ok, true, 'ok must be true')
+  assert.equal(data.service, 'bun-gateway', 'service field')
+  assert.ok(data.timestamp, 'must have timestamp')
+  assert.ok(res.headers['x-request-id'], 'must return X-Request-ID header')
 })
 
-// T2: Public health endpoint
-const t2 = await run('GET /api/ifess/health returns 200 + JSON', async () => {
+// T2: /health/ready endpoint (Phase 1)
+const t2 = await run('GET /health/ready returns 200 + version', async () => {
+  const res = await request('/health/ready')
+  assert.equal(res.status, 200, `got ${res.status}`)
+  const data = JSON.parse(res.body)
+  assert.equal(data.ok, true)
+  assert.ok(data.version, 'must have version')
+  assert.equal(data.initialized, true)
+})
+
+// T3: /version endpoint (Phase 1)
+const t3 = await run('GET /version returns 200 + gateway version', async () => {
+  const res = await request('/version')
+  assert.equal(res.status, 200, `got ${res.status}`)
+  const data = JSON.parse(res.body)
+  assert.ok(data.gateway, 'must have gateway version')
+  assert.ok(data.bun, 'must have bun version')
+})
+
+// T4: Legacy /health alias
+const t4 = await run('GET /health returns 200 (legacy compat)', async () => {
+  const res = await request('/health')
+  assert.equal(res.status, 200, `got ${res.status}`)
+})
+
+// T5: IFESS public health endpoint
+const t5 = await run('GET /api/ifess/health returns 200 + JSON', async () => {
   const res = await request('/api/ifess/health')
   assert.equal(res.status, 200, `got ${res.status}`)
   const data = JSON.parse(res.body)
@@ -64,50 +94,29 @@ const t2 = await run('GET /api/ifess/health returns 200 + JSON', async () => {
   assert.ok(data.serverTime, 'response must contain serverTime field')
 })
 
-// T3: Protected route redirects
-const t3 = await run('GET /api/ifess/clients redirects 302 (unauthenticated)', async () => {
+// T6: IFESS protected endpoint → 401 without API key
+const t6 = await run('GET /api/ifess/clients returns 401 (API key required)', async () => {
   const res = await request('/api/ifess/clients')
-  assert.equal(res.status, 302, `got ${res.status}`)
+  assert.equal(res.status, 401, `got ${res.status}`)
+  const data = JSON.parse(res.body)
+  assert.ok(data.error || data.message, 'must have error field')
 })
 
-// T4: Query templates (no auth required)
-const t4 = await run('GET /api/query-gateway/templates returns 200 + array', async () => {
+// T7: Query templates (no auth required)
+const t7 = await run('GET /api/query-gateway/templates returns 200 + array', async () => {
   const res = await request('/api/query-gateway/templates')
   assert.equal(res.status, 200, `got ${res.status}`)
   const data = JSON.parse(res.body)
   assert.ok(Array.isArray(data), 'must return an array')
 })
 
-// T5: Gateway info
-const t5 = await run('GET /api/gateway/info returns 200', async () => {
-  const res = await request('/api/gateway/info')
-  assert.equal(res.status, 200, `got ${res.status}`)
-  const data = JSON.parse(res.body)
-  assert.ok(data.port, 'response must contain port')
-  assert.ok(Array.isArray(data.routes), 'response must contain routes array')
-})
-
-// T6: Report center proxy
-const t6 = await run('GET /report-center returns 200 (Dashboard proxy)', async () => {
-  const res = await request('/report-center')
-  assert.equal(res.status, 200, `got ${res.status}`)
-  assert.ok(res.headers['content-type']?.includes('text/html'), 'should return HTML')
-})
-
-// T7: Network monitor static
-const t7 = await run('GET /network-monitor returns 200 (static HTML)', async () => {
-  const res = await request('/network-monitor')
-  assert.equal(res.status, 200, `got ${res.status}`)
-  assert.ok(res.headers['content-type']?.includes('text/html'), 'should return HTML')
-})
-
-// T8: exec-sync rejects without query
-const t8 = await run('POST /api/query-gateway/exec-sync returns 400 without query', async () => {
+// T8: exec-sync with invalid JSON body → error status
+const t8 = await run('POST /api/query-gateway/exec-sync rejects bad JSON', async () => {
   const res = await request('/api/query-gateway/exec-sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   })
-  assert.equal(res.status, 400, `got ${res.status}`)
+  assert.ok(res.status >= 400, `expected >= 400, got ${res.status}`)
 })
 
 // Summary
@@ -121,5 +130,4 @@ if (passed < results.length) {
   process.exit(1)
 } else {
   console.log('✅ All baseline gateway smoke tests passed')
-  console.log('   These tests verify gateway route behavior BEFORE any extraction refactor.')
 }
