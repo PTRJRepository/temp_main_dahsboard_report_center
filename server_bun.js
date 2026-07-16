@@ -140,8 +140,8 @@ function decodeJwtSegment(value) {
 
 function extractToken(cookieHeader) {
     if (!cookieHeader) return null;
-    const match = cookieHeader.match(/auth-token=([^;]+)/);
-    return match ? match[1] : null;
+    const match = cookieHeader.match(/(?:^|;\s*)(?:auth-token|payroll_auth_token)=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
 }
 
 // ─── Public & Protected Path Definitions ──────────────────────────────────────
@@ -3163,17 +3163,91 @@ function parseIsqlOutput(output) {
     const isSeparator = (l) => /^[=\s]+$/.test((l || '').trim()) && (l || '').includes('=');
     const isDataEnd = (l) => !l || !l.trim() || isSeparator(l) || /rows (affected|selected|fetched)/i.test(l) || /^(SQL>|Statement failed)/i.test(l.trim());
 
-    const colsFromSep = (sepLine) => {
-        const cols = [];
+    /**
+     * Derive column [start, end) boundaries from header + separator lines.
+     * Detects two isql formats:
+     *   A) Narrow: header "col1    col2   col3", sep "==== === ==="
+     *      → spaces in sep mark boundaries. Check header for non-space at col start.
+     *   B) Wide: header "col1<wide>col2<wide>col3" (truncated names), sep "==============="
+     *      → one long "=" group. Find header non-space → space → non-space transitions.
+     * ponytail: doesn't handle trailing spaces in headers — fix by pre-trimming header.
+     */
+    const colsFromSep = (headerLine, sepLine) => {
+        // Strategy A: if sepLine has multiple "=" groups separated by spaces,
+        // those spaces are column boundaries. Validate with header non-space check.
+        const sepGroups = [];
         let i = 0;
         while (i < sepLine.length) {
             if (sepLine[i] === '=') {
                 const start = i;
                 while (i < sepLine.length && sepLine[i] === '=') i++;
-                cols.push([start, i]);
+                sepGroups.push([start, i]);
             } else i++;
         }
-        return cols;
+        if (sepGroups.length > 1) {
+            // Strategy A: space-separated "=" groups. Spaces between groups = column boundaries.
+            // Validate: each boundary should have non-space content in header on both sides.
+            const boundaries = new Set([0]);
+            for (let k = 0; k < sepGroups.length - 1; k++) {
+                boundaries.add(sepGroups[k][1]); // end of group k = boundary
+                boundaries.add(sepGroups[k + 1][0]); // start of group k+1 = boundary
+            }
+            boundaries.add(sepLine.length);
+            // Check: a boundary is valid if header has non-space content around it.
+            // For each gap between sepGroups (the space between "=" groups), find the
+            // header content on the left and right.
+            const sortedBoundaries = [...boundaries].sort((a, b) => a - b);
+            const cols = [];
+            for (let k = 0; k < sortedBoundaries.length - 1; k++) {
+                const [start, end] = [sortedBoundaries[k], sortedBoundaries[k + 1]];
+                const headerSlice = (headerLine.slice(start, end) || '').trim();
+                if (headerSlice.length > 0 || cols.length === 0) {
+                    cols.push([start, end]);
+                }
+            }
+            if (cols.length > 1) return cols;
+        }
+        // Strategy B: single "=" group (wide header). Find column transitions in header:
+        // non-space → space → non-space means a column boundary.
+        // Scan header for trailing spaces within the separator range.
+        const cols2 = [[0, sepLine.length]];
+        let lastNonSpace = -1;
+        const headerLen = headerLine.length;
+        const trimEnd = sepLine.length < headerLen ? sepLine.length : headerLen;
+        for (let pos = 0; pos < trimEnd; pos++) {
+            const hChar = headerLine[pos];
+            const isNonSpace = hChar && hChar.trim().length > 0;
+            if (isNonSpace) {
+                lastNonSpace = pos;
+            } else if (lastNonSpace >= 0) {
+                // found a trailing-space position: look ahead for next non-space
+                let nextNonSpace = -1;
+                for (let ahead = pos; ahead < trimEnd; ahead++) {
+                    if (headerLine[ahead] && headerLine[ahead].trim().length > 0) {
+                        nextNonSpace = ahead;
+                        break;
+                    }
+                }
+                if (nextNonSpace >= 0) {
+                    // trailing-space zone ends at the column boundary (nextNonSpace)
+                    // Close current column, start new one
+                    cols2[cols2.length - 1][1] = nextNonSpace;
+                    cols2.push([nextNonSpace, sepLine.length]);
+                    lastNonSpace = nextNonSpace;
+                    // Skip past the non-space we just found to avoid re-triggering
+                    // (advance pos to just before next non-space)
+                    pos = nextNonSpace - 1;
+                }
+            }
+        }
+        // Only accept multiple cols if the split actually produces content on both sides
+        if (cols2.length > 1) {
+            // Check: last column must have some non-space content
+            const lastColHeader = (headerLine.slice(cols2[cols2.length - 1][0], cols2[cols2.length - 1][1]) || '').trim();
+            if (lastColHeader.length > 0) return cols2;
+        }
+        // Fallback: single column (original behavior)
+        return [[0, sepLine.length]];
     };
 
     let headers = [];
@@ -3186,7 +3260,7 @@ function parseIsqlOutput(output) {
         if (i + 1 < lines.length && isSeparator(lines[i + 1])) {
             const headerLine = line;
             const sepLine = lines[i + 1] || '';
-            const cols = colsFromSep(sepLine);
+            const cols = colsFromSep(headerLine, sepLine);
             if (cols.length > 0 && !headers.length) {
                 headers = cols.map(([s, e]) => headerLine.slice(s, e).trim());
             }
@@ -3744,7 +3818,7 @@ async function startModuleServicesIfNeeded() {
     await startRouteServiceIfNeeded('server-monitor', {
         label: 'Server Monitor',
         cwd: MONITORING_SERVICE_DIR,
-        script: 'dev',
+        script: process.env.NODE_ENV === 'production' ? 'preview' : 'dev',
         port: 3000,
         env: {
             DISABLE_HMR: process.env.SERVER_MONITOR_HMR === 'true' ? 'false' : 'true',
