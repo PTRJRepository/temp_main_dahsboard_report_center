@@ -304,12 +304,12 @@ Before Phase 1 begins, these must be completed:
   - Known residual: single-row wide header with single "=" separator still returns 1 column
 - [x] **R-04**: Create `isReadOnlySql` corpus test — `tests/baseline/firebird-readonly-validator.test.js` (41 tests)
   - 2 known false positives (documented): `SELECT UPDATE FROM EMP`, `LIKE '%DROP%'`
-- [ ] **R-05**: Create ADR-001 marking `Module Services/report-center` as deprecated
-- [ ] **R-01, R-02, R-03, R-08**: Document credential rotation plan (separate from refactor)
-- [ ] Verify `npm run build:dashboard` from root passes
-- [ ] Verify `npx tsc --noEmit` in `Dashboard_Utama/` passes
+- [x] **R-05**: ADR-001 created — `Dokumentasi/ADR-001-Report-Center-Canonical.md` (mark deprecated, merge components before delete)
+- [x] **R-02, R-03, R-08**: Credential rotation plan documented — `Dokumentasi/SEC-Credential-Rotation-Plan.md`
+- [x] Verify `npm run build:dashboard` passes — Next.js build succeeds (exit 0)
+- [x] Verify `npx tsc --noEmit` in `Dashboard_Utama/` passes — TypeScript clean (exit 0)
 
-> Exit gate: 3/7 items complete. Remaining: ADR-001, credential rotation, build verification.
+> ✅ Exit gate: 7/7 items complete. Phase 1 may proceed.
 
 ---
 
