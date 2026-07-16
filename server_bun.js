@@ -40,6 +40,43 @@ import {
 // IFESS shared service (kept in CommonJS for Bun/Node compatibility)
 const ifessService = require('./Services/ifess-control-server/service');
 
+function getServerTime() { return new Date().toISOString(); }
+
+// ─── IFESS Control Service Proxy (Phase 3) ───────────────────────────────────────────────────────────────
+// All /api/ifess/* requests are proxied to the standalone IFESS Control Service (port 8003).
+// The service handles its own data persistence to data/ifess/*.json.
+// Phase 5 API keys kept here for future per-route auth.
+const QUERY_API_KEY = process.env.QUERY_API_KEY || 'ptrj-query-gateway-key';
+const UPATH_API_KEY = process.env.UPATH_API_KEY || 'ptrj-upath-key';
+const IFESS_CLIENT_API_KEY = process.env.IFESS_CLIENT_API_KEY || 'ptrj-ifess-client-key';
+
+async function proxyToIFESSService(req, reqPath) {
+    try {
+        const upstreamUrl = `http://localhost:8003${reqPath}`;
+        const headers = {};
+        req.headers.forEach((v, k) => { headers[k] = v; });
+        let body = null;
+        if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+            body = await req.arrayBuffer();
+        }
+        const upstream = await fetch(upstreamUrl, { method: req.method, headers, body });
+        const text = await upstream.text();
+        const responseHeaders = new Headers();
+        upstream.headers.forEach((v, k) => {
+            if (k !== 'transfer-encoding') responseHeaders.set(k, v);
+        });
+        responseHeaders.set('Access-Control-Allow-Origin', '*');
+        responseHeaders.set('X-Gateway-Proxied', 'ifess-control-service');
+        return new Response(text, { status: upstream.status, headers: responseHeaders });
+    } catch (e) {
+        console.error('[gateway->ifess] proxy error:', e.message);
+        return new Response(JSON.stringify({ error: 'IFESS service unavailable', message: e.message }), {
+            status: 503, headers: { 'Content-Type': 'application/json' }
+        });
+    }
+}
+
+
 // ─── Load .env BEFORE any process.env usage ──────────────────────────────────
 const env = process.env.NODE_ENV || 'development';
 try {
@@ -179,214 +216,7 @@ function redirectToLogin(req, pathname, search = '') {
     return Response.redirect(`/login?returnTo=${returnTo}`, 302);
 }
 
-// ─── IFESS Control Server Handler (Bun Native) ─────────────────────────────────
-const IFESS_API_KEY = process.env.IFESS_API_KEY || 'ptrj-rebinmas-air-ruak-parit-gunung-darul';
-const IFESS_DATA_DIR = `${ROOT_DIR}/data/ifess`;
-
-// IFESS data cache
-let ifessData = {
-    clients: [],
-    configs: {},
-    commands: [],
-    moduleStatuses: [],
-    heartbeatLogs: []
-};
-
-function getServerTime() { return new Date().toISOString(); }
-
-function loadIFESSData() {
-    try {
-        const clientsPath = `${IFESS_DATA_DIR}/clients.json`;
-        const configsPath = `${IFESS_DATA_DIR}/configs.json`;
-        const commandsPath = `${IFESS_DATA_DIR}/commands.json`;
-        const statusesPath = `${IFESS_DATA_DIR}/module-statuses.json`;
-        const logsPath = `${IFESS_DATA_DIR}/heartbeat-logs.json`;
-
-        ifessData.clients = JSON.parse(readFileSync(clientsPath, 'utf-8') || '[]');
-        ifessData.configs = JSON.parse(readFileSync(configsPath, 'utf-8') || '{}');
-        ifessData.commands = JSON.parse(readFileSync(commandsPath, 'utf-8') || '[]');
-        ifessData.moduleStatuses = JSON.parse(readFileSync(statusesPath, 'utf-8') || '[]');
-        ifessData.heartbeatLogs = JSON.parse(readFileSync(logsPath, 'utf-8') || '[]');
-    } catch { /* files may not exist yet */ }
-}
-
-function saveIFESSData() {
-    try {
-        require('fs').mkdirSync(IFESS_DATA_DIR, { recursive: true });
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/clients.json`, JSON.stringify(ifessData.clients, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/configs.json`, JSON.stringify(ifessData.configs, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/commands.json`, JSON.stringify(ifessData.commands, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/module-statuses.json`, JSON.stringify(ifessData.moduleStatuses, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/heartbeat-logs.json`, JSON.stringify(ifessData.heartbeatLogs, null, 2));
-    } catch (e) { console.error('IFESS save error:', e); }
-}
-
-function validateApiKey(req) {
-    const key = req.headers.get('x-api-key');
-    if (!key) return false;
-    return key === IFESS_API_KEY;
-}
-
-// Frontend proxy handler - delegates to shared IFESS service
-async function handleFrontendProxy(req) {
-    try {
-        const body = await req.arrayBuffer();
-        const { action, params = {} } = JSON.parse(new TextDecoder().decode(body) || '{}');
-
-        if (!action) {
-            return jsonResp(400, { error: 'Action is required' });
-        }
-
-        switch (action) {
-            case 'getDashboard':
-                return jsonResp(200, ifessService.getDashboardSummary());
-
-            case 'listClients':
-                return jsonResp(200, ifessService.listClients());
-
-            case 'getClient': {
-                const client = ifessService.getClient(params.clientId);
-                return client ? jsonResp(200, client) : jsonResp(404, { error: 'Client not found' });
-            }
-
-            case 'getClientConfig': {
-                const config = ifessService.getClientConfig(params.clientId);
-                return config ? jsonResp(200, config) : jsonResp(404, { error: 'Config not found' });
-            }
-
-            case 'registerClient':
-                return jsonResp(200, ifessService.registerClient(params));
-
-            case 'updateClientConfig': {
-                const result = ifessService.updateClientConfig(params.clientId, params.config || params);
-                return result.success ? jsonResp(200, result) : jsonResp(400, result);
-            }
-
-            case 'sendHeartbeat':
-            case 'receiveHeartbeat': {
-                const result = ifessService.receiveHeartbeat(params.clientId, params);
-                return result.success ? jsonResp(200, result) : jsonResp(404, result);
-            }
-
-            case 'getModuleStatuses':
-                return jsonResp(200, ifessService.listModuleStatuses(params.clientId));
-
-            case 'reportModuleStatus':
-                return jsonResp(200, ifessService.reportModuleStatus(params.clientId, { modules: params.modules || [] }));
-
-            case 'pollCommands':
-                return jsonResp(200, { commands: ifessService.pollPendingCommands(params.clientId) });
-
-            case 'listCommands':
-                return jsonResp(200, ifessService.listCommands(params.clientId, params.status));
-
-            case 'createCommand': {
-                const cmd = ifessService.createCommand(params.clientId, {
-                    commandType: params.commandType,
-                    moduleCode: params.moduleCode,
-                    payload: params.payload || {}
-                });
-                return jsonResp(200, cmd);
-            }
-
-            case 'reportCommandResult': {
-                const result = ifessService.reportCommandResult(params.clientId, params.commandId, { status: params.status, message: params.message });
-                return result.success ? jsonResp(200, result) : jsonResp(404, result);
-            }
-
-            // Client Groups
-            case 'listClientGroups':
-                return jsonResp(200, ifessService.listClientGroups());
-
-            case 'getClientGroup': {
-                const group = ifessService.getClientGroup(params.groupCode);
-                return group ? jsonResp(200, group) : jsonResp(404, { error: 'Group not found' });
-            }
-
-            case 'createClientGroup': {
-                const result = ifessService.createClientGroup(params);
-                return result.success ? jsonResp(200, result) : jsonResp(400, result);
-            }
-
-            case 'updateClientGroup': {
-                const result = ifessService.updateClientGroup(params.groupCode, params);
-                return result.success ? jsonResp(200, result) : jsonResp(404, result);
-            }
-
-            case 'deleteClientGroup': {
-                const result = ifessService.deleteClientGroup(params.groupCode);
-                return result.success ? jsonResp(200, result) : jsonResp(404, result);
-            }
-
-            case 'addClientToGroup': {
-                const result = ifessService.addClientToGroup(params.groupCode, params.clientId);
-                return result.success ? jsonResp(200, result) : jsonResp(404, result);
-            }
-
-            case 'removeClientFromGroup': {
-                const result = ifessService.removeClientFromGroup(params.groupCode, params.clientId);
-                return result.success ? jsonResp(200, result) : jsonResp(404, result);
-            }
-
-            // Audit Logs
-            case 'listAuditLogs':
-                return jsonResp(200, ifessService.listAuditLogs(params.filters || {}));
-
-            // ── Firebird → SQL sync ──
-            case 'listSyncDivisions':
-                return jsonResp(200, ifessService.listSyncDivisions());
-
-            // syncBootstrap: one-time full historical load via FB_Migration subprocess.
-            // (The old client-push syncDispatch is removed — sync is now server-pull via
-            // the Next.js /api/ifess/sync route, which dispatches EXECUTE_FIREBIRD_QUERY.)
-            case 'syncBootstrap': {
-                // One-time full historical load via FB_Migration subprocess (heavy).
-                const div = ifessService.resolveDivision(params.divisionCode);
-                if (!div) return jsonResp(404, { success: false, error: 'Unknown divisionCode' });
-                const job = ifessService.createSyncJob({
-                    clientId: params.clientId || 'bootstrap',
-                    divisionCode: params.divisionCode,
-                    mode: 'bootstrap',
-                    tables: params.tables || [],
-                    requestedBy: params.requestedBy
-                });
-                // Spawn FB_Migration node subprocess; fire-and-forget (status polled via getSyncJob).
-                const fbMigrate = `${ROOT_DIR.replace(/\\/g, '/')}/../FB_Migration/src/migrate.js`;
-                const args = [params.tables && params.tables.length ? 'selected' : 'full',
-                    '--divisions=' + params.divisionCode,
-                    ...(params.tables && params.tables.length ? ['--tables=' + params.tables.join(',')] : []),
-                    ...(params.from ? ['--from=' + params.from] : [])];
-                ifessService.updateSyncJob(job.syncJobId, { status: 'running', startedAt: new Date().toISOString() });
-                spawnFbMigration(fbMigrate, args, job.syncJobId);
-                return jsonResp(200, job);
-            }
-
-            case 'listSyncJobs':
-                return jsonResp(200, ifessService.listSyncJobs(params.limit || 50));
-
-            case 'getSyncJob':
-                return jsonResp(200, ifessService.getSyncJob(params.syncJobId));
-
-            default:
-                return jsonResp(400, { error: `Unknown action: ${action}` });
-        }
-    } catch (e) {
-        return jsonResp(500, { error: e.message });
-    }
-}
-
-// ─── Observability Infrastructure (Phase 1) ──────────────────────────────────
-
-/**
- * Structured JSON logger — all gateway log output goes through here.
- * In production: JSON lines. In development: human-readable with color.
- */
-const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
-
-const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
-const currentLevel = LOG_LEVELS[LOG_LEVEL] ?? 1;
-
-function structuredLog(level, event, data = {}) {
+// ─── IFESS Control Server Handler (Bun Native) ─────────────────────────────────function structuredLog(level, event, data = {}) {
     if (LOG_LEVELS[level] < currentLevel) return;
     const entry = {
         timestamp: new Date().toISOString(),
@@ -2903,135 +2733,16 @@ async function getMonitoringSnapshot(options = {}) {
     return monitoringSnapshotCache;
 }
 
-function handleIFESSApi(req, reqPath) {
-    // Public endpoints
-    if (reqPath === '/api/ifess/health') {
-        return new Response(JSON.stringify({ status: 'Healthy', serverTime: getServerTime() }), {
-            headers: { 'Content-Type': 'application/json' }
-        });
-    }
-
-    if (reqPath === '/api/ifess/server-info') {
-        return new Response(JSON.stringify(ifessService.getServerInfo()), { headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // Frontend proxy handler (POST with {action, params} format) - bypass auth
-    if (req.method === 'POST' && reqPath === '/api/ifess') {
-        return handleFrontendProxy(req);
-    }
-
-    // Query Gateway routes under /api/ifess
-    if (reqPath.startsWith('/api/ifess/query-gateway')) {
-        return handleQueryGateway(req, reqPath);
-    }
-
-    // Protected endpoints - require API key
-    if (!validateApiKey(req)) {
-        return new Response(JSON.stringify({ error: 'Unauthorized', message: 'Valid X-API-Key header is required.' }), {
-            status: 401,
-            headers: { 'Content-Type': 'application/json' }
-        });
-    }
-
-    // GET /api/ifess/clients
-    if (req.method === 'GET' && (reqPath === '/api/ifess/clients' || reqPath === '/api/ifess/clients/')) {
-        return new Response(JSON.stringify(ifessService.listClients()), { headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // GET /api/ifess/dashboard
-    if (req.method === 'GET' && reqPath === '/api/ifess/dashboard') {
-        return new Response(JSON.stringify(ifessService.getDashboardSummary()), { headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // POST /api/ifess/clients/register
-    if (req.method === 'POST' && reqPath === '/api/ifess/clients/register') {
-        return req.arrayBuffer().then(body => {
-            try {
-                const data = JSON.parse(new TextDecoder().decode(body));
-                const result = ifessService.registerClient(data);
-                return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-            } catch {
-                return new Response(JSON.stringify({ error: 'Bad Request', message: 'Invalid JSON body' }), {
-                    status: 400, headers: { 'Content-Type': 'application/json' }
-                });
-            }
-        });
-    }
-
-    // POST /api/ifess/clients/:id/heartbeat
-    if (req.method === 'POST' && /^\/api\/ifess\/clients\/[^/]+\/heartbeat$/.test(reqPath)) {
-        const clientId = reqPath.split('/')[4];
-        return req.arrayBuffer().then(body => {
-            try {
-                const data = JSON.parse(new TextDecoder().decode(body));
-                const result = ifessService.receiveHeartbeat(clientId, data);
-                return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-            } catch {
-                return new Response(JSON.stringify({ error: 'Bad Request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-            }
-        });
-    }
-
-    // SuperApp compat: GET /api/ifess/clients/:id/commands/pending?limit=N
-    if (req.method === 'GET' && /^\/api\/ifess\/clients\/[^/]+\/commands\/pending$/.test(reqPath)) {
-        const clientId = reqPath.split('/')[4];
-        const commands = ifessService.pollPendingCommands(clientId);
-        return new Response(JSON.stringify({ commands }), { headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // SuperApp compat: GET /api/ifess/clients/:id/config
-    if (req.method === 'GET' && /^\/api\/ifess\/clients\/[^/]+\/config$/.test(reqPath)) {
-        const clientId = reqPath.split('/')[4];
-        const config = ifessService.getClientConfig(clientId);
-        return new Response(JSON.stringify(config), { status: config ? 200 : 404, headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // SuperApp compat: POST /api/ifess/clients/:id/commands/:cmdId/result
-    if (req.method === 'POST' && /^\/api\/ifess\/clients\/[^/]+\/commands\/[^/]+\/result$/.test(reqPath)) {
-        const parts = reqPath.split('/');
-        const clientId = parts[4];
-        const commandId = parts[6];
-        return req.arrayBuffer().then(body => {
-            try {
-                const data = JSON.parse(new TextDecoder().decode(body));
-                const result = ifessService.reportCommandResult(clientId, commandId, data);
-                return new Response(JSON.stringify(result), { status: result.success ? 200 : 404, headers: { 'Content-Type': 'application/json' } });
-            } catch {
-                return new Response(JSON.stringify({ error: 'Bad Request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-            }
-        });
-    }
-
-    // Client Groups
-    if (reqPath === '/api/ifess/client-groups') {
-        if (req.method === 'GET') {
-            return new Response(JSON.stringify(ifessService.listClientGroups()), { headers: { 'Content-Type': 'application/json' } });
-        }
-        if (req.method === 'POST') {
-            return req.arrayBuffer().then(body => {
-                try {
-                    const data = JSON.parse(new TextDecoder().decode(body));
-                    const result = ifessService.createClientGroup(data);
-                    return new Response(JSON.stringify(result), { status: result.success ? 200 : 400, headers: { 'Content-Type': 'application/json' } });
-                } catch {
-                    return new Response(JSON.stringify({ error: 'Bad Request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-                }
-            });
-        }
-    }
-
-    // Audit Logs
-    if (reqPath === '/api/ifess/audit-logs') {
-        if (req.method === 'GET') {
-            return new Response(JSON.stringify(ifessService.listAuditLogs()), { headers: { 'Content-Type': 'application/json' } });
-        }
-    }
-
-    // Default 404
-    return new Response(JSON.stringify({ error: 'Not Found', path: reqPath }), {
-        status: 404, headers: { 'Content-Type': 'application/json' }
-    });
+/**
+ * Phase 3: All IFESS API requests are proxied to the standalone
+ * IFESS Control Service (localhost:8003). This stub delegates to
+ * proxyToIFESSService() to maintain the same call-site signatures
+ * used by the gateway route dispatcher.
+ */
+async function handleIFESSApi(req, reqPath) {
+    return proxyToIFESSService(req, reqPath);
 }
+
 
 // Query Gateway Data Store
 const queryData = {
@@ -3459,7 +3170,6 @@ function spawnFbMigration(scriptPath, args, syncJobId) {
 // Remove old query data and load/save functions (now handled by service module)
 
 // Initialize IFESS data on startup
-loadIFESSData();
 loadQueryData();
 
 // Stuck-command reaper: every 30s, fail any Received command whose client hasn't reported a
@@ -4304,7 +4014,7 @@ server = Bun.serve({
             // Sync chunk/watermark/job-status routes go to handleQueryGateway (REST),
             // but the action dispatcher (POST /api/ifess {action:'syncDispatch'}) stays in handleIFESSApi.
             if (reqPath.startsWith('/api/ifess/sync/')) {
-                return handleQueryGateway(req, reqPath);
+                return null; // fall through to SPA proxy -> Dashboard :3100
             }
             return handleIFESSApi(req, reqPath);
         }
