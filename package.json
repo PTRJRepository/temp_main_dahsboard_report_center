@@ -16,7 +16,10 @@
     "start:fast": "bun run start:bun",
     "dev:fast": "bun run dev:bun",
     "smoke:gateway": "bun scripts/gateway-smoke.js",
-    "bench": "bun run test.ts"
+    "bench": "bun run test.ts",
+    "dev:gateway": "NODE_ENV=development DASHBOARD_PORT=3100 START_DASHBOARD=false START_MODULE_SERVICES=false bun run server_bun.js",
+    "dev:report-center": "powershell -ExecutionPolicy Bypass -File scripts/start-report-center.ps1",
+    "dev:ifess-services": "powershell -ExecutionPolicy Bypass -File scripts/start-ifess-services.ps1"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
