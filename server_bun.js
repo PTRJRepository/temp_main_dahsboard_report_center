@@ -3540,6 +3540,10 @@ function isViteDevAssetPath(reqPath) {
         reqPath.startsWith('/node_modules/vite/');
 }
 
+function isHttpTarget(target) {
+    return typeof target === 'string' && /^https?:///i.test(target);
+}
+
 // ─── Static File Utilities ───────────────────────────────────────────────────
 const STATIC_EXTENSIONS_RE = /\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|webp|avif|map)$/;
 const VERSION_HASH_RE = /-[a-f0-9]{6,}\.[a-z]+$/;
@@ -3692,55 +3696,10 @@ async function isUpstreamReady(target) {
 }
 
 async function startDashboardIfNeeded() {
-    if (await isUpstreamReady(DASHBOARD_TARGET)) {
-        console.log(`Dashboard upstream ready: ${DASHBOARD_TARGET}`);
-        return;
-    }
-
-    if (!START_DASHBOARD) {
-        console.log(`Dashboard upstream not ready: ${DASHBOARD_TARGET}`);
-        return;
-    }
-
-    const dashboardScript = process.env.NODE_ENV === 'production' ? 'start' : 'dev';
-
-    // Use process.execPath (the running Bun executable) for spawning child processes on Windows
-    const bunExecutable = process.execPath;
-
-    console.log(`Starting dashboard upstream with bun run ${dashboardScript} at ${DASHBOARD_TARGET}...`);
-    const child = Bun.spawn({
-        cmd: [bunExecutable, 'run', dashboardScript, '--', '-p', String(DASHBOARD_PORT), '--hostname', '127.0.0.1'],
-        cwd: DASHBOARD_DIR,
-        stdout: 'inherit',
-        stderr: 'inherit',
-        env: {
-            ...process.env,
-            PORT: String(DASHBOARD_PORT),
-            HOSTNAME: '127.0.0.1',
-        },
-    });
-
-    process.on('exit', () => child.kill());
-
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-        await Bun.sleep(500);
-        if (await isUpstreamReady(DASHBOARD_TARGET)) {
-            console.log(`Dashboard upstream ready: ${DASHBOARD_TARGET}`);
-            return;
-        }
-    }
-
-    console.warn(`Dashboard upstream did not become ready yet: ${DASHBOARD_TARGET}`);
+    // Phase 4: removed child-process spawning — dashboard must be started externally
+    console.log('[Phase 4] startDashboardIfNeeded() stubbed — dashboard managed externally');
+    return;
 }
-
-function findBaseRoute(id) {
-    return routesConfig.find(route => route.id === id);
-}
-
-function isHttpTarget(target) {
-    return typeof target === 'string' && /^https?:\/\//i.test(target);
-}
-
 async function ensureNodeDependencies(serviceDir, label) {
     if (existsSync(`${serviceDir}/node_modules`)) return true;
 
@@ -3818,19 +3777,10 @@ async function startRouteServiceIfNeeded(routeId, options) {
 }
 
 async function startModuleServicesIfNeeded() {
-    await startRouteServiceIfNeeded('server-monitor', {
-        label: 'Server Monitor',
-        cwd: MONITORING_SERVICE_DIR,
-        script: process.env.NODE_ENV === 'production' ? 'preview' : 'dev',
-        port: 3000,
-        env: {
-            DISABLE_HMR: process.env.SERVER_MONITOR_HMR === 'true' ? 'false' : 'true',
-            VITE_BASE_PATH: '/server-monitor/',
-            VITE_HMR_CLIENT_PORT: String(PORT),
-        },
-    });
+    // Phase 4: removed child-process spawning — module services must be started externally
+    console.log('[Phase 4] startModuleServicesIfNeeded() stubbed — services managed externally');
+    return;
 }
-
 async function proxyDashboard(req, reqPath, search) {
     const targetUrl = `${DASHBOARD_TARGET}${reqPath}${search}`;
     const headers = buildProxyHeaders(req);
@@ -4138,7 +4088,7 @@ if (START_DASHBOARD) {
     console.log('START_DASHBOARD=false — skipping dashboard upstream startup');
 }
 
-await startModuleServicesIfNeeded();
+if (START_MODULE_SERVICES) { await startModuleServicesIfNeeded(); } else { console.log('[Phase 4] START_MODULE_SERVICES=false — skipping module services startup'); }
 await prewarmConnections();
 startLanDiscoveryScheduler();
 
