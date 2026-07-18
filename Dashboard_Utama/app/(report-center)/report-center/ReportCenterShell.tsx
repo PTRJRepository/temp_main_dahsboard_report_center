@@ -5,6 +5,8 @@ import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import { useReportStore } from '@/store/reportStore'
 
+const REPORT_CENTER_THEME_V2 = process.env.NEXT_PUBLIC_REPORT_CENTER_THEME_V2 !== 'false'
+
 export default function ReportCenterShell({
   children,
 }: {
@@ -13,10 +15,10 @@ export default function ReportCenterShell({
   const { sidebarCollapsed } = useReportStore()
 
   return (
-    <div className="report-center-dark flex h-screen overflow-hidden bg-[var(--rc-bg)] text-[var(--rc-text)]">
+    <div className={`report-center-dark ${REPORT_CENTER_THEME_V2 ? 'report-center-forest' : ''} flex h-screen overflow-hidden bg-[var(--rc-bg)] text-[var(--rc-text)]`}>
       <Sidebar />
       <div className="relative flex flex-1 flex-col overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_0%,rgba(245,158,11,0.1),transparent_28rem)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_0%,rgba(16,185,129,0.11),transparent_28rem)]" />
         <Topbar />
         <motion.main
           key={sidebarCollapsed ? 'collapsed' : 'expanded'}

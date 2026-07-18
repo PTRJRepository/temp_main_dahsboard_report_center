@@ -45,11 +45,46 @@ body {
   --rc-accent-soft: rgba(245, 158, 11, 0.14);
   --rc-success: #34d399;
   --rc-danger: #fb7185;
+  --rc-forest-canvas: #03120d;
+  --rc-forest-canvas-soft: #062019;
+  --rc-forest-surface: #0b2119;
+  --rc-forest-surface-raised: #103126;
+  --rc-forest-surface-muted: #071a14;
+  --rc-forest-border: rgba(74, 222, 128, 0.18);
+  --rc-forest-border-strong: rgba(132, 204, 22, 0.42);
+  --rc-forest-primary: #10b981;
+  --rc-forest-primary-soft: rgba(16, 185, 129, 0.14);
+  --rc-forest-accent: #a3e635;
+  --rc-forest-accent-soft: rgba(163, 230, 53, 0.12);
+  --rc-forest-premium: #c6a15b;
+  --rc-forest-premium-soft: rgba(198, 161, 91, 0.14);
+  --rc-forest-info: #22d3ee;
+  --rc-forest-warning: #f59e0b;
+  --rc-forest-danger: #fb7185;
+  --rc-forest-success: #34d399;
   background:
     radial-gradient(circle at 12% 0%, rgba(245, 158, 11, 0.14), transparent 28rem),
     linear-gradient(135deg, #06080d 0%, #0b1018 46%, #06080d 100%);
   color: var(--rc-text);
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+.report-center-dark.report-center-forest {
+  --rc-bg: var(--rc-forest-canvas);
+  --rc-bg-soft: var(--rc-forest-canvas-soft);
+  --rc-surface: var(--rc-forest-surface);
+  --rc-surface-raised: var(--rc-forest-surface-raised);
+  --rc-surface-muted: var(--rc-forest-surface-muted);
+  --rc-border: var(--rc-forest-border);
+  --rc-border-strong: var(--rc-forest-border-strong);
+  --rc-accent: var(--rc-forest-primary);
+  --rc-accent-soft: var(--rc-forest-primary-soft);
+  --rc-success: var(--rc-forest-success);
+  --rc-danger: var(--rc-forest-danger);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(16, 185, 129, 0.16), transparent 30rem),
+    radial-gradient(circle at 82% 12%, rgba(163, 230, 53, 0.1), transparent 24rem),
+    linear-gradient(135deg, var(--rc-forest-canvas) 0%, var(--rc-forest-canvas-soft) 48%, #020906 100%);
 }
 
 .report-center-dark .bg-white,
@@ -139,6 +174,62 @@ body {
 .report-center-dark .rc-accent-bg {
   background: var(--rc-accent-soft);
   color: #fbbf24;
+}
+
+.report-center-dark.report-center-forest .rc-panel {
+  background:
+    linear-gradient(180deg, rgba(16, 49, 38, 0.96), rgba(7, 26, 20, 0.94));
+  border-color: var(--rc-forest-border);
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.3), 0 0 38px rgba(16, 185, 129, 0.06);
+}
+
+.report-center-dark.report-center-forest .rc-panel-active {
+  border-color: var(--rc-forest-border-strong);
+  box-shadow: inset 3px 0 0 var(--rc-forest-accent), 0 22px 80px rgba(0, 0, 0, 0.34);
+}
+
+.report-center-dark.report-center-forest .rc-muted-panel {
+  background: rgba(7, 26, 20, 0.74);
+  border-color: var(--rc-forest-border);
+}
+
+.report-center-dark.report-center-forest .rc-accent-text {
+  color: var(--rc-forest-accent);
+}
+
+.report-center-dark.report-center-forest .rc-accent-bg {
+  background: var(--rc-forest-accent-soft);
+  color: var(--rc-forest-accent);
+}
+
+.report-center-dark.report-center-forest .rc-forest-card {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(16, 49, 38, 0.92), rgba(7, 26, 20, 0.96));
+  border: 1px solid var(--rc-forest-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 60px rgba(0, 0, 0, 0.22);
+}
+
+.report-center-dark.report-center-forest .rc-forest-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(120deg, transparent 0 36%, rgba(163, 230, 53, 0.06) 36% 37%, transparent 37% 100%),
+    radial-gradient(circle at 84% 12%, rgba(16, 185, 129, 0.14), transparent 14rem);
+}
+
+.report-center-dark.report-center-forest .rc-forest-focus:focus-visible {
+  outline: 2px solid var(--rc-forest-accent);
+  outline-offset: 3px;
+}
+
+.report-center-dark.report-center-forest .rc-forest-badge {
+  border: 1px solid var(--rc-forest-border);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--rc-forest-accent);
 }
 
 .report-center-dark .hover\:bg-slate-50:hover,
