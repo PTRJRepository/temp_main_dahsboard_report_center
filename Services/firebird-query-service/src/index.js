@@ -22,7 +22,9 @@ import { handleRequest, initRoutes } from './routes.js';
 
 // ── Configuration ───────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT || '8004', 10);
-const DATA_DIR = resolve(process.env.DATA_DIR || '../../../data/ifess');
+const DATA_DIR = process.env.DATA_DIR
+    ? resolve(process.env.DATA_DIR)
+    : resolve(import.meta.dir, '../../../data/ifess');
 const TEMPLATES_FILE = resolve(DATA_DIR, 'query-templates.json');
 
 // Init routes with the shared templates file (same JSON used by ifess-control-server)
@@ -31,14 +33,14 @@ initRoutes(TEMPLATES_FILE);
 // ── Bun HTTP Server ────────────────────────────────────────────────────────────
 const server = Bun.serve({
     port: PORT,
-    fetch(req) {
+    async fetch(req) {
         const url = new URL(req.url);
         const path = url.pathname;
 
         console.log(`[FirebirdQS] ${req.method} ${path}`);
 
         // Forward CORS for browser-based clients
-        const response = handleRequest(req, path, url);
+        const response = await handleRequest(req, path, url);
 
         if (response === null) {
             return new Response(JSON.stringify({ error: 'Not Found', path }), {

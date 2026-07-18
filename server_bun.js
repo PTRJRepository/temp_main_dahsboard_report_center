@@ -59,6 +59,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 const DASHBOARD_DIR = `${ROOT_DIR}/Dashboard_Utama`;
 const DASHBOARD_PORT = parseInt(process.env.DASHBOARD_PORT || '3100');
 const DASHBOARD_TARGET = process.env.DASHBOARD_TARGET || `http://127.0.0.1:${DASHBOARD_PORT}`;
+const FIREBIRD_QUERY_TARGET = process.env.FIREBIRD_QUERY_TARGET || 'http://localhost:8004';
 const START_DASHBOARD = process.env.START_DASHBOARD !== 'false';
 const START_MODULE_SERVICES = process.env.START_MODULE_SERVICES !== 'false';
 const AUTO_INSTALL_MODULE_SERVICES = process.env.AUTO_INSTALL_MODULE_SERVICES !== 'false';
@@ -2846,9 +2847,9 @@ function handleIFESSApi(req, reqPath) {
         return handleFrontendProxy(req);
     }
 
-    // Query Gateway routes under /api/ifess
+    // Query Gateway routes under /api/ifess are proxied to Firebird Query Service
     if (reqPath.startsWith('/api/ifess/query-gateway')) {
-        return handleQueryGateway(req, reqPath);
+        return proxyFirebirdQueryService(req, reqPath, new URL(req.url).search);
     }
 
     // Protected endpoints - require API key
@@ -3004,24 +3005,6 @@ function handleQueryGateway(req, reqPath) {
         });
     }
 
-    // POST /query-gateway/exec-sync — execute query DIRECTLY via isql (no polling, instant result)
-    // For local-dev/fast mode. Bypasses batch/job/command flow.
-    if (req.method === 'POST' && normalizedPath === '/query-gateway/exec-sync') {
-        return req.arrayBuffer().then(async (body) => {
-            try {
-                const data = JSON.parse(new TextDecoder().decode(body));
-                const validation = ifessService.isReadOnlySql(data.queryText);
-                if (!validation.valid) {
-                    return new Response(JSON.stringify({ success: false, error: validation.errors.join('; ') }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-                }
-                const result = await execLocalQuery(data.queryText, data.maxRows || 100);
-                return new Response(JSON.stringify({ success: true, ...result }), { headers: { 'Content-Type': 'application/json' } });
-            } catch (e) {
-                return new Response(JSON.stringify({ success: false, error: String(e && e.message || e) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-            }
-        });
-    }
-
     if (req.method === 'POST' && normalizedPath === '/query-gateway/dispatch') {
         return req.arrayBuffer().then(body => {
             try {
@@ -3107,29 +3090,6 @@ function handleQueryGateway(req, reqPath) {
         });
     }
 
-    // GET /query-gateway/explore — list all tables + views (DB object explorer)
-    if (req.method === 'GET' && (normalizedPath === '/query-gateway/explore' || normalizedPath === '/query-gateway/explore/')) {
-        return Promise.all([
-            execLocalQuery("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG = 0 AND RDB$VIEW_SOURCE IS NULL ORDER BY 1", 1000),
-            execLocalQuery("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG = 0 AND RDB$VIEW_SOURCE IS NOT NULL ORDER BY 1", 1000),
-        ]).then(([rt, rv]) => {
-            const objects = [
-                ...rt.rows.map(row => ({ name: row[0], type: 'TABLE' })),
-                ...rv.rows.map(row => ({ name: row[0], type: 'VIEW' })),
-            ].sort((a, b) => a.name.localeCompare(b.name));
-            return new Response(JSON.stringify({ success: true, objects, count: objects.length }), { headers: { 'Content-Type': 'application/json' } });
-        });
-    }
-
-    // GET /query-gateway/explore/:tableName — list columns of a table/view
-    if (req.method === 'GET' && /\/query-gateway\/explore\/[^/]+$/.test(normalizedPath)) {
-        const tableName = decodeURIComponent(normalizedPath.split('/').pop());
-        return execLocalQuery(`SELECT RDB$FIELD_NAME, RDB$FIELD_SOURCE FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = '${tableName.replace(/'/g, "''")}' ORDER BY RDB$FIELD_POSITION`, 1000).then(r => {
-            const columns = r.rows.map(row => ({ name: row[0], type: row[1] }));
-            return new Response(JSON.stringify({ success: true, table: tableName, columns }), { headers: { 'Content-Type': 'application/json' } });
-        });
-    }
-
     // GET /query-gateway/batches/:batchId/results — assembled result rows for a batch
     if (req.method === 'GET' && /\/query-gateway\/batches\/[\w-]+\/results$/.test(normalizedPath)) {
         const batchId = normalizedPath.split('/').slice(-2, -1)[0];
@@ -3149,194 +3109,6 @@ function handleQueryGateway(req, reqPath) {
     }
 
     return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-}
-
-// ── Local direct isql executor (sync, no polling) ───────────────────────────
-// Bypasses batch/job/command flow for instant query results.
-const LOCAL_ISQL = process.env.ISQL_PATH || 'C:\\Program Files (x86)\\Firebird\\Firebird_1_5\\bin\\isql.exe';
-const LOCAL_DB = process.env.IFESS_DB_PATH || 'D:\\Gawean Rebinmas\\Monitoring Database\\Database Ifess\\IFESS_ARE_C_28-06-2026 (1)\\PTRJ_ARC.FDB';
-const LOCAL_FB_USER = process.env.FB_USER || 'SYSDBA';
-const LOCAL_FB_PASS = process.env.FB_PASS || 'masterkey';
-
-function parseIsqlOutput(output) {
-    // isql paginates output (~20 rows/page), each page = header + separator(===) + data + blank.
-    // Reference: Client_Server_Web_No_GUI db_utils._parse_enhanced_output — loop all lines,
-    // detect header (next line is separator), collect rows until blank/separator, then
-    // CONTINUE to next page (don't break out entirely). Merge all pages' rows.
-    const lines = output.split(/\r?\n/).map(l => l.replace(/\r$/, ''));
-    // isql separator: groups of '=' separated by spaces (e.g. "============ ============ ")
-    const isSeparator = (l) => /^[=\s]+$/.test((l || '').trim()) && (l || '').includes('=');
-    const isDataEnd = (l) => !l || !l.trim() || isSeparator(l) || /rows (affected|selected|fetched)/i.test(l) || /^(SQL>|Statement failed)/i.test(l.trim());
-
-    /**
-     * Derive column [start, end) boundaries from header + separator lines.
-     * Detects two isql formats:
-     *   A) Narrow: header "col1    col2   col3", sep "==== === ==="
-     *      → spaces in sep mark boundaries. Check header for non-space at col start.
-     *   B) Wide: header "col1<wide>col2<wide>col3" (truncated names), sep "==============="
-     *      → one long "=" group. Find header non-space → space → non-space transitions.
-     * ponytail: doesn't handle trailing spaces in headers — fix by pre-trimming header.
-     */
-    const colsFromSep = (headerLine, sepLine) => {
-        // Strategy A: if sepLine has multiple "=" groups separated by spaces,
-        // those spaces are column boundaries. Validate with header non-space check.
-        const sepGroups = [];
-        let i = 0;
-        while (i < sepLine.length) {
-            if (sepLine[i] === '=') {
-                const start = i;
-                while (i < sepLine.length && sepLine[i] === '=') i++;
-                sepGroups.push([start, i]);
-            } else i++;
-        }
-        if (sepGroups.length > 1) {
-            // Strategy A: space-separated "=" groups. Spaces between groups = column boundaries.
-            // Validate: each boundary should have non-space content in header on both sides.
-            const boundaries = new Set([0]);
-            for (let k = 0; k < sepGroups.length - 1; k++) {
-                boundaries.add(sepGroups[k][1]); // end of group k = boundary
-                boundaries.add(sepGroups[k + 1][0]); // start of group k+1 = boundary
-            }
-            boundaries.add(sepLine.length);
-            // Check: a boundary is valid if header has non-space content around it.
-            // For each gap between sepGroups (the space between "=" groups), find the
-            // header content on the left and right.
-            const sortedBoundaries = [...boundaries].sort((a, b) => a - b);
-            const cols = [];
-            for (let k = 0; k < sortedBoundaries.length - 1; k++) {
-                const [start, end] = [sortedBoundaries[k], sortedBoundaries[k + 1]];
-                const headerSlice = (headerLine.slice(start, end) || '').trim();
-                if (headerSlice.length > 0 || cols.length === 0) {
-                    cols.push([start, end]);
-                }
-            }
-            if (cols.length > 1) return cols;
-        }
-        // Strategy B: single "=" group (wide header). Find column transitions in header:
-        // non-space → space → non-space means a column boundary.
-        // Scan header for trailing spaces within the separator range.
-        const cols2 = [[0, sepLine.length]];
-        let lastNonSpace = -1;
-        const headerLen = headerLine.length;
-        const trimEnd = sepLine.length < headerLen ? sepLine.length : headerLen;
-        for (let pos = 0; pos < trimEnd; pos++) {
-            const hChar = headerLine[pos];
-            const isNonSpace = hChar && hChar.trim().length > 0;
-            if (isNonSpace) {
-                lastNonSpace = pos;
-            } else if (lastNonSpace >= 0) {
-                // found a trailing-space position: look ahead for next non-space
-                let nextNonSpace = -1;
-                for (let ahead = pos; ahead < trimEnd; ahead++) {
-                    if (headerLine[ahead] && headerLine[ahead].trim().length > 0) {
-                        nextNonSpace = ahead;
-                        break;
-                    }
-                }
-                if (nextNonSpace >= 0) {
-                    // trailing-space zone ends at the column boundary (nextNonSpace)
-                    // Close current column, start new one
-                    cols2[cols2.length - 1][1] = nextNonSpace;
-                    cols2.push([nextNonSpace, sepLine.length]);
-                    lastNonSpace = nextNonSpace;
-                    // Skip past the non-space we just found to avoid re-triggering
-                    // (advance pos to just before next non-space)
-                    pos = nextNonSpace - 1;
-                }
-            }
-        }
-        // Only accept multiple cols if the split actually produces content on both sides
-        if (cols2.length > 1) {
-            // Check: last column must have some non-space content
-            const lastColHeader = (headerLine.slice(cols2[cols2.length - 1][0], cols2[cols2.length - 1][1]) || '').trim();
-            if (lastColHeader.length > 0) return cols2;
-        }
-        // Fallback: single column (original behavior)
-        return [[0, sepLine.length]];
-    };
-
-    let headers = [];
-    let rows = [];
-    let i = 0;
-    while (i < lines.length) {
-        const line = lines[i];
-        if (!line || !line.trim() || line.trim().startsWith('SQL>')) { i++; continue; }
-        // header candidate: this line + next is separator
-        if (i + 1 < lines.length && isSeparator(lines[i + 1])) {
-            const headerLine = line;
-            const sepLine = lines[i + 1] || '';
-            const cols = colsFromSep(headerLine, sepLine);
-            if (cols.length > 0 && !headers.length) {
-                headers = cols.map(([s, e]) => headerLine.slice(s, e).trim());
-            }
-            // collect data rows — skip leading blanks (isql puts blank between separator and data)
-            let j = i + 2;
-            let sawData = false;
-            while (j < lines.length) {
-                const dl = lines[j];
-                // blank line: skip if before data, break if after data (end of page)
-                if (!dl || !dl.trim()) {
-                    if (sawData) break;
-                    j++; continue;
-                }
-                if (isSeparator(dl)) break;
-                if (/rows (affected|selected|fetched)/i.test(dl) || /^(SQL>|Statement failed)/i.test(dl.trim())) break;
-                if (cols.length > 0) {
-                    rows.push(cols.map(([s, e]) => dl.slice(s, e).trim()));
-                    sawData = true;
-                }
-                j++;
-            }
-            i = j;
-            continue;
-        }
-        i++;
-    }
-    return { headers, rows };
-}
-
-// Firebird 1.5 fbserver is single-threaded: concurrent isql sessions serialize at the DB
-// and can cascade-timeout (one slow query holds the lock, others wait past 60s). So we
-// serialize isql execution in-process — at most one query runs at a time. Promise chain queue.
-let _isqlChain = Promise.resolve();
-function withIsqlLock(fn) {
-    const next = _isqlChain.then(fn, fn);
-    _isqlChain = next.catch(() => {});
-    return next;
-}
-
-async function execLocalQuery(queryText, maxRows) {
-    // Unique temp filename per call — concurrent Promise.all calls (e.g. explore endpoint
-    // fires 2 isql queries) collide if they share a name, corrupting one query's .sql file.
-    const __p = require('node:path'), __os = require('node:os'), __cp = require('node:child_process');
-    execLocalQuery._seq = (execLocalQuery._seq || 0) + 1;
-    const tmpSql = __p.join(__os.tmpdir(), `ifess_exec_${Date.now()}_${process.pid}_${execLocalQuery._seq}.sql`);
-    let sql = queryText.trim();
-    if (!/^SELECT FIRST/i.test(sql) && maxRows) {
-        sql = sql.replace(/^SELECT/i, `SELECT FIRST ${maxRows}`);
-    }
-    writeFileSync(tmpSql, sql + ';\nquit;\n');
-    // Serialized: only one isql runs at a time. Prevents Firebird lock-cascade timeouts.
-    return withIsqlLock(() => {
-    try {
-        // execFileSync returns isql stdout reliably under Bun. Timeout 20s (was 60s) — a stuck
-        // isql must fail FAST so the serialization queue frees for the next query, otherwise one
-        // slow/hung query cascades every subsequent query into ETIMEDOUT ("always error").
-        const out = execFileSync(LOCAL_ISQL, [`localhost:${LOCAL_DB}`, '-u', LOCAL_FB_USER, '-p', LOCAL_FB_PASS, '-q', '-i', tmpSql], { encoding: 'utf8', timeout: 20000, maxBuffer: 100 * 1024 * 1024 });
-        const parsed = parseIsqlOutput(out);
-        return { ...parsed, rowCount: parsed.rows.length, raw: out };
-    } catch (e) {
-        // On ANY isql failure (timeout or otherwise), kill ALL isql.exe immediately — don't wait
-        // 60s. A pinned fbserver lock blocks every subsequent query; raze the orphan now.
-        try {
-            const __cp2 = require('node:child_process');
-            __cp2.spawnSync('taskkill', ['/IM', 'isql.exe', '/F'], { windowsHide: true, timeout: 5000 });
-        } catch {}
-        return { ok: false, error: String(e && e.message || e), headers: [], rows: [], rowCount: 0 };
-    } finally {
-        try { unlinkSync(tmpSql); } catch {}
-    }
-    });
 }
 
 // Spawn FB_Migration as a node subprocess for bootstrap (one-time full historical load).
@@ -3378,9 +3150,6 @@ function spawnFbMigration(scriptPath, args, syncJobId) {
         ifessService.updateSyncJob(syncJobId, { status: 'failed', finishedAt: new Date().toISOString(), errorMessage: 'spawn failed: ' + (e && e.message || e) });
     }
 }
-
-// Reap orphaned isql.exe stuck on a Firebird lock (zombies from timed-out queries).
-// Only kills isql older than 90s — never an in-flight fast query.
 
 // Remove old query data and load/save functions (now handled by service module)
 
@@ -3859,6 +3628,32 @@ function copyResponseHeaders(source) {
     return headers;
 }
 
+async function proxyFirebirdQueryService(req, reqPath, search) {
+    const servicePath = reqPath
+        .replace(/^\/api\/ifess\/query-gateway/, '')
+        .replace(/^\/api\/query-gateway/, '') || '/';
+    const targetUrl = `${FIREBIRD_QUERY_TARGET}${servicePath}${search}`;
+
+    try {
+        const response = await fetch(targetUrl, {
+            method: req.method,
+            headers: buildProxyHeaders(req),
+            body: hasRequestBody(req.method) ? req.body : undefined,
+            redirect: 'manual',
+            signal: req.signal,
+        });
+        const headers = copyResponseHeaders(response.headers);
+        headers.set('Server', 'Bun-Gateway');
+        headers.set('X-Proxy-Upstream', 'firebird-query-service');
+        return new Response(response.body, { status: response.status, headers });
+    } catch (err) {
+        return new Response(JSON.stringify({ error: 'Firebird Query Service Unavailable', message: err.message }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' },
+        });
+    }
+}
+
 // ─── HTTP Client Pre-warm ────────────────────────────────────────────────────
 async function prewarmConnections() {
     const targets = [...new Set(routesConfig.map(r => r.target).filter(isHttpTarget))];
@@ -4174,11 +3969,14 @@ server = Bun.serve({
             if (reqPath.startsWith('/api/ifess/sync/')) {
                 return handleQueryGateway(req, reqPath);
             }
+            if (reqPath.startsWith('/api/ifess/query-gateway')) {
+                return proxyFirebirdQueryService(req, reqPath, url.search);
+            }
             return handleIFESSApi(req, reqPath);
         }
-        // Query Gateway
+        // Query Gateway — proxied to standalone Firebird Query Service
         if (reqPath.startsWith('/api/query-gateway')) {
-            return handleQueryGateway(req, reqPath);
+            return proxyFirebirdQueryService(req, reqPath, url.search);
         }
         // Runtime monitoring snapshot for Server Monitor and Network Monitor.
         if (reqPath === '/api/monitoring/host-labels') {

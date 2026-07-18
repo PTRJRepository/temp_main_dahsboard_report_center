@@ -96,11 +96,13 @@ export function handleRequest(req, path, url) {
         });
     }
 
-    // ── POST /exec ───────────────────────────────────────────────────────────────
-    if (method === 'POST' && normalizedPath === '/exec') {
+    // ── POST /exec, /exec-sync ──────────────────────────────────────────────────
+    if (method === 'POST' && (normalizedPath === '/exec' || normalizedPath === '/exec-sync')) {
         return req.arrayBuffer().then(async (body) => {
             try {
-                const data = JSON.parse(new TextDecoder().decode(body));
+                const raw = new TextDecoder().decode(body).trim();
+                if (!raw) return json({ ok: false, error: 'Invalid JSON', headers: [], rows: [], rowCount: 0 }, 400);
+                const data = JSON.parse(raw);
                 // Validate read-only BEFORE executing
                 const validation = isReadOnlySql(data.queryText);
                 if (!validation.valid) {

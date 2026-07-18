@@ -20,6 +20,7 @@ const ROUTES = [
     { method: 'DELETE', path: /^\/templates\/([^/]+)$/,                  handler: (_, m) => deleteTemplate(m[1]) },
     { method: 'POST',   path: /^\/validate$/,                            handler: (body) => json(validateSql(body)) },
     { method: 'POST',   path: /^\/exec$/,                               handler: (body) => execQuery(body) },
+    { method: 'POST',   path: /^\/exec-sync$/,                          handler: (body) => execQuery(body) },
     { method: 'GET',    path: /^\/explore\/?$/,                         handler: () => json({ ok: true, objects: [], count: 0 }) },
     { method: 'GET',    path: /^\/explore\/([^/]+)$/,                    handler: (_, m) => json({ ok: true, table: decodeURIComponent(m[1]), columns: [] }) },
 ];
@@ -187,6 +188,16 @@ describe('routes — path matching', () => {
         assert.equal(resp.status, 400);
         const body = JSON.parse(resp.body);
         assert.equal(body.ok, false);
+    });
+
+    it('POST /exec-sync — legacy compatibility alias for /exec', () => {
+        _execCalls = [];
+        const r = matchRoute('POST', '/exec-sync');
+        const resp = r.handler({ queryText: 'SELECT * FROM EMP', maxRows: 5 });
+        const body = JSON.parse(resp.body);
+        assert.equal(resp.status, 200);
+        assert.equal(body.ok, true);
+        assert.equal(_execCalls[0].maxRows, 5);
     });
 
     it('GET /explore — returns object list', () => {
