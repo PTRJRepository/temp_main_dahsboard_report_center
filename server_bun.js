@@ -180,6 +180,11 @@ function redirectToLogin(req, pathname, search = '') {
 
 // ─── IFESS Control Server Handler (Bun Native) ─────────────────────────────────
 const IFESS_API_KEY = process.env.IFESS_API_KEY || 'ptrj-rebinmas-air-ruak-parit-gunung-darul';
+// Phase 5: Proxy route API keys
+const QUERY_API_KEY = process.env.QUERY_API_KEY || 'ptrj-query-gateway-key';
+const UPATH_API_KEY = process.env.UPATH_API_KEY || 'ptrj-upath-key';
+const IFESS_CLIENT_API_KEY = process.env.IFESS_CLIENT_API_KEY || 'ptrj-ifess-client-key';
+
 const IFESS_DATA_DIR = `${ROOT_DIR}/data/ifess`;
 
 // IFESS data cache
@@ -4147,6 +4152,24 @@ server = Bun.serve({
         const url = new URL(req.url);
         const reqPath = url.pathname;
 
+        // Phase 1: Canonical health endpoints
+        if (reqPath === "/health/live" || reqPath === "/health/live/") {
+            const rid = "req_"+Date.now().toString(36)+"_"+(1+Math.random()*999999|0).toString(36);
+            return new Response(JSON.stringify({ ok: true, timestamp: new Date().toISOString(), service: "bun-gateway" }), {
+                status: 200, headers: { "Content-Type": "application/json", "Server": "Bun-Gateway", "X-Request-ID": rid }
+            });
+        }
+        if (reqPath === '/health/ready' || reqPath === '/health/ready/') {
+            return new Response(JSON.stringify({ ok: true, version: "1.0.0", service: 'bun-gateway', initialized: true }), {
+                status: 200, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' }
+            });
+        }
+        if (reqPath === '/version' || reqPath === '/version/') {
+            return new Response(JSON.stringify({ gateway: '1.0.0', bun: process.versions.bun || 'unknown' }), {
+                status: 200, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' }
+            });
+        }
+
         // Root /health alias — client SetupForm TestServer hits BaseUrl + "health" (no /api/ifess).
         if (reqPath === '/health' || reqPath === '/health/') {
             return new Response(JSON.stringify({ status: 'Healthy', serverTime: getServerTime() }), {
@@ -4289,6 +4312,18 @@ server = Bun.serve({
         const routeReqPath = directRoute ? reqPath : `${route?.path || ''}${reqPath}`;
         const token = extractToken(req.headers.get('cookie') || '');
         const user = token ? verifyJWT(token) : null;
+
+        // Phase 5: require X-API-Key for /backend/upah, /query, /ifess
+        const hApiKey = req.headers.get('x-api-key'); const reqId = req.headers.get('x-request-id') || 'req_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+
+        if (reqPath.startsWith('/backend/upah') && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
+        if (reqPath.startsWith('/backend/upah') && hApiKey !== UPATH_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
+
+        if (reqPath.startsWith('/query') && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
+        if (reqPath.startsWith('/query') && hApiKey !== QUERY_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
+
+        if (reqPath.startsWith('/ifess') && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
+        if (reqPath.startsWith('/ifess') && hApiKey !== IFESS_CLIENT_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
 
         // ── Static file bypass (zero overhead — fastest path) ───────────────
         const staticFile = getStaticFilePath(reqPath);

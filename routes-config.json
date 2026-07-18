@@ -72,8 +72,7 @@
     "rewriteContent": false,
     "changeOrigin": false,
     "rewritePath": true,
-    "image": "https://broadwayshr.com/wp-content/uploads/2024/02/upah-lembur-per-jam-cover.jpg",
-    "public": true
+    "image": "https://broadwayshr.com/wp-content/uploads/2024/02/upah-lembur-per-jam-cover.jpg"
   },
   {
     "id": "absen",
@@ -157,8 +156,7 @@
     "description": "SQL Gateway API",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": false,
-    "public": true
+    "rewritePath": false
   },
   {
     "id": "file",
@@ -176,7 +174,6 @@
     "description": "IFESS Client Gateway",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": true,
-    "public": true
+    "rewritePath": true
   }
 ]
