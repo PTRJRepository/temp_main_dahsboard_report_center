@@ -78,6 +78,8 @@ export type ReadOnlyValidation = {
   safe: boolean
   reason?: string
   blockedTerms?: string[]
+  valid?: boolean
+  error?: string
 }
 
 type FilterablePayload = {
@@ -251,23 +253,28 @@ export function validateReadOnlySql(sql: string): ReadOnlyValidation {
   const normalized = stripSqlForValidation(sql)
 
   if (!/^(select|with)\b/i.test(normalized)) {
-    return { safe: false, reason: 'Query report harus diawali SELECT atau WITH.' }
+    const reason = 'Query report harus diawali SELECT atau WITH.'
+    return { safe: false, valid: false, reason, error: reason }
   }
 
   const blockedTerms = normalized.match(sqlWritePattern)?.map((item) => item.toUpperCase()) ?? []
   if (blockedTerms.length > 0) {
+    const reason = `Operasi non-read diblokir: ${[...new Set(blockedTerms)].join(', ')}.`
     return {
       safe: false,
-      reason: `Operasi non-read diblokir: ${[...new Set(blockedTerms)].join(', ')}.`,
+      valid: false,
+      reason,
+      error: reason,
       blockedTerms: [...new Set(blockedTerms)],
     }
   }
 
   if (/\bselect\b[\s\S]*\binto\b/i.test(normalized)) {
-    return { safe: false, reason: 'SELECT INTO diblokir karena membuat objek baru.' }
+    const reason = 'SELECT INTO diblokir karena membuat objek baru.'
+    return { safe: false, valid: false, reason, error: reason }
   }
 
-  return { safe: true }
+  return { safe: true, valid: true }
 }
 
 export function validateNaturalLanguageReadOnly(query: string): ReadOnlyValidation {
@@ -284,6 +291,28 @@ export function validateNaturalLanguageReadOnly(query: string): ReadOnlyValidati
   }
 
   return { safe: true }
+}
+
+function sanitizeLike(value: string) {
+  return value.replace(/'/g, "''").replace(/%/g, '').trim()
+}
+
+export function textSearch(search: string, fields: string[]) {
+  if (!search?.trim()) return ''
+  const term = `%${sanitizeLike(search)}%`
+  return `AND (${fields.map((field) => `CONVERT(nvarchar, ${field}) LIKE '${term}'`).join(' OR ')})`
+}
+
+export function cleanLocationCode(value?: string | null) {
+  const code = (value ?? '').trim().toUpperCase()
+  return code.length === 4 ? code : 'PTRJ'
+}
+
+const STOCK_ACCOUNT_MOVEMENT_ANALYSIS_CODES = ['DEADS', 'MEMOV', 'SLMOV', 'FAMOV', 'NOMOV']
+
+export function cleanStockAccountMovementAnalysisCode(value?: string | null) {
+  const code = sanitizeLike(value ?? '').trim().toUpperCase()
+  return STOCK_ACCOUNT_MOVEMENT_ANALYSIS_CODES.includes(code) ? code : ''
 }
 
 function cleanText(value: unknown, max = 80) {
