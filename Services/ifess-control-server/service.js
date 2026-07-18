@@ -1437,6 +1437,21 @@ function isReadOnlySql(queryText) {
         return { valid: false, errors: ['Query must start with SELECT or WITH ... SELECT'] };
     }
 
+
+    // Strip string literals so keywords inside strings (e.g. LIKE '%DROP%') are not flagged
+    const stripped = normalized
+        .replace(/'[^']*'/g, "''")
+        .replace(/"[^"]*"/g, '""');
+
+    // Remove SQL-keyword column names from SELECT lists to avoid false positives
+    // e.g. "SELECT UPDATE FROM EMP" — UPDATE is a column name between SELECT and FROM
+    const selectMatch = stripped.match(/\bSELECT\s+(.*?)\s+FROM\b/i);
+    let scanTarget = stripped;
+    if (selectMatch) {
+        const selectList = selectMatch[1];
+        const cleanedList = selectList.replace(/\b(UPDATE|INSERT|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|EXECUTE|EXEC|COMMIT|ROLLBACK|SAVEPOINT)\b/g, ' COLNAME ');
+        scanTarget = stripped.replace(selectList, cleanedList);
+    }
     // Deny dangerous keywords/patterns
     const forbiddenPatterns = [
         /\bINSERT\b/, /\bUPDATE\b/, /\bDELETE\b/, /\bDROP\b/, /\bALTER\b/, /\bCREATE\b/,
@@ -1446,7 +1461,7 @@ function isReadOnlySql(queryText) {
 
     const errors = [];
     for (const pattern of forbiddenPatterns) {
-        if (pattern.test(normalized)) {
+        if (pattern.test(scanTarget)) {
             errors.push(`Query contains forbidden pattern: ${pattern.toString()}`);
         }
     }
