@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowRight, Boxes, ChevronDown, ChevronRight, CircleDollarSign, Factory, Fuel, Hammer, Landmark, Leaf, PackageCheck, Route, Users, Warehouse } from 'lucide-react'
+import { Activity, ArrowRight, Boxes, ChevronDown, ChevronRight, CircleDollarSign, Database, Factory, FileText, Fuel, Hammer, Landmark, Leaf, PackageCheck, Route, Users, Warehouse } from 'lucide-react'
 import GlobalSearch from '@/components/dashboard/GlobalSearch'
 import HeroBanner from '@/components/dashboard/HeroBanner'
 import FavoritesPanel from '@/components/dashboard/FavoritesPanel'
@@ -37,6 +37,14 @@ const accentClass = {
   cyan: 'text-[var(--rc-forest-info)] bg-cyan-400/10',
 } as const
 
+const KPI_ITEMS = [
+  { icon: Boxes, value: '11', label: 'Kategori bisnis', stroke: '#9be23d' },
+  { icon: FileText, value: '151', label: 'Total laporan', stroke: '#29c7c8' },
+  { icon: Database, value: '8', label: 'Data source live', stroke: '#18b96b' },
+  { icon: Users, value: '12', label: 'Pengguna aktif', stroke: '#d6b85c' },
+  { icon: Activity, value: 'Normal', label: 'System status', stroke: '#20ce79' },
+]
+
 export default function ReportCenterPage() {
   const [insightsOpen, setInsightsOpen] = useState(false)
 
@@ -45,6 +53,28 @@ export default function ReportCenterPage() {
       <GlobalSearch />
       <div className="mx-auto max-w-screen-2xl space-y-5 px-4 pb-8 pt-5 sm:px-6 lg:px-8">
         <HeroBanner />
+
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Ringkasan sistem">
+          {KPI_ITEMS.map((item) => {
+            const Icon = item.icon
+            return (
+              <article key={item.label} className="rc-kpi-card min-h-[132px] p-[18px]">
+                <div className="relative z-10 flex items-center gap-3">
+                  <div className="grid h-[42px] w-[42px] place-items-center rounded-[13px] border border-[rgba(155,226,61,.22)] bg-[rgba(24,185,107,.1)] text-[var(--rc-forest-accent)]">
+                    <Icon size={22} strokeWidth={1.8} />
+                  </div>
+                  <div>
+                    <strong className="block text-[26px] leading-none tracking-[-0.04em] text-[var(--rc-text)]">{item.value}</strong>
+                    <p className="mt-1 text-xs text-[var(--rc-text-faint)]">{item.label}</p>
+                  </div>
+                </div>
+                <svg className="relative z-10 mt-4 h-9 w-full" viewBox="0 0 220 36" fill="none" aria-hidden="true">
+                  <path d="M2 28c18-4 28 2 42-3s20-14 34-7 25 10 41 2 27-11 45-5 27 5 54-7" stroke={item.stroke} strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </article>
+            )
+          })}
+        </section>
 
         <section id="modules" className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -63,9 +93,10 @@ export default function ReportCenterPage() {
                 <a
                   key={category.title}
                   href={category.route}
-                  className="rc-forest-card rc-forest-focus group relative flex min-h-[230px] flex-col rounded-2xl p-4 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)]"
+                  className="rc-forest-card rc-forest-focus group relative flex min-h-[236px] flex-col rounded-[18px] p-[19px] transition hover:-translate-y-1 hover:border-[var(--rc-forest-border-strong)] hover:shadow-[0_22px_44px_rgba(0,0,0,.27)]"
                   aria-label={`Buka kategori ${category.title}`}
                 >
+                  <span className="absolute inset-y-0 left-0 w-1 bg-[var(--rc-forest-accent)] opacity-80" aria-hidden="true" />
                   <div className="relative z-10 flex items-start justify-between gap-3">
                     <div className={`grid h-12 w-12 place-items-center rounded-2xl border border-[var(--rc-forest-border)] ${accentClass[category.accent as keyof typeof accentClass]}`}>
                       <Icon size={23} strokeWidth={1.8} />

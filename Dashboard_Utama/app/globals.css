@@ -45,20 +45,20 @@ body {
   --rc-accent-soft: rgba(245, 158, 11, 0.14);
   --rc-success: #34d399;
   --rc-danger: #fb7185;
-  --rc-forest-canvas: #03120d;
-  --rc-forest-canvas-soft: #062019;
-  --rc-forest-surface: #0b2119;
-  --rc-forest-surface-raised: #103126;
-  --rc-forest-surface-muted: #071a14;
-  --rc-forest-border: rgba(74, 222, 128, 0.18);
-  --rc-forest-border-strong: rgba(132, 204, 22, 0.42);
-  --rc-forest-primary: #10b981;
-  --rc-forest-primary-soft: rgba(16, 185, 129, 0.14);
-  --rc-forest-accent: #a3e635;
-  --rc-forest-accent-soft: rgba(163, 230, 53, 0.12);
-  --rc-forest-premium: #c6a15b;
-  --rc-forest-premium-soft: rgba(198, 161, 91, 0.14);
-  --rc-forest-info: #22d3ee;
+  --rc-forest-canvas: #050b08;
+  --rc-forest-canvas-soft: #07110d;
+  --rc-forest-surface: #0a1711;
+  --rc-forest-surface-raised: #11261c;
+  --rc-forest-surface-muted: #0d1e16;
+  --rc-forest-border: rgba(172, 255, 188, 0.16);
+  --rc-forest-border-strong: rgba(172, 255, 188, 0.32);
+  --rc-forest-primary: #18b96b;
+  --rc-forest-primary-soft: rgba(24, 185, 107, 0.12);
+  --rc-forest-accent: #9be23d;
+  --rc-forest-accent-soft: rgba(155, 226, 61, 0.12);
+  --rc-forest-premium: #d6b85c;
+  --rc-forest-premium-soft: rgba(214, 184, 92, 0.14);
+  --rc-forest-info: #29c7c8;
   --rc-forest-warning: #f59e0b;
   --rc-forest-danger: #fb7185;
   --rc-forest-success: #34d399;
@@ -228,8 +228,38 @@ body {
 
 .report-center-dark.report-center-forest .rc-forest-badge {
   border: 1px solid var(--rc-forest-border);
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(24, 185, 107, 0.1);
   color: var(--rc-forest-accent);
+}
+
+.report-center-dark.report-center-forest .rc-reference-grid {
+  background-image:
+    linear-gradient(rgba(155, 226, 61, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(155, 226, 61, 0.035) 1px, transparent 1px);
+  background-size: 30px 30px;
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000);
+}
+
+.report-center-dark.report-center-forest .rc-kpi-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--rc-forest-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(24, 185, 107, 0.06), transparent 56%),
+    var(--rc-forest-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.report-center-dark.report-center-forest .rc-kpi-card::after {
+  content: '';
+  position: absolute;
+  right: -24px;
+  bottom: -24px;
+  width: 90px;
+  height: 90px;
+  border: 1px solid rgba(155, 226, 61, 0.08);
+  border-radius: 999px;
 }
 
 .report-center-dark .hover\:bg-slate-50:hover,
