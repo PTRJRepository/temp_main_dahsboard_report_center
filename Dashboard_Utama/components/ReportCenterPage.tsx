@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ArrowRight, Boxes, ChevronDown, ChevronRight, CircleDollarSign, Factory, Fuel, Hammer, Landmark, Leaf, PackageCheck, Route, Users, Warehouse } from 'lucide-react'
 import GlobalSearch from '@/components/dashboard/GlobalSearch'
 import HeroBanner from '@/components/dashboard/HeroBanner'
-import ModuleCard, { MODULES } from '@/components/dashboard/ModuleCard'
 import FavoritesPanel from '@/components/dashboard/FavoritesPanel'
 import RecentPanel from '@/components/dashboard/RecentPanel'
 import SystemInfoPanel from '@/components/dashboard/SystemInfoPanel'
@@ -16,6 +15,27 @@ const MOCK_RECOMMENDATIONS = [
   { id: '3', reportName: 'Rekap Lembur Mingguan', module: 'Human Resources', reason: 'due' as const, reasonText: 'Masuk ke sub-modul Lembur', confidence: 0.95, timestamp: 'Besok' },
   { id: '4', reportName: 'Budget vs Actual', module: 'Budget', reason: 'time_based' as const, reasonText: 'Katalog budget siap ditinjau', confidence: 0.78 },
 ]
+
+const BUSINESS_CATEGORIES = [
+  { title: 'Warehouse & Inventory', description: 'Posisi stok, gudang, umur stok, kualitas master, dan stock opname.', icon: Warehouse, submodules: 6, reports: 42, status: 'Live', route: '/report-center/inventory', accent: 'emerald' },
+  { title: 'Receiving & Purchase', description: 'Penerimaan barang, PR/PO, supplier, return, dan audit receipt.', icon: PackageCheck, submodules: 6, reports: 24, status: 'Catalog', route: '/report-center/receiving-purchase', accent: 'lime' },
+  { title: 'Workshop & Vehicle', description: 'Spare part, kendaraan, running, service history, dan biaya maintenance.', icon: Hammer, submodules: 5, reports: 18, status: 'Catalog', route: '/report-center/workshop', accent: 'gold' },
+  { title: 'Fuel Inventory', description: 'Stok BBM, issue kendaraan, konsumsi blok, dan variance fuel.', icon: Fuel, submodules: 5, reports: 15, status: 'Catalog', route: '/report-center/fuel-inventory', accent: 'cyan' },
+  { title: 'Stock Movement', description: 'Masuk, keluar, transfer, adjustment, return, dan tren movement.', icon: Route, submodules: 5, reports: 21, status: 'Live', route: '/report-center/inventory', accent: 'emerald' },
+  { title: 'Asset & Valuation', description: 'Valuasi stok, aset, unit cost, quantity on hand, dan valuation history.', icon: Boxes, submodules: 6, reports: 19, status: 'Live', route: '/report-center/inventory', accent: 'gold' },
+  { title: 'Financial & Accounting', description: 'Jurnal, biaya, budget, accounting period, dan kontrol finansial.', icon: CircleDollarSign, submodules: 5, reports: 13, status: 'Catalog', route: '/report-center/financial', accent: 'gold' },
+  { title: 'Human Resources', description: 'Absensi, lembur, payroll, produktivitas tenaga kerja, dan audit HR.', icon: Users, submodules: 5, reports: 12, status: 'Catalog', route: '/report-center/human-resources', accent: 'lime' },
+  { title: 'Budget & Planning', description: 'Budget vs actual, rencana kerja, forecast, dan monitoring deviasi.', icon: Landmark, submodules: 4, reports: 9, status: 'Catalog', route: '/report-center/budget', accent: 'cyan' },
+  { title: 'Production & Operation', description: 'Produksi kebun/pabrik, operasi harian, KPI, dan data health.', icon: Factory, submodules: 5, reports: 11, status: 'Catalog', route: '/report-center/production', accent: 'emerald' },
+  { title: 'General & Others', description: 'Report pendukung, audit trail, data sources, dan administrasi katalog.', icon: Leaf, submodules: 4, reports: 7, status: 'Catalog', route: '/report-center', accent: 'lime' },
+]
+
+const accentClass = {
+  emerald: 'text-[var(--rc-forest-primary)] bg-[var(--rc-forest-primary-soft)]',
+  lime: 'text-[var(--rc-forest-accent)] bg-[var(--rc-forest-accent-soft)]',
+  gold: 'text-[var(--rc-forest-premium)] bg-[var(--rc-forest-premium-soft)]',
+  cyan: 'text-[var(--rc-forest-info)] bg-cyan-400/10',
+} as const
 
 export default function ReportCenterPage() {
   const [insightsOpen, setInsightsOpen] = useState(false)
@@ -29,17 +49,55 @@ export default function ReportCenterPage() {
         <section id="modules" className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-amber-300">Report families</p>
-              <h2 className="mt-1 text-base font-bold text-[var(--rc-text)]">Modul Laporan Lengkap</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--rc-forest-accent)]">Business report map</p>
+              <h2 className="mt-1 text-base font-bold text-[var(--rc-text)]">Kategori Bisnis Forest Intelligence</h2>
             </div>
-            <span className="rounded-full border border-[var(--rc-border)] px-3 py-1 text-xs font-semibold text-[var(--rc-text-muted)]">
-              {MODULES.length} modul utama
+            <span className="rounded-full rc-forest-badge px-3 py-1 text-xs font-semibold">
+              {BUSINESS_CATEGORIES.length} kategori bisnis
             </span>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {MODULES.map((mod) => (
-              <ModuleCard key={mod.id} module={mod} className="h-full" />
-            ))}
+            {BUSINESS_CATEGORIES.map((category) => {
+              const Icon = category.icon
+              return (
+                <a
+                  key={category.title}
+                  href={category.route}
+                  className="rc-forest-card rc-forest-focus group relative flex min-h-[230px] flex-col rounded-2xl p-4 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)]"
+                  aria-label={`Buka kategori ${category.title}`}
+                >
+                  <div className="relative z-10 flex items-start justify-between gap-3">
+                    <div className={`grid h-12 w-12 place-items-center rounded-2xl border border-[var(--rc-forest-border)] ${accentClass[category.accent as keyof typeof accentClass]}`}>
+                      <Icon size={23} strokeWidth={1.8} />
+                    </div>
+                    <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/5 px-2.5 py-1 text-xs font-semibold text-[var(--rc-text-muted)]">
+                      {category.status}
+                    </span>
+                  </div>
+
+                  <div className="relative z-10 mt-4 flex-1">
+                    <h3 className="text-lg font-bold text-[var(--rc-text)]">{category.title}</h3>
+                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--rc-text-muted)]">{category.description}</p>
+                  </div>
+
+                  <div className="relative z-10 mt-4 grid grid-cols-2 gap-2 border-t border-[var(--rc-forest-border)] pt-3 text-xs">
+                    <span className="rounded-xl bg-white/[0.04] px-3 py-2 text-[var(--rc-text-muted)]">
+                      <strong className="block text-base text-[var(--rc-forest-accent)]">{category.submodules}</strong>
+                      sub-modul
+                    </span>
+                    <span className="rounded-xl bg-white/[0.04] px-3 py-2 text-[var(--rc-text-muted)]">
+                      <strong className="block text-base text-[var(--rc-forest-accent)]">{category.reports}</strong>
+                      laporan
+                    </span>
+                  </div>
+
+                  <span className="relative z-10 mt-3 inline-flex items-center gap-2 text-sm font-bold text-[var(--rc-forest-accent)]">
+                    Pilih kategori
+                    <ArrowRight size={15} className="transition group-hover:translate-x-1" />
+                  </span>
+                </a>
+              )
+            })}
           </div>
         </section>
 
