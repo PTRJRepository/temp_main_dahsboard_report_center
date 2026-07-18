@@ -3,7 +3,7 @@ const table = process.argv[2];
 const sql = `SELECT RDB$FIELD_NAME, RDB$FIELD_POSITION FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME='${table}' ORDER BY RDB$FIELD_POSITION`;
 const data = JSON.stringify({ queryText: sql, maxRows: 100 });
 const req = http.request({
-  hostname: "localhost", port: 3002, path: "/api/query-gateway/exec-sync", method: "POST",
+  hostname: "localhost", port: 3001, path: "/api/query-gateway/exec-sync", method: "POST",
   headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) }
 }, res => {
   let b = "";

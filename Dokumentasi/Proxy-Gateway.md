@@ -59,7 +59,7 @@ Targets map to sibling services: `:8002` upah, `:5176` absen, `:5177` monitoring
 
 ## 5. Gateway ↔ Next.js Integration
 - `START_DASHBOARD=false` skips spawning Next.js (avoids 503s from `startDashboardIfNeeded`/`prewarmConnections` hanging).
-- **Port 3001 zombie**: a `bun.exe` on the Services session often holds 3001 ("access denied", unkillable from Console) → run on `PORT=3002` and point clients/browser there.
+- **Port 3001 zombie**: a `bun.exe` on the Services session often holds 3001 ("access denied", unkillable from Console) → free the process and keep using canonical `PORT=3001`.
 - Direct IFESS analytics UI served by the Bun gateway (before proxy): `/ifess-control[/app,/simple]` → `ifess-app.html` / `ifess-simple.html`; `/ifess-assets/*` → static.
 
 ## 6. nginx (Docker)

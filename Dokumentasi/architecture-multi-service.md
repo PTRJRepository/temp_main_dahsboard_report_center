@@ -40,7 +40,7 @@
 | Mode | Perintah | Deskripsi |
 |---|---|---|
 | **Full** (default) | `npm run dev` | Spawn gateway (3001) **+** Next.js dashboard (3100) |
-| **Gateway only** | `PORT=3002 START_DASHBOARD=false bun run server_bun.js` | Hanya proxy + API, tanpa dashboard — **fastest** untuk IFESS work |
+| **Gateway only** | `PORT=3001 START_DASHBOARD=false bun run server_bun.js` | Hanya proxy + API, tanpa dashboard — **fastest** untuk IFESS work |
 | **Express legacy** | `npm run dev:express` | Gateway berbasis Express (`server.js`) — fallback |
 
 `★ Insight ─────────────────────────────────────`
@@ -285,9 +285,9 @@ cd "Module Services/rebinmas-jaya-server" && npm run dev
 open "Module Services/Wifi_LAN_Monitor/reference-design/index.html"
 
 # 4. IFESS / Firebird — via gateway only (START_DASHBOARD=false)
-PORT=3002 START_DASHBOARD=false bun run server_bun.js
+PORT=3001 START_DASHBOARD=false bun run server_bun.js
 # lalu test:
-POST http://localhost:3002/api/query-gateway/exec-sync  {"query":"..."}
+POST http://localhost:3001/api/query-gateway/exec-sync  {"query":"..."}
 
 # 5-11. External services — jalankan di terminal masing-masing
 cd Services/query && npm start        # :8001
@@ -405,7 +405,7 @@ Module Services/rebinmas-jaya-server/
 | Port | Process | Service | Protocol |
 |---|---|---|---|
 | `3001` | `server_bun.js` | **Main Gateway** (default) | HTTP |
-| `3002` | `server_bun.js` | **Alt Gateway** (ketika 3001 zombie) | HTTP |
+| `3001` | `server_bun.js` | **Main Gateway** (canonical) | HTTP |
 | `3100` | Next.js | **Report Center** (spawn otomatis) | HTTP |
 | `3200` | standalone Next.js | **Report Center** (manual) | HTTP (disabled in proxy) |
 | `3000` | Vite | **Server Monitor** | HTTP+WS |
@@ -418,7 +418,7 @@ Module Services/rebinmas-jaya-server/
 | `1433` | MSSQL | **SQL Server (Estate/Mill)** | TCP |
 | `1888` | MSSQL | **SQL Server Mirror** | TCP |
 
-**Port 3001 zombie**: bun.exe di sesi Services kadang menahan 3001 dengan "access denied", tidak bisa di-kill dari console. Solusi: gunakan `PORT=3002`.
+**Port 3001 zombie**: bun.exe di sesi Services kadang menahan 3001 dengan "access denied", tidak bisa di-kill dari console. Solusi: hentikan proses lama, tetap gunakan `PORT=3001`.
 
 ---
 
@@ -506,7 +506,7 @@ Jika module tidak memenuhi poin 1 → perlu direfactor (add `dev` script, expose
 
 | Gejala | Penyebab | Solusi |
 |---|---|---|
-| `EADDRINUSE: port 3001` | Zombie bun.exe di Services | `PORT=3002` atau kill via Task Manager |
+| `EADDRINUSE: port 3001` | Zombie bun.exe di Services | kill proses lama via Task Manager, tetap `PORT=3001` |
 | Report Center 503 | Next.js belum ready | Tunggu 5-10 detik setelah spawn |
 | IFESS timeout (>60s) | `COUNT(DISTINCT)` over UNION | Split jadi single-table counts |
 | SQL wrong data (`HariHadir=166`) | Missing month filter on scanner table | Tambah `TRANSDATE BETWEEN 'YYYY-MM-01' AND 'YYYY-MM-31'` |

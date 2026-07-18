@@ -1,5 +1,5 @@
 # Phase 4 integration test
-param([string]$port = "3002")
+param([string]$port = "3001")
 $ErrorActionPreference = "Continue"
 
 $env:START_DASHBOARD = "false"

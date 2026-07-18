@@ -3,7 +3,7 @@ const q = process.argv[2];
 const max = process.argv[3] || 100;
 const data = JSON.stringify({ queryText: q, maxRows: Number(max) });
 const req = http.request({
-  hostname: "localhost", port: 3002, path: "/api/query-gateway/exec-sync", method: "POST",
+  hostname: "localhost", port: 3001, path: "/api/query-gateway/exec-sync", method: "POST",
   headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) }
 }, res => {
   let b = "";

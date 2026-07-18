@@ -15,7 +15,7 @@ const fetch = (url, headers = {}) => new Promise((resolve) => {
 
 (async () => {
     // Start gateway with both flags false
-    const env = { ...process.env, START_DASHBOARD: 'false', START_MODULE_SERVICES: 'false', PORT: '3002' };
+    const env = { ...process.env, START_DASHBOARD: 'false', START_MODULE_SERVICES: 'false', PORT: '3001' };
     const bg = spawn('C:/Users/nbgmf/AppData/Roaming/npm/node_modules/bun/bin/bun.exe', ['run', 'server_bun.js'], {
         cwd: 'D:/Gawean Rebinmas/Main Dashboard',
         env,
@@ -31,23 +31,23 @@ const fetch = (url, headers = {}) => new Promise((resolve) => {
 
     // Test health endpoints
     console.log('=== Phase 4 Tests ===');
-    const live = await fetch('http://localhost:3002/health/live');
+    const live = await fetch('http://localhost:3001/health/live');
     console.log('/health/live:', live.status, live.body.slice(0, 80));
 
-    const ready = await fetch('http://localhost:3002/health/ready');
+    const ready = await fetch('http://localhost:3001/health/ready');
     console.log('/health/ready:', ready.status, ready.body.slice(0, 80));
 
     // Phase 5 auth tests
-    const bk401 = await fetch('http://localhost:3002/backend/upah');
+    const bk401 = await fetch('http://localhost:3001/backend/upah');
     console.log('/backend/upah (no key) ->', bk401.status);
 
-    const bk302 = await fetch('http://localhost:3002/backend/upah', { 'x-api-key': 'ptrj-upath-key' });
+    const bk302 = await fetch('http://localhost:3001/backend/upah', { 'x-api-key': 'ptrj-upath-key' });
     console.log('/backend/upah (correct key) ->', bk302.status, '(expect 302)');
 
-    const q401 = await fetch('http://localhost:3002/query');
+    const q401 = await fetch('http://localhost:3001/query');
     console.log('/query (no key) ->', q401.status);
 
-    const ifess401 = await fetch('http://localhost:3002/ifess');
+    const ifess401 = await fetch('http://localhost:3001/ifess');
     console.log('/ifess (no key) ->', ifess401.status);
 
     // All tests pass?
