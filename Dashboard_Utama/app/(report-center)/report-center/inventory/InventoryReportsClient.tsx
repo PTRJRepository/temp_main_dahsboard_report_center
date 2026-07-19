@@ -879,10 +879,10 @@ function TileShell({
   return (
     <div
       className={[
-        'rounded-[18px] border bg-white p-[18px] shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition duration-200',
+        'rounded-[18px] border border-[var(--rc-forest-border)] bg-[var(--rc-forest-surface)] p-[18px] shadow-[0_4px_16px_rgba(0,0,0,.2)] transition duration-200',
         active
-          ? 'border-2 border-[#16A34A] bg-[#F0FDF4] shadow-[0_0_0_4px_rgba(22,163,74,0.12),0_16px_36px_rgba(15,23,42,0.12)]'
-          : 'border-[#CBD5E1] hover:-translate-y-0.5 hover:border-[#16A34A] hover:shadow-[0_16px_36px_rgba(15,23,42,0.14)]',
+          ? 'border-[rgba(155,226,61,.42)] bg-[linear-gradient(90deg,rgba(24,185,107,.16),rgba(155,226,61,.05))] shadow-[inset_3px_0_0_var(--rc-forest-accent),0_0_24px_rgba(24,185,107,.08)]'
+          : 'hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)] hover:bg-[var(--rc-forest-surface-raised)]',
         className,
       ].join(' ')}
     >
