@@ -1855,6 +1855,9 @@ function pickSummaryOnly(summary: DbRow, keys: string[]) {
   return null
 }
 
+/** Primary Ringkasan ≤6 — metric-dictionary (ID). Summary only; no page-row sums. */
+const FLOW_KPI_SURFACE = 'border-[color:var(--rc-forest-border,rgba(155,226,61,0.18))] bg-white/[0.04] text-white'
+
 function buildOfficialMovementFlowKpis(payload: ReportPayload): ReportKpiCard[] {
   const summary = payload.summary ?? {}
   // GUARDRAIL(flow-kpi-summary-only): page rows = TOP N window — never sum for grand totals.
@@ -1863,32 +1866,15 @@ function buildOfficialMovementFlowKpis(payload: ReportPayload): ReportKpiCard[] 
 
   const openingAmt = amt(['OpeningAmount'])
   const openingQty = qty(['OpeningQty'])
-  const receivedAmt = amt(['ReceivedAmount'])
-  const returnAdviceAmt = amt(['ReturnAdviceAmount'])
-  const transferredAmt = amt(['TransferredAmount'])
-  const adjustmentAmt = amt(['AdjustmentAmount'])
   const ledgerAmt = amt(['LedgerAmount'])
   const stationAmt = amt(['IssuedStationAmount'])
   const vehicleAmt = amt(['IssuedVehicleAmount'])
   const issuedTotalAmt = amt(['IssuedTotalAmount'])
   const returnAmt = amt(['ReturnAmount'])
   const goodsReceiveAmt = amt(['GoodsReceiveAmount'])
-  const goodsReturnAmt = amt(['GoodsReturnAmount'])
-  const dispatchAmt = amt(['DispatchAdvAmount'])
   const closingAmt = amt(['ClosingAmount'])
   const closingQty = qty(['ClosingQty'])
-
-  const inventoryTotal =
-    toNumber(receivedAmt?.value) +
-    toNumber(returnAdviceAmt?.value) +
-    toNumber(transferredAmt?.value) +
-    toNumber(adjustmentAmt?.value)
-
-  const purchasingNet =
-    toNumber(returnAmt?.value) +
-    toNumber(goodsReceiveAmt?.value) -
-    toNumber(goodsReturnAmt?.value) -
-    toNumber(dispatchAmt?.value)
+  const totalItem = amt(['TotalItem', 'FilteredRows', 'TotalRows'])
 
   const ledgerN = toNumber(ledgerAmt?.value)
   const stationN = toNumber(stationAmt?.value)
@@ -1898,112 +1884,92 @@ function buildOfficialMovementFlowKpis(payload: ReportPayload): ReportKpiCard[] 
   const issuedDirect = toNumber(issuedTotalAmt?.value)
   const issuedTotalValue = issuedDirect > 0 ? issuedDirect : issuedPartsSum > 0 ? issuedPartsSum : issuedDirect
 
-  const cards: ReportKpiCard[] = []
-
-  cards.push({
-    label: 'Opening',
-    value: toNumber(openingAmt?.value),
-    description: 'Opening balance · prev Acc period',
-    tone: 'border-sky-300/30 bg-sky-500/10 text-sky-50',
-    scope: 'flow',
-    flowSection: 'opening',
-    sourceTable: 'IN_MTHENDITEM',
-    sourceField: 'OpeningAmount ← SUM(Amount) prev AccYear/AccMonth',
-    metrics: [
-      { key: 'OpeningAmount', label: 'Amount', value: toNumber(openingAmt?.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'OpeningAmount' },
-      ...(openingQty ? [{ key: 'OpeningQty', label: 'Qty', value: toNumber(openingQty.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'OpeningQty' }] : []),
-    ],
-  })
-
-  cards.push({
-    label: 'Inventory',
-    value: inventoryTotal,
-    description: 'Received + Return advice + Transfer + Adj (often 0)',
-    tone: 'border-cyan-300/30 bg-cyan-500/10 text-cyan-50',
-    scope: 'flow',
-    flowSection: 'inventory',
-    sourceTable: 'summary',
-    sourceField: 'ReceivedAmount + ReturnAdviceAmount + TransferredAmount + AdjustmentAmount',
-    metrics: [
-      { key: 'ReceivedAmount', label: 'Received', value: toNumber(receivedAmt?.value), sourceField: 'ReceivedAmount' },
-      { key: 'ReturnAdviceAmount', label: 'Return advice', value: toNumber(returnAdviceAmt?.value), sourceField: 'ReturnAdviceAmount' },
-      { key: 'TransferredAmount', label: 'Transferred', value: toNumber(transferredAmt?.value), sourceField: 'TransferredAmount' },
-      { key: 'AdjustmentAmount', label: 'Adjustment', value: toNumber(adjustmentAmt?.value), sourceField: 'AdjustmentAmount' },
-    ],
-  })
-
-  cards.push({
-    label: 'Issued total',
-    value: issuedTotalValue,
-    description: 'Ledger + Station + Vehicle · full scope summary',
-    tone: 'border-rose-300/35 bg-rose-500/10 text-rose-50',
-    scope: 'flow',
-    flowSection: 'issued',
-    sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK',
-    sourceField: 'IssuedTotalAmount = LedgerAmount + IssuedStationAmount + IssuedVehicleAmount',
-    metrics: [
-      {
-        key: 'LedgerAmount',
-        label: 'Ledger',
-        value: ledgerN,
-        sourceTable: 'IN_STOCKISSUELN / FUEL / WS',
-        sourceField: 'LedgerAmount (Blk+Veh empty)',
-      },
-      {
-        key: 'IssuedStationAmount',
-        label: 'Station',
-        value: stationN,
-        sourceTable: 'IN_STOCKISSUELN / FUEL / WS',
-        sourceField: 'IssuedStationAmount (Blk set, Veh empty)',
-      },
-      {
-        key: 'IssuedVehicleAmount',
-        label: 'Vehicle',
-        value: vehicleN,
-        sourceTable: 'IN_STOCKISSUELN / FUEL / WS',
-        sourceField: 'IssuedVehicleAmount (Veh set)',
-      },
-      {
-        key: 'IssuedTotalAmount',
-        label: 'Total',
-        value: issuedTotalValue,
-        sourceTable: 'summary',
-        sourceField: 'IssuedTotalAmount',
-      },
-    ],
-  })
-
-  cards.push({
-    label: 'Purchasing',
-    value: purchasingNet,
-    description: 'Return + GR − Goods return − Dispatch',
-    tone: 'border-violet-300/30 bg-violet-500/10 text-violet-50',
-    scope: 'flow',
-    flowSection: 'purchasing',
-    sourceTable: 'WS_JOBSTOCK + PU_GOODSRCV + PU_GOODSRET',
-    sourceField: 'ReturnAmount + GoodsReceiveAmount − GoodsReturnAmount − DispatchAdvAmount',
-    metrics: [
-      { key: 'ReturnAmount', label: 'Return', value: toNumber(returnAmt?.value), sourceTable: 'WS_JOBSTOCK', sourceField: 'ReturnAmount' },
-      { key: 'GoodsReceiveAmount', label: 'Goods receive', value: toNumber(goodsReceiveAmt?.value), sourceTable: 'PU_GOODSRCVLN', sourceField: 'GoodsReceiveAmount' },
-      { key: 'GoodsReturnAmount', label: 'Goods return', value: toNumber(goodsReturnAmt?.value), sourceTable: 'PU_GOODSRETLN', sourceField: 'GoodsReturnAmount' },
-      { key: 'DispatchAdvAmount', label: 'Dispatch adv', value: toNumber(dispatchAmt?.value), sourceField: 'DispatchAdvAmount' },
-    ],
-  })
-
-  cards.push({
-    label: 'Closing',
-    value: toNumber(closingAmt?.value),
-    description: 'Prefer IN_MTHENDITEM report period',
-    tone: 'border-lime-300/40 bg-lime-400/15 text-lime-50',
-    scope: 'flow',
-    flowSection: 'closing',
-    sourceTable: 'IN_MTHENDITEM (prefer) / reconstructed',
-    sourceField: 'ClosingAmount',
-    metrics: [
-      { key: 'ClosingAmount', label: 'Amount', value: toNumber(closingAmt?.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'ClosingAmount' },
-      ...(closingQty ? [{ key: 'ClosingQty', label: 'Qty', value: toNumber(closingQty.value), sourceField: 'ClosingQty' }] : []),
-    ],
-  })
+  const itemCount = toNumber(totalItem?.value)
+  const cards: ReportKpiCard[] = [
+    {
+      label: 'Saldo Awal',
+      value: toNumber(openingAmt?.value),
+      description: 'Saldo pembuka · periode Acc sebelumnya',
+      tone: FLOW_KPI_SURFACE,
+      scope: 'flow',
+      flowSection: 'opening',
+      sourceTable: 'IN_MTHENDITEM',
+      sourceField: 'OpeningAmount',
+      metrics: [
+        { key: 'OpeningAmount', label: 'Nilai', value: toNumber(openingAmt?.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'OpeningAmount' },
+        ...(openingQty ? [{ key: 'OpeningQty', label: 'Qty', value: toNumber(openingQty.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'OpeningQty' }] : []),
+      ],
+    },
+    {
+      label: 'Penerimaan',
+      value: toNumber(goodsReceiveAmt?.value),
+      description: 'Goods receive (GR) · ringkasan server',
+      tone: FLOW_KPI_SURFACE,
+      scope: 'flow',
+      flowSection: 'purchasing',
+      sourceTable: 'PU_GOODSRCVLN',
+      sourceField: 'GoodsReceiveAmount',
+      metrics: [
+        { key: 'GoodsReceiveAmount', label: 'GR', value: toNumber(goodsReceiveAmt?.value), sourceTable: 'PU_GOODSRCVLN', sourceField: 'GoodsReceiveAmount' },
+      ],
+    },
+    {
+      label: 'Pengeluaran',
+      value: issuedTotalValue,
+      description: 'Ledger + Stasiun + Kendaraan · ringkasan server',
+      tone: FLOW_KPI_SURFACE,
+      scope: 'flow',
+      flowSection: 'issued',
+      sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK',
+      sourceField: 'IssuedTotalAmount',
+      metrics: [
+        { key: 'LedgerAmount', label: 'Ledger', value: ledgerN, sourceField: 'LedgerAmount' },
+        { key: 'IssuedStationAmount', label: 'Stasiun', value: stationN, sourceField: 'IssuedStationAmount' },
+        { key: 'IssuedVehicleAmount', label: 'Kendaraan', value: vehicleN, sourceField: 'IssuedVehicleAmount' },
+        { key: 'IssuedTotalAmount', label: 'Total', value: issuedTotalValue, sourceField: 'IssuedTotalAmount' },
+      ],
+    },
+    {
+      label: 'Retur',
+      value: toNumber(returnAmt?.value),
+      description: 'Retur workshop / stock return',
+      tone: FLOW_KPI_SURFACE,
+      scope: 'flow',
+      flowSection: 'return',
+      sourceTable: 'WS_JOBSTOCK',
+      sourceField: 'ReturnAmount',
+      metrics: [
+        { key: 'ReturnAmount', label: 'Retur', value: toNumber(returnAmt?.value), sourceTable: 'WS_JOBSTOCK', sourceField: 'ReturnAmount' },
+      ],
+    },
+    {
+      label: 'Saldo Akhir',
+      value: toNumber(closingAmt?.value),
+      description: 'Closing · ringkasan server terfilter',
+      tone: `${FLOW_KPI_SURFACE} ring-1 ring-lime-400/25`,
+      scope: 'flow',
+      flowSection: 'closing',
+      sourceTable: 'IN_MTHENDITEM (prefer) / reconstructed',
+      sourceField: 'ClosingAmount',
+      metrics: [
+        { key: 'ClosingAmount', label: 'Nilai', value: toNumber(closingAmt?.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'ClosingAmount' },
+        ...(closingQty ? [{ key: 'ClosingQty', label: 'Qty', value: toNumber(closingQty.value), sourceField: 'ClosingQty' }] : []),
+      ],
+    },
+    {
+      label: 'Jumlah Item',
+      value: itemCount,
+      description: 'Jumlah item pada scope terfilter',
+      tone: FLOW_KPI_SURFACE,
+      scope: 'flow',
+      flowSection: 'count',
+      sourceTable: 'summary',
+      sourceField: 'TotalItem',
+      metrics: [
+        { key: 'TotalItem', label: 'Item', value: itemCount, sourceField: 'TotalItem' },
+      ],
+    },
+  ]
 
   return cards
 }
@@ -2854,42 +2820,62 @@ function isReportPayloadReady(payload: ReportPayload | null) {
   )
 }
 
+function exportRowCeiling(reportId: string) {
+  return MONTHLY_STOCK_MOVEMENT_REPORT_IDS.has(reportId) ? 100_000 : 20_000
+}
+
 function downloadCsv(report: InventoryReport, source: ReportSource, filters: ReportFilterInput) {
+  const ceiling = exportRowCeiling(report.id)
   const params = buildReportParams(report, source, 'all', filters)
   params.set('format', 'csv')
   const anchor = document.createElement('a')
   anchor.href = `/api/reports/inventory?${params.toString()}`
   anchor.download = `${report.id}.csv`
   anchor.click()
+  window.setTimeout(() => {
+    window.alert(`CSV diunduh (batas sistem hingga ${ceiling.toLocaleString('id-ID')} baris terfilter).`)
+  }, 50)
 }
 
 async function exportExcel(report: InventoryReport, source: ReportSource, filters: ReportFilterInput) {
+  const ceiling = exportRowCeiling(report.id)
+  if (!window.confirm(`Export Excel memuat baris di browser (hingga ~${ceiling.toLocaleString('id-ID')} baris). Lanjut?`)) return
   const payload = await fetchReport(report, source, 'all', filters)
   const rows = payload.rows
-  if (rows.length === 0) return
+  if (rows.length === 0) {
+    window.alert('Tidak ada baris untuk diekspor.')
+    return
+  }
   const XLSX = await import('xlsx')
   const sheet = XLSX.utils.json_to_sheet(rows)
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet, report.title.slice(0, 31))
   XLSX.writeFile(workbook, `${report.id}.xlsx`)
+  window.alert(`Excel: ${rows.length.toLocaleString('id-ID')} baris (bukan sampel AI; batas sistem ${ceiling.toLocaleString('id-ID')}).`)
 }
 
 async function exportPdf(report: InventoryReport, rows: DbRow[], columns: string[]) {
   const { default: JsPDF } = await import('jspdf')
   const doc = new JsPDF({ orientation: 'landscape', unit: 'pt' })
-  let y = 46
+  let y = 40
   const visible = columns.slice(0, 7)
-  doc.setFontSize(16)
+  const previewRows = rows.slice(0, 34)
+  doc.setFontSize(14)
   doc.text(report.title, 40, y)
-  y += 24
+  y += 16
+  doc.setFontSize(9)
+  doc.setTextColor(120, 40, 40)
+  doc.text('PRATINJAU PDF — maks 34 baris × 7 kolom. Bukan laporan resmi penuh.', 40, y)
+  doc.setTextColor(0, 0, 0)
+  y += 14
   doc.setFontSize(8)
   doc.text(visible.join(' | '), 40, y)
-  y += 16
-  rows.slice(0, 34).forEach((row) => {
+  y += 14
+  previewRows.forEach((row) => {
     doc.text(visible.map((column) => formatValue(row[column])).join(' | ').slice(0, 165), 40, y)
-    y += 14
+    y += 12
   })
-  doc.save(`${report.id}.pdf`)
+  doc.save(`${report.id}-pratinjau.pdf`)
 }
 
 export default function ReportViewerClient({ reportId }: { reportId: string }) {
