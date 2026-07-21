@@ -4601,19 +4601,24 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               {flowKpiCards.length > 0 && (
                 <div>
                   <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-lime-200/75">
-                    <span>Ringkasan · alur stok</span>
+                    <span>Ringkasan</span>
                     <span className="rc-scope-chip text-[10px] text-lime-100/80">
-                      Opening → In → Issued → Purchasing → Closing
+                      {isMonthlyStockMovement
+                        ? 'Saldo Awal → Penerimaan → Pengeluaran → Retur → Saldo Akhir'
+                        : 'Alur stok'}
                     </span>
                     {isMonthlyStockMovement && (
-                      <span className="rc-scope-chip">summary server · bukan sample</span>
+                      <span className="rc-scope-chip">Ringkasan server (terfilter) · bukan sampel</span>
                     )}
                   </p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                    {(isMonthlyStockMovement ? flowKpiCards.slice(0, 6) : flowKpiCards).map((kpi) => (
+                  <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'xl:grid-cols-6' : 'xl:grid-cols-5'}`}>
+                    {(isMonthlyStockMovement ? flowKpiCards.slice(0, 6) : flowKpiCards).map((kpi) => {
+                      const showNested = !isMonthlyStockMovement || kpi.flowSection === 'issued'
+                      const nested = showNested ? (kpi.metrics ?? []).filter((m) => m.key !== 'IssuedTotalAmount' && m.key !== 'TotalItem') : []
+                      return (
                       <div
                         key={`flow-${kpi.flowSection ?? kpi.label}`}
-                        className={`group relative min-h-[118px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
+                        className={`group relative min-h-[112px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
                         title={[kpi.sourceTable, kpi.sourceField].filter(Boolean).join(' · ')}
                       >
                         <button
@@ -4624,18 +4629,18 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                         >
                           SQL
                         </button>
-                        <span className="block truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/55">
+                        <span className="rc-kpi-label block truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/55">
                           {kpi.label}
                         </span>
-                        <span className="mt-1 block text-xl font-black tracking-tight text-lime-100 whitespace-normal break-all">
+                        <span className="rc-kpi-value mt-1 block text-xl font-black tracking-tight text-lime-100 whitespace-normal break-all">
                           {compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}
                         </span>
                         <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-white/60">
                           {kpi.description}
                         </span>
-                        {kpi.metrics && kpi.metrics.length > 0 && (
+                        {nested.length > 0 && (
                           <div className="mt-2 grid grid-cols-2 gap-1">
-                            {kpi.metrics.map((metric) => (
+                            {nested.slice(0, 4).map((metric) => (
                               <div
                                 key={metric.key}
                                 className="rounded-md border border-white/10 bg-black/20 px-1.5 py-1"
@@ -4652,36 +4657,9 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                           </div>
                         )}
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
-                  {/* Issued detail callout — total + ledger/station/vehicle always visible */}
-                  {flowKpiCards.some((c) => c.flowSection === 'issued') && (
-                    <div className="mt-2 rounded-xl border border-rose-300/25 bg-rose-500/10 px-3 py-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-100/80">
-                        Issued breakdown · summary.IssuedTotalAmount
-                      </p>
-                      <p className="mt-0.5 font-mono text-[9px] font-semibold text-rose-100/50">
-                        source: IN_STOCKISSUE / IN_FUELISSUE / WS_JOBSTOCK · field IssuedTotalAmount = Ledger + Station + Vehicle
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {(flowKpiCards.find((c) => c.flowSection === 'issued')?.metrics ?? []).map((metric) => (
-                          <span
-                            key={`issued-${metric.key}`}
-                            className="inline-flex max-w-full flex-col gap-0.5 rounded-lg border border-rose-200/20 bg-black/25 px-2 py-1 text-[11px] font-bold text-rose-50"
-                            title={[metric.sourceTable, metric.sourceField].filter(Boolean).join(' · ')}
-                          >
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="text-rose-100/60">{metric.label}</span>
-                              <span className="font-black text-lime-100">{compactMetric(metric.value, metric.sourceField ?? metric.key, metric.label)}</span>
-                            </span>
-                            <span className="truncate font-mono text-[8px] font-semibold text-white/35">
-                              {metric.sourceField ?? metric.key}
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -4932,7 +4910,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           />
         )}
 
-        {viewerProfile.showAccountingPeriodFilter && (
+        {viewerProfile.showAccountingPeriodFilter && !isMonthlyStockMovement && (
         <section className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-white shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -5133,9 +5111,9 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               )}
               {manualFilterOpen && (
                 <>
-              {viewerProfile.showAccountingPeriodFilter && (
-                <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Periode (Bulan Aktual)</p>
+              {viewerProfile.showAccountingPeriodFilter && !isMonthlyStockMovement && (
+                              <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Periode (Bulan Aktual)</p>
                   <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
                     <label className="block">
                       <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-white/40">Bulan / Tahun aktual</span>
@@ -5813,40 +5791,44 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 <FileSpreadsheet size={16} />
                 Excel
               </button>
-              <button type="button" onClick={() => exportPdf(report, filteredRows, visibleColumns)} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 text-sm font-bold text-amber-400 hover:bg-amber-500/20'}>
+              <button type="button" onClick={() => exportPdf(report, filteredRows, visibleColumns)} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 text-sm font-bold text-amber-400 hover:bg-amber-500/20'} title="Pratinjau maks 34 baris × 7 kolom">
                 <FileText size={16} />
-                Export PDF
+                PDF pratinjau
               </button>
               <button type="button" onClick={() => downloadCsv(report, selectedSource, requestFilters)} className={tableExpanded ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800 hover:bg-slate-50' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}>
                 <Download size={16} />
                 CSV
               </button>
-              <button type="button" onClick={() => window.print()} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}>
-                <Printer size={16} />
-                Print
-              </button>
-              <button type="button" onClick={() => navigator.clipboard.writeText(window.location.href)} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}>
-                <Copy size={16} />
-                Copy Link
-              </button>
-              {debugSqlStatements.length > 0 && (
-                <button type="button" onClick={() => jumpToAnalysis('sql')} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 text-sm font-black text-amber-100 hover:bg-amber-400/20'}>
-                  SQL Debug
-                </button>
-              )}
-              <button type="button" onClick={() => jumpToAnalysis('ai')} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20'}>
-                <BarChart3 size={16} />
-                Tampilkan AI Insight
-              </button>
-              <button type="button" onClick={() => jumpToAnalysis('charts')} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}>
-                Charts
-              </button>
-              <button type="button" onClick={() => jumpToAnalysis('quality')} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}>
-                Quality
-              </button>
+              <details className={tableExpanded ? 'hidden' : 'relative'}>
+                <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]">
+                  Lainnya ▾
+                </summary>
+                <div className="absolute right-0 z-30 mt-2 flex min-w-[200px] flex-col gap-1 rounded-xl border border-white/15 bg-[#0b1018] p-2 shadow-2xl">
+                  {debugSqlStatements.length > 0 && (
+                    <button type="button" onClick={() => jumpToAnalysis('sql')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-amber-100 hover:bg-white/10">
+                      SQL (audit)
+                    </button>
+                  )}
+                  <button type="button" onClick={() => jumpToAnalysis('ai')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-emerald-200 hover:bg-white/10">
+                    AI Insight (sampel)
+                  </button>
+                  <button type="button" onClick={() => jumpToAnalysis('charts')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
+                    Charts
+                  </button>
+                  <button type="button" onClick={() => jumpToAnalysis('quality')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
+                    Quality
+                  </button>
+                  <button type="button" onClick={() => window.print()} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
+                    Print
+                  </button>
+                  <button type="button" onClick={() => navigator.clipboard.writeText(window.location.href)} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
+                    Salin tautan
+                  </button>
+                </div>
+              </details>
               <button type="button" onClick={enterFullTable} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl bg-[#167A3A] px-4 text-sm font-black text-white hover:bg-[#0f6a30]'}>
                 <Expand size={16} />
-                Full Table
+                Layar penuh
               </button>
             </div>
           </div>
@@ -5855,7 +5837,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             <div className="space-y-2 p-5" aria-hidden="true">
               <div className="flex items-center gap-2 rounded-xl border border-lime-400/20 bg-lime-400/10 px-4 py-3 text-sm font-bold text-lime-100">
                 <Loader2 className="animate-spin text-lime-300" size={16} />
-                Waiting full-scope summary and KPI… table next.
+                Memuat ringkasan server & KPI… tabel menyusul.
               </div>
               <div className="h-11 animate-pulse rounded-xl bg-white/10" />
               <div className="h-11 animate-pulse rounded-xl bg-white/5" />
@@ -5870,12 +5852,12 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           ) : (
             <>
               {!tableExpanded && reportInfoVisible && tableContextItems.length > 0 && (
-                <div className="border-b border-slate-200 bg-[#F0F4FA] px-4 py-3">
+                <div className="border-b border-amber-400/15 bg-[#071426] px-4 py-3">
                   <div className="flex flex-wrap gap-2">
                     {tableContextItems.map(([label, value]) => (
-                      <div key={label} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm">
-                        <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-500">{label}</span>
-                        <span className="mt-0.5 block text-xs font-black text-slate-950">{formatValue(value)}</span>
+                      <div key={label} className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1.5">
+                        <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-white/45">{label}</span>
+                        <span className="mt-0.5 block text-xs font-black text-lime-100">{formatValue(value)}</span>
                       </div>
                     ))}
                   </div>
