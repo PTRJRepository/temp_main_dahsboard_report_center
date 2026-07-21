@@ -1271,11 +1271,9 @@ function buildSubCategoryKpiCards(
 
   return ranked.map(([key, stats], index) => {
     const masterHint =
-      groupField === 'StockAnalysisCode' || groupField === 'StockAnalysisName'
-        ? stockAnalysisMasterLabel(key, stats.name)
-        : stats.name && stats.name !== key
-          ? `${key} · ${stats.name}`
-          : key
+      stats.name && stats.name !== key
+        ? `${key} · ${stats.name}`
+        : key
     const metricList = secondary
       .filter((metric) => stats.metrics[metric] !== undefined)
       .map((metric) => ({
@@ -1948,18 +1946,6 @@ function filterKeyForGroupField(groupField?: string): keyof ReportFilterInput | 
   if (groupField === 'Location' || groupField === 'Gudang' || groupField === 'LocCode') return 'location'
   if (groupField === 'ItemType' || groupField === 'ItemTypeName') return 'itemType'
   return undefined
-}
-
-function stockAnalysisMasterLabel(code: unknown, name?: unknown) {
-  const c = String(code ?? '').trim().toUpperCase()
-  const n = String(name ?? '').trim()
-  if (!c) return n || '—'
-  const hint =
-    c === 'DEADS' ? 'master DEAD STOCK'
-    : c === 'MEMOV' ? 'master MEDIUM MOVING'
-    : c === 'SLMOV' ? 'master SLOW MOVING'
-    : 'master StockAnalysis'
-  return n ? `${c} · ${n} (${hint})` : `${c} (${hint})`
 }
 
 function appendFilterParam(params: URLSearchParams, key: keyof ReportFilterInput, value: unknown) {
@@ -3951,77 +3937,97 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           {kpiCards.length > 0 && (
             <div className="space-y-2">
               {flowKpiCards.length > 0 && (
-                <div>
+                <div className="space-y-3">
                   <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-lime-200/75">
                     <span>Ringkasan</span>
                     <span className="rc-scope-chip text-[10px] text-lime-100/80">
                       {isMonthlyStockMovement
-                        ? '14 kolom resmi PDF · Opening → Issued → Purchasing → Closing'
+                        ? '14 kolom resmi PDF · Opening → Inventory → Issued → Purchasing → Closing'
                         : 'Alur stok'}
                     </span>
                     {isMonthlyStockMovement && (
                       <span className="rc-scope-chip">Ringkasan server (terfilter) · bukan sampel</span>
                     )}
                   </p>
-                  <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : 'xl:grid-cols-5'}`}>
-                    {flowKpiCards.map((kpi) => {
-                      // Official monthly: Amount primary, Qty secondary. Other reports keep issued nested.
-                      const amountMetric = (kpi.metrics ?? []).find((m) => /Amount|TotalItem/i.test(m.key)) ?? kpi.metrics?.[0]
-                      const qtyMetric = (kpi.metrics ?? []).find((m) => /Qty/i.test(m.key))
-                      const nested = !isMonthlyStockMovement
-                        ? (kpi.metrics ?? []).filter((m) => m.key !== 'IssuedTotalAmount' && m.key !== 'TotalItem')
-                        : []
-                      return (
-                      <div
-                        key={`flow-${kpi.sourceField ?? kpi.label}`}
-                        className={`group relative min-h-[104px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
-                        title={[kpi.sourceTable, kpi.sourceField].filter(Boolean).join(' · ')}
-                      >
-                        <button
-                          type="button"
-                          onClick={(event) => openKpiSqlDebug(event, kpi)}
-                          title="SQL sederhana KPI ini"
-                          className="rc-sql-debug absolute right-2 top-2 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                        >
-                          SQL
-                        </button>
-                        <span className="rc-kpi-label block truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/55">
-                          {kpi.label}
-                        </span>
-                        <span className="rc-kpi-value mt-1 block text-xl font-black tracking-tight text-lime-100 whitespace-normal break-all">
-                          {compactMetric(kpi.value, amountMetric?.key ?? kpi.sourceField, kpi.label)}
-                        </span>
-                        {isMonthlyStockMovement && qtyMetric && kpi.sourceField !== 'TotalItem' ? (
-                          <span className="mt-1 block text-[11px] font-bold tabular-nums text-white/70">
-                            Qty {compactMetric(qtyMetric.value, qtyMetric.key, qtyMetric.label)}
-                          </span>
-                        ) : (
-                          <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-white/60">
-                            {kpi.description}
-                          </span>
+                  {(isMonthlyStockMovement
+                    ? [
+                        { id: 'opening', title: 'Opening', sections: ['opening'] },
+                        { id: 'inventory', title: 'Inventory', sections: ['inventory'] },
+                        { id: 'issued', title: 'Issued', sections: ['issued'] },
+                        { id: 'purchasing', title: 'Purchasing', sections: ['purchasing'] },
+                        { id: 'closing', title: 'Closing / Count', sections: ['closing', 'count'] },
+                      ]
+                    : [{ id: 'all', title: 'Alur stok', sections: ['opening', 'inventory', 'issued', 'purchasing', 'return', 'closing', 'count'] }]
+                  ).map((group) => {
+                    const sectionSet = new Set(group.sections)
+                    const cards = flowKpiCards.filter((kpi) => sectionSet.has(kpi.flowSection ?? 'opening'))
+                    if (cards.length === 0) return null
+                    return (
+                      <div key={group.id} className="space-y-1.5">
+                        {isMonthlyStockMovement && (
+                          <p className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">{group.title}</p>
                         )}
-                        {nested.length > 0 && (
-                          <div className="mt-2 grid grid-cols-2 gap-1">
-                            {nested.slice(0, 4).map((metric) => (
+                        <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'md:grid-cols-3 xl:grid-cols-4' : 'xl:grid-cols-5'}`}>
+                          {cards.map((kpi) => {
+                            const amountMetric = (kpi.metrics ?? []).find((m) => /Amount|TotalItem/i.test(m.key)) ?? kpi.metrics?.[0]
+                            const qtyMetric = (kpi.metrics ?? []).find((m) => /Qty/i.test(m.key))
+                            const nested = !isMonthlyStockMovement
+                              ? (kpi.metrics ?? []).filter((m) => m.key !== 'IssuedTotalAmount' && m.key !== 'TotalItem')
+                              : []
+                            return (
                               <div
-                                key={metric.key}
-                                className="rounded-md border border-white/10 bg-black/20 px-1.5 py-1"
-                                title={`${metric.label}: ${formatValue(metric.value, metric.key)}`}
+                                key={`flow-${kpi.sourceField ?? kpi.label}`}
+                                className={`group relative min-h-[96px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
+                                title={[kpi.sourceTable, kpi.sourceField].filter(Boolean).join(' · ')}
                               >
-                                <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/50">
-                                  {metric.label}
+                                <button
+                                  type="button"
+                                  onClick={(event) => openKpiSqlDebug(event, kpi)}
+                                  title="SQL sederhana KPI ini"
+                                  className="rc-sql-debug absolute right-2 top-2 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                                >
+                                  SQL
+                                </button>
+                                <span className="rc-kpi-label block truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/55">
+                                  {kpi.label}
                                 </span>
-                                <span className="block text-[11px] font-black text-white/90 whitespace-normal break-all">
-                                  {compactMetric(metric.value, metric.key, metric.label)}
+                                <span className="rc-kpi-value mt-1 block text-xl font-black tracking-tight text-lime-100 whitespace-normal break-all">
+                                  {compactMetric(kpi.value, amountMetric?.key ?? kpi.sourceField, kpi.label)}
                                 </span>
+                                {isMonthlyStockMovement && qtyMetric && kpi.sourceField !== 'TotalItem' ? (
+                                  <span className="mt-1 block text-[11px] font-bold tabular-nums text-white/70">
+                                    Qty {compactMetric(qtyMetric.value, qtyMetric.key, qtyMetric.label)}
+                                  </span>
+                                ) : (
+                                  <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-white/60">
+                                    {kpi.description}
+                                  </span>
+                                )}
+                                {nested.length > 0 && (
+                                  <div className="mt-2 grid grid-cols-2 gap-1">
+                                    {nested.slice(0, 4).map((metric) => (
+                                      <div
+                                        key={metric.key}
+                                        className="rounded-md border border-white/10 bg-black/20 px-1.5 py-1"
+                                        title={`${metric.label}: ${formatValue(metric.value, metric.key)}`}
+                                      >
+                                        <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/50">
+                                          {metric.label}
+                                        </span>
+                                        <span className="block text-[11px] font-black text-white/90 whitespace-normal break-all">
+                                          {compactMetric(metric.value, metric.key, metric.label)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            )
+                          })}
+                        </div>
                       </div>
-                      )
-                    })}
-                  </div>
+                    )
+                  })}
                 </div>
               )}
 
