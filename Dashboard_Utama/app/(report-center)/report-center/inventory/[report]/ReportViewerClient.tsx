@@ -28,6 +28,7 @@ import {
 import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
 import ReportAnalysisBand from '@/components/report-center/ReportAnalysisBand'
 import AppliedFilterBar from '@/components/report-center/AppliedFilterBar'
+import ReportTableToolbar from '@/components/report-center/ReportTableToolbar'
 import ReportDetailLoadingScreen from '@/components/report-center/ReportDetailLoadingScreen'
 import ReportQuestionPanel, { type ReportQuestionRequest } from '@/components/report-center/ReportQuestionPanel'
 import type { InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
@@ -788,8 +789,6 @@ function resolveGroupFieldAliases(groupBy?: string): string[] {
     ProductBrandCode: ['ProductBrandCode', 'product_brand_code'],
     ProductModelCode: ['ProductModelCode', 'product_model_code'],
     ProductMaterialCode: ['ProductMaterialCode', 'product_material_code'],
-    StockAnalysisCode: ['StockAnalysisCode', 'StockAnalysisName', 'stock_analysis_code'],
-    StockAnalysisName: ['StockAnalysisName', 'StockAnalysisCode'],
     MovementCategory: ['MovementCategory'],
     Location: ['Location', 'Gudang', 'LocCode', 'location'],
     Gudang: ['Gudang', 'Location', 'LocCode', 'location'],
@@ -1922,7 +1921,7 @@ function preferredGroupColumn(columns: string[], profile: ReportViewerProfile, f
     filters.productModel ? 'ProductModelCode' : undefined,
     filters.productMaterial ? 'ProductMaterialCode' : undefined,
     filters.movementCategory ? 'MovementCategory' : undefined,
-    (filters.stockAnalysis ?? filters.category) ? 'StockAnalysisCode' : undefined,
+    undefined,
     ...profile.preferredGroupColumns,
   ].filter(Boolean) as string[]
 
@@ -1937,7 +1936,6 @@ function preferredGroupColumn(columns: string[], profile: ReportViewerProfile, f
 
 function filterKeyForGroupField(groupField?: string): keyof ReportFilterInput | undefined {
   if (!groupField) return undefined
-  if (groupField === 'StockAnalysisCode' || groupField === 'StockAnalysisName') return 'stockAnalysis'
   if (groupField === 'ProductTypeCode' || groupField === 'ProductTypeDescription') return 'productType'
   if (groupField === 'ProductCategoryCode') return 'productCategory'
   if (groupField === 'ProductBrandCode') return 'productBrand'
@@ -1981,7 +1979,6 @@ const viewerFilterQueryKeys: Array<keyof ReportFilterInput | 'natural'> = [
   'movementMovingMin',
   'movementMovingMax',
   'movementSlowCount',
-  'stockAnalysis',
   'blankField',
   'minQty',
   'minAmount',
@@ -2033,7 +2030,6 @@ function viewerUrlWithFilters(pathname: string, currentParams: URLSearchParams, 
   appendFilterParam(params, 'movementMovingMin', filters.movementMovingMin)
   appendFilterParam(params, 'movementMovingMax', filters.movementMovingMax)
   appendFilterParam(params, 'movementSlowCount', filters.movementSlowCount)
-  appendFilterParam(params, 'stockAnalysis', filters.stockAnalysis)
   appendFilterParam(params, 'blankField', filters.blankField)
   appendFilterParam(params, 'minQty', filters.minQty)
   appendFilterParam(params, 'minAmount', filters.minAmount)
@@ -2109,7 +2105,6 @@ function buildReportParams(report: InventoryReport, source: ReportSource, limit:
   appendFilterParam(params, 'movementMovingMin', filters.movementMovingMin)
   appendFilterParam(params, 'movementMovingMax', filters.movementMovingMax)
   appendFilterParam(params, 'movementSlowCount', filters.movementSlowCount)
-  appendFilterParam(params, 'stockAnalysis', filters.stockAnalysis)
   appendFilterParam(params, 'blankField', filters.blankField)
   appendFilterParam(params, 'minQty', filters.minQty)
   appendFilterParam(params, 'minAmount', filters.minAmount)
@@ -4917,173 +4912,54 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
 
         <div className={tableExpanded ? '' : 'mt-5'}>
         <section className={tableExpanded ? 'fixed inset-0 z-50 overflow-hidden bg-[#06080d] p-2' : 'overflow-hidden rounded-2xl border border-amber-400/25 bg-[#0b1018] shadow-[0_24px_80px_rgba(0,0,0,0.32)]'}>
-          <div className={`sticky top-0 z-40 flex flex-wrap items-center justify-between border-b border-amber-400/20 bg-[#071426] ${tableExpanded ? 'mb-1 gap-1 rounded-lg border border-amber-400/20 bg-[#0b1018] px-2 py-1 text-slate-100 shadow-sm' : 'gap-3 px-5 py-4'}`}>
-            <div className="flex flex-wrap items-center gap-2">
-              {tableExpanded && (
-                <button
-                  type="button"
-                  onClick={() => setTableExpanded(false)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-900 px-2 text-xs font-bold text-white hover:bg-slate-800"
-                >
-                  <Minimize2 size={16} />
-                  Exit
-                </button>
-              )}
-              <div className={`relative w-full ${tableExpanded ? 'max-w-xs' : 'max-w-md'}`}>
-                <Search className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${tableExpanded ? 'text-slate-400' : 'text-white/40'}`} />
-                <input
-                  value={tableSearch}
-                  onChange={(event) => {
-                    setTableSearch(event.target.value)
-                    setPage(1)
-                  }}
-                  placeholder="Search dalam table..."
-                  className={tableExpanded ? 'h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs font-semibold text-slate-950 placeholder:text-slate-400 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20' : 'h-11 w-full rounded-xl border border-white/20 bg-[#1A1A1A] pl-9 pr-3 text-sm font-medium text-white placeholder:text-white/40 outline-none focus:border-emerald-500 focus:bg-[#1A1A1A] focus:ring-4 focus:ring-emerald-500/20'}
-                />
-              </div>
-              {tableExpanded && (
-                <span className="hidden rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-600 md:inline-flex">
-                  {shownTableRows} / {displayTableTotalRows} row{serverPaged && tableWindow.windowed ? ` dari ${safeTotalTableRows} total` : ''}
-                </span>
-              )}
-              {(tableStreaming || tableStreamProgress) && (
-                <span
-                  className={
-                    tableExpanded
-                      ? 'inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2 py-1 text-[11px] font-bold text-sky-900'
-                      : 'inline-flex items-center gap-1.5 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-100'
-                  }
-                  title="Full-scope stream after first paint — KPI uses summary, not page window"
-                >
-                  {tableStreaming ? (
-                    <Loader2 size={14} className="animate-spin shrink-0" aria-hidden="true" />
-                  ) : null}
-                  {tableStreaming
-                    ? `Streaming table ${tableStreamProgress?.loaded?.toLocaleString('id-ID') ?? '…'} / ${tableStreamProgress?.total?.toLocaleString('id-ID') ?? '…'}`
-                    : `Stream complete · ${(tableStreamProgress?.loaded ?? displayTableTotalRows).toLocaleString('id-ID')} rows`}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <select
-                value={tableGroupMode}
-                onChange={(event) => {
-                  setTableGroupMode(event.target.value)
-                  setCollapsedGroups({})
-                  setPage(1)
-                }}
-                className={tableExpanded ? 'h-8 max-w-[180px] rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20' : 'h-11 rounded-xl border border-white/20 bg-[#1A1A1A] px-3 text-sm font-semibold text-white outline-none hover:bg-[#252525] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20'}
-              >
-                <option value={AUTO_GROUP}>Auto group</option>
-                <option value={NO_GROUP}>Tanpa group</option>
-                {payloadColumns.map((column) => (
-                  <option key={column} value={column}>Group: {displayColumnLabel(column)}</option>
-                ))}
-              </select>
-              {groupedTableActive && (
-                <div className="flex rounded-xl border border-white/20 bg-[#1A1A1A] p-1">
-                  <button
-                    type="button"
-                    onClick={() => setAllGroupsCollapsed(false)}
-                    className="rounded-lg px-3 py-2 text-xs font-bold text-white/70 hover:bg-[#252525] hover:text-white"
-                  >
-                    Expand
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAllGroupsCollapsed(true)}
-                    className="rounded-lg px-3 py-2 text-xs font-bold text-white/70 hover:bg-[#252525] hover:text-white"
-                  >
-                    Collapse
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setTableDensity((current) => (current === 'compact' ? 'comfortable' : 'compact'))}
-                className={tableExpanded ? 'inline-flex h-8 items-center rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800 hover:bg-slate-50' : 'inline-flex h-11 items-center rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}
-              >
-                {tableDensity === 'compact' ? 'Comfort' : 'Compact'}
-              </button>
-              <details className="relative">
-                <summary className={tableExpanded ? 'h-8 cursor-pointer rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-800 hover:bg-slate-50' : 'h-11 cursor-pointer rounded-xl border border-white/20 bg-[#1A1A1A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#252525]'}>
-                  Columns
-                </summary>
-                <div className="absolute right-0 z-20 mt-2 max-h-80 w-64 overflow-y-auto rounded-xl border border-white/20 bg-[#1A1A1A] p-3 text-white shadow-2xl">
-                  {(payload?.columns ?? []).map((column) => (
-                    <label key={column} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-white/70 hover:bg-[#252525]">
-                      <input type="checkbox" checked={visibleColumns.includes(column)} onChange={() => toggleColumn(column)} />
-                      <span className="truncate">{displayColumnLabel(column)}</span>
-                    </label>
-                  ))}
-                </div>
-              </details>
-              {tableExpanded && !groupedTableActive && (
-                <div className="flex h-8 overflow-hidden rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700">
-                  <button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="px-2 hover:bg-slate-50 disabled:opacity-30">Prev</button>
-                  <span className="border-x border-slate-200 px-2 py-1.5">{page}/{pageCount}</span>
-                  <button type="button" disabled={page === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="px-2 hover:bg-slate-50 disabled:opacity-30">Next</button>
-                </div>
-              )}
-              {tableExpanded && !groupedTableActive && (
-                <select
-                  value={pageSize}
-                  onChange={(event) => {
-                    setPageSize(Number(event.target.value))
-                    setPage(1)
-                  }}
-                  className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800"
-                >
-                  {[100, 200, 500].map((size) => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
-              )}
-              <button type="button" onClick={() => exportExcel(report, selectedSource, requestFilters)} className={tableExpanded ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-700/30 bg-emerald-50 px-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20'}>
-                <FileSpreadsheet size={16} />
-                Excel
-              </button>
-              <button type="button" onClick={() => exportPdf(report, filteredRows, visibleColumns)} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 text-sm font-bold text-amber-400 hover:bg-amber-500/20'} title="Pratinjau maks 34 baris × 7 kolom">
-                <FileText size={16} />
-                PDF pratinjau
-              </button>
-              <button type="button" onClick={() => downloadCsv(report, selectedSource, requestFilters)} className={tableExpanded ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800 hover:bg-slate-50' : 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'}>
-                <Download size={16} />
-                CSV
-              </button>
-              <details className={tableExpanded ? 'hidden' : 'relative'}>
-                <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]">
-                  Lainnya ▾
-                </summary>
-                <div className="absolute right-0 z-30 mt-2 flex min-w-[200px] flex-col gap-1 rounded-xl border border-white/15 bg-[#0b1018] p-2 shadow-2xl">
-                  {debugSqlStatements.length > 0 && (
-                    <button type="button" onClick={() => jumpToAnalysis('sql')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-amber-100 hover:bg-white/10">
-                      SQL (audit)
-                    </button>
-                  )}
-                  <button type="button" onClick={() => jumpToAnalysis('ai')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-emerald-200 hover:bg-white/10">
-                    AI Insight (sampel)
-                  </button>
-                  <button type="button" onClick={() => jumpToAnalysis('charts')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
-                    Charts
-                  </button>
-                  <button type="button" onClick={() => jumpToAnalysis('quality')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
-                    Quality
-                  </button>
-                  <button type="button" onClick={() => window.print()} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
-                    Print
-                  </button>
-                  <button type="button" onClick={() => navigator.clipboard.writeText(window.location.href)} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-white/80 hover:bg-white/10">
-                    Salin tautan
-                  </button>
-                </div>
-              </details>
-              <button type="button" onClick={enterFullTable} className={tableExpanded ? 'hidden' : 'inline-flex h-11 items-center gap-2 rounded-xl bg-[#167A3A] px-4 text-sm font-black text-white hover:bg-[#0f6a30]'}>
-                <Expand size={16} />
-                Layar penuh
-              </button>
-            </div>
-          </div>
+          <ReportTableToolbar
+            tableExpanded={tableExpanded}
+            tableSearch={tableSearch}
+            onTableSearchChange={(value) => {
+              setTableSearch(value)
+              setPage(1)
+            }}
+            shownTableRows={shownTableRows}
+            displayTableTotalRows={displayTableTotalRows}
+            safeTotalTableRows={safeTotalTableRows}
+            serverPaged={serverPaged}
+            tableWindowed={Boolean(tableWindow.windowed)}
+            tableStreaming={tableStreaming}
+            tableStreamProgress={tableStreamProgress}
+            tableGroupMode={tableGroupMode}
+            onTableGroupModeChange={(value) => {
+              setTableGroupMode(value)
+              setCollapsedGroups({})
+              setPage(1)
+            }}
+            autoGroupValue={AUTO_GROUP}
+            noGroupValue={NO_GROUP}
+            payloadColumns={payloadColumns}
+            displayColumnLabel={displayColumnLabel}
+            groupedTableActive={groupedTableActive}
+            onExpandGroups={() => setAllGroupsCollapsed(false)}
+            onCollapseGroups={() => setAllGroupsCollapsed(true)}
+            tableDensity={tableDensity}
+            onToggleDensity={() => setTableDensity((current) => (current === 'compact' ? 'comfortable' : 'compact'))}
+            visibleColumns={visibleColumns}
+            allColumns={payload?.columns ?? []}
+            onToggleColumn={toggleColumn}
+            page={page}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size)
+              setPage(1)
+            }}
+            onExportExcel={() => exportExcel(report, selectedSource, requestFilters)}
+            onExportPdf={() => exportPdf(report, filteredRows, visibleColumns)}
+            onExportCsv={() => downloadCsv(report, selectedSource, requestFilters)}
+            onJumpToAnalysis={jumpToAnalysis}
+            showSqlAudit={debugSqlStatements.length > 0}
+            onEnterFullTable={enterFullTable}
+            onExitFullTable={() => setTableExpanded(false)}
+          />
 
           {loading ? (
             <div className="space-y-2 p-5" aria-hidden="true">
