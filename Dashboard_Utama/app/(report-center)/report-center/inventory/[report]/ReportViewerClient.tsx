@@ -152,9 +152,9 @@ type ReportKpiCard = {
    * movement = always-on Movement Category rail (separate from sub)
    */
   scope?: 'global' | 'flow' | 'breakdown' | 'sub' | 'movement'
-  /** group field (e.g. StockAnalysisCode) when scope=sub|breakdown|movement */
+  /** group field when scope=sub|breakdown|movement */
   groupField?: string
-  /** bucket key (e.g. MEMOV / Fast Moving) when scope=sub|breakdown|movement */
+  /** bucket key when scope=sub|breakdown|movement */
   groupKey?: string
   /** flow section id: opening | inventory | issued | purchasing | closing */
   flowSection?: string
@@ -867,9 +867,6 @@ function chartRowMatchesGroupField(row: DbRow, groupField: string) {
   if (groupFieldsMatch(groupField, 'MovementCategory')) {
     return dimId === 'movement-category' || Boolean(row.MovementCategory)
   }
-  if (groupFieldsMatch(groupField, 'StockAnalysisCode')) {
-    return dimId === 'stock-analysis' || Boolean(row.StockAnalysisCode)
-  }
   if (groupFieldsMatch(groupField, 'Location') || groupFieldsMatch(groupField, 'Gudang')) {
     return dimId === 'location' || Boolean(row.Gudang || row.Location || row.location || row.LocCode)
   }
@@ -918,9 +915,6 @@ function chartGroupKey(row: DbRow, groupField: string) {
       ? [row.Gudang, row.Location, row.location, row.LocCode]
       : []),
     ...(groupFieldsMatch(groupField, 'MovementCategory') ? [row.MovementCategory] : []),
-    ...(groupFieldsMatch(groupField, 'StockAnalysisCode')
-      ? [row.StockAnalysisCode, row.StockAnalysisName]
-      : []),
     ...(groupFieldsMatch(groupField, 'ProductTypeCode') || groupFieldsMatch(groupField, 'ProductType')
       ? [row.ProductTypeCode, row.ProductType, row.product_type_code, row.ProductTypeDescription]
       : []),
@@ -944,7 +938,6 @@ function chartGroupName(row: DbRow, groupField: string) {
         : row.DimensionName ??
           row[`${groupField.replace(/Code$/, '')}Description`] ??
           row.ProductTypeDescription ??
-          row.StockAnalysisName ??
           (groupField === 'ItemType' || groupField === 'ItemTypeName' ? row.ItemTypeName ?? row.ItemType : undefined) ??
           row.Label
   return String(value ?? '').trim()
@@ -1245,9 +1238,6 @@ function buildSubCategoryKpiCards(
       if (!key) key = '(blank)'
       const bucket = buckets.get(key) ?? { count: 0, metrics: {}, name: undefined }
       bucket.count += 1
-      if (!bucket.name && groupFieldsMatch(groupField, 'StockAnalysisCode') && row.StockAnalysisName) {
-        bucket.name = String(row.StockAnalysisName)
-      }
       if (
         !bucket.name &&
         (groupFieldsMatch(groupField, 'ProductTypeCode') || groupFieldsMatch(groupField, 'ProductType')) &&
@@ -1357,7 +1347,7 @@ function buildDynamicGrandTotalKpis(
   }
 
   // Two analysis families (do not mix):
-  // 1) Stored taxonomy sub — fields already on row/master (StockAnalysis, ProductType, Location…).
+  // 1) Stored taxonomy sub — fields already on row/master (ProductType, Location…).
   // 2) Computed rails — derived outside raw table cells (Movement Actual from StockIssue window).
   // Future auto-calc analyses → new scope rail like `movement`, never dump into `sub`.
   const selectedGroup = tableGroupField || filters?.groupBy || filters?.chartDimension
@@ -1386,7 +1376,7 @@ function buildDynamicGrandTotalKpis(
   ).map((card) => ({
     ...card,
     scope: 'movement' as const,
-    description: 'Movement Actual · dihitung otomatis dari StockIssue (bukan StockAnalysis master)',
+    description: 'Movement Actual · dihitung otomatis dari StockIssue',
   }))
 
   // Structure: GLOBAL → ItemType breakdown → stored sub → computed Movement Actual.
@@ -3517,7 +3507,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   const isNameColumn = (column: string) => ['NamaBarang', 'description', 'ItemDescription'].includes(column)
   const isPinnedColumn = (column: string) => isCodeColumn(column) || isNameColumn(column)
   const isCategoryColumn = (column: string) => (
-    /^(MovementCategory|ProductType|ProductCategory|StockAnalysis|ItemType|Location|Gudang|Category|Kategori)$/i.test(column)
+    /^(MovementCategory|ProductType|ProductCategory|ItemType|Location|Gudang|Category|Kategori)$/i.test(column)
     || /category|type|status|bucket|risk/i.test(column)
   )
   const isNumericColumn = (column: string) => (
