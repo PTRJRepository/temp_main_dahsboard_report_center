@@ -771,11 +771,10 @@ function textSearch(search: string, fields: string[]) {
   return `AND (${fields.map((field) => `RTRIM(${field}) LIKE N'%${q}%'`).join(' OR ')})`
 }
 
-const stockAccountMovementAnalysisCodes = ['DEADS', 'MEMOV', 'SLMOV']
 
-function cleanStockAccountMovementAnalysisCode(value?: string) {
-  const code = sanitizeLike(value ?? '').trim().toUpperCase()
-  return stockAccountMovementAnalysisCodes.includes(code) ? code : ''
+function cleanStockAccountMovementAnalysisCode(_value?: string) {
+  // Stock Analysis Code removed from monthly path.
+  return ''
 }
 
 function accountingPeriodFilter(alias: string, accYear: number, accMonth: number) {
