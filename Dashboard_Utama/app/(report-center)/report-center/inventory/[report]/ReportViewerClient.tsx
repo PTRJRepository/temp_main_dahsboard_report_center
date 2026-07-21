@@ -29,7 +29,7 @@ import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
 import ReportAnalysisBand from '@/components/report-center/ReportAnalysisBand'
 import AppliedFilterBar from '@/components/report-center/AppliedFilterBar'
 import ReportTableToolbar from '@/components/report-center/ReportTableToolbar'
-import ReportRowDetail from '@/components/report-center/ReportRowDetail'
+import ReportDataTable from '@/components/report-center/ReportDataTable'
 import { bucketTone, isAmountField, movementTone, renderReportCell, riskTone } from '@/components/report-center/reportTableCells'
 import ReportDetailLoadingScreen from '@/components/report-center/ReportDetailLoadingScreen'
 import ReportQuestionPanel, { type ReportQuestionRequest } from '@/components/report-center/ReportQuestionPanel'
@@ -3433,101 +3433,6 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     ? Math.max(0, tableRowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end)
     : 0
 
-  const renderTableRow = (rowModel: ReportTableRenderRow<DbRow>) => {
-    if (rowModel.type === 'group-header') {
-      const group = rowModel.group
-      const collapsed = Boolean(collapsedGroups[group.key])
-      const itemCurrent = groupMetricTotal(group.rows, ['ItemCurrent']) || group.rows.length
-      const amountCurrent = groupMetricTotal(group.rows, ['AmountItem', 'AmountCurrent', 'TotalAmount', 'total_amount', 'NilaiStok'])
-      const totalQuantity = groupMetricTotal(group.rows, ['total_quantity', 'quantity_on_hand', 'QuantityClosing', 'StockIssueMovementQty', 'TotalStok', 'Qty', 'qty'])
-      const movementReport = report.id === 'all-stock-movement-analysis'
-      const subtotalChips = group.subtotalColumns
-        .filter((column) => !['ItemCurrent', 'AmountItem', 'AmountCurrent', 'TotalAmount', 'NilaiStok', 'NilaiPersediaan', 'Amount', 'QuantityClosing', 'StockIssueMovementQty', 'TotalStok', 'Qty'].includes(column))
-        .slice(0, 2)
-
-      return (
-        <tr key={rowModel.key} className="bg-[#071426] text-slate-200">
-          <td colSpan={Math.max(visibleColumns.length, 1)} className="border-y border-amber-400/20 px-2 py-1.5">
-            <button
-              type="button"
-              onClick={() => toggleGroup(group.key)}
-              className="flex w-full min-w-0 items-center justify-between gap-2 text-left"
-            >
-              <span className="inline-flex min-w-0 items-center gap-1.5 font-black text-amber-100">
-                {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <span className="truncate text-xs">{displayColumnLabel(activeTableGroupColumn ?? '')}: {group.label}</span>
-              </span>
-              <span className="flex shrink-0 flex-nowrap gap-1 overflow-hidden">
-                <span className="rounded border border-emerald-300/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-200">{movementReport ? 'Item' : 'Item'}: {formatValue(itemCurrent)}</span>
-                <span className="rounded border border-amber-300/20 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-100">{movementReport ? 'Amt' : 'Amt'}: {formatValue(amountCurrent, 'AmountItem')}</span>
-                <span className="rounded border border-slate-300/15 bg-white/5 px-1.5 py-0.5 text-[10px] font-bold text-slate-300">Qty: {formatValue(totalQuantity)}</span>
-                {subtotalChips.map((column) => (
-                  <span key={column} className="hidden rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-bold text-slate-300 xl:inline">
-                    {displayColumnLabel(column)}: {formatValue(group.totals[column], column)}
-                  </span>
-                ))}
-              </span>
-            </button>
-          </td>
-        </tr>
-      )
-    }
-
-    if (rowModel.type === 'group-subtotal') {
-      const group = rowModel.group
-      return (
-        <tr key={rowModel.key} className="rc-subtotal-row bg-[#13261c] text-amber-50 border-l-2 border-amber-400/70">
-          {visibleColumns.map((column, columnIndex) => (
-            <td
-              key={column}
-              className={bodyCellClass(column, columnIndex, true)}
-              style={stickyCellStyle(column)}
-            >
-              {columnIndex === 0
-                ? `Subtotal ${group.label}`
-                : group.subtotalColumns.includes(column)
-                  ? formatValue(group.totals[column], column)
-                  : ''}
-            </td>
-          ))}
-        </tr>
-      )
-    }
-
-    if (rowModel.type === 'detail') {
-      return <ReportRowDetail key={rowModel.key} row={rowModel.row} columns={visibleColumns} colSpan={visibleColumns.length} mode={viewerProfile.rowDetail} displayColumnLabel={displayColumnLabel} />
-    }
-
-    const movementExpanded = Boolean(expandedMovementRows[rowModel.rowKey])
-    const zebraAlt = rowModel.rowIndex % 2 !== 0
-    return (
-      <tr
-        key={rowModel.key}
-        className={`group cursor-pointer ${movementExpanded ? 'is-selected' : ''}`}
-        onClick={() => toggleMovementRow(rowModel.rowKey)}
-      >
-        {visibleColumns.map((column, columnIndex) => (
-          <td
-            key={column}
-            className={bodyCellClass(column, columnIndex, false, movementExpanded, zebraAlt)}
-            style={stickyCellStyle(column)}
-          >
-            {columnIndex === 0 ? (
-              <button type="button" onClick={(event) => toggleReportRow(event, rowModel.rowKey)} className="inline-flex max-w-full min-w-0 items-start gap-1 text-left leading-snug text-amber-100 hover:text-amber-300">
-                {movementExpanded ? <ChevronDown size={13} className="mt-0.5 shrink-0" /> : <ChevronRight size={13} className="mt-0.5 shrink-0" />}
-                <span className="min-w-0 whitespace-normal break-words line-clamp-2">{renderReportCell(column, rowModel.row[column], rowModel.row)}</span>
-              </button>
-            ) : (
-              <span className={cellContentClass(column)}>
-                {renderReportCell(column, rowModel.row[column], rowModel.row)}
-              </span>
-            )}
-          </td>
-        ))}
-      </tr>
-    )
-  }
-
   return (
     <main className="min-h-full bg-[#0F2B1A]">
       <div className="mx-auto max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8">
@@ -4819,52 +4724,35 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   </div>
                 </div>
               )}
-              <div className={`overflow-auto ${tableExpanded ? 'h-[calc(100vh-58px)] rounded-lg border border-amber-400/20 bg-[#0b1018]' : 'h-[76vh] min-h-[620px] max-h-[920px] bg-[#0b1018]'}`} ref={tableContainerRef}>
-                <table className={`w-full table-fixed border-separate border-spacing-0 text-left ${tableExpanded ? 'text-[11px]' : 'text-xs'}`}>
-                  <thead className={`sticky top-0 z-30 border-b border-amber-400/25 uppercase text-amber-100 ${tableExpanded ? 'text-[9px] tracking-[0.06em]' : 'text-[10px] tracking-[0.08em]'}`}>
-                    <tr>
-                      {visibleColumns.map((column) => (
-                        <th
-                          key={column}
-                          className={headerCellClass(column)}
-                          style={stickyCellStyle(column)}
-                          title={displayColumnHelp(column)}
-                        >
-                          <button type="button" onClick={() => sortBy(column)} className="w-full text-left font-bold leading-tight hover:text-amber-300 line-clamp-2">
-                            {displayColumnLabel(column)}{sortColumn === column ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}
-                          </button>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {filteredRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={Math.max(visibleColumns.length, 1)} className="px-4 py-12 text-center text-slate-400">
-                          Tidak ada report ditemukan. Coba ubah kata kunci atau filter.
-                        </td>
-                      </tr>
-                    ) : (
-                      <Fragment>
-                        {virtualPaddingTop > 0 && (
-                          <tr aria-hidden="true">
-                            <td colSpan={Math.max(visibleColumns.length, 1)} style={{ height: virtualPaddingTop, padding: 0, border: 0 }} />
-                          </tr>
-                        )}
-                        {virtualRows.map((virtualRow) => {
-                          const rowModel = tableRows[virtualRow.index]
-                          return rowModel ? renderTableRow(rowModel) : null
-                        })}
-                        {virtualPaddingBottom > 0 && (
-                          <tr aria-hidden="true">
-                            <td colSpan={Math.max(visibleColumns.length, 1)} style={{ height: virtualPaddingBottom, padding: 0, border: 0 }} />
-                          </tr>
-                        )}
-                      </Fragment>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <ReportDataTable
+                tableExpanded={tableExpanded}
+                tableContainerRef={tableContainerRef}
+                visibleColumns={visibleColumns}
+                tableRows={tableRows}
+                virtualRows={virtualRows}
+                virtualPaddingTop={virtualPaddingTop}
+                virtualPaddingBottom={virtualPaddingBottom}
+                filteredRowsLength={filteredRows.length}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={sortBy}
+                displayColumnLabel={displayColumnLabel}
+                displayColumnHelp={displayColumnHelp}
+                formatValue={formatValue}
+                headerCellClass={headerCellClass}
+                bodyCellClass={bodyCellClass}
+                cellContentClass={cellContentClass}
+                stickyCellStyle={stickyCellStyle}
+                collapsedGroups={collapsedGroups}
+                expandedMovementRows={expandedMovementRows}
+                onToggleGroup={toggleGroup}
+                onToggleMovementRow={toggleMovementRow}
+                onToggleReportRow={toggleReportRow}
+                activeTableGroupColumn={activeTableGroupColumn}
+                groupMetricTotal={groupMetricTotal}
+                reportId={report.id}
+                rowDetailMode={viewerProfile.rowDetail}
+              />
 
               {!tableExpanded && Object.keys(tableTotals).length > 0 && (
                 <div className="sticky bottom-0 z-20 flex flex-wrap gap-2 border-t border-amber-400/30 bg-[#0b1018]/95 px-4 py-2.5 backdrop-blur-md">
