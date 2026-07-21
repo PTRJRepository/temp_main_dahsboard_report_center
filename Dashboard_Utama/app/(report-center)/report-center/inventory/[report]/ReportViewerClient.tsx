@@ -4006,7 +4006,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           />
         )}
 
-        {viewerProfile.showAccountingPeriodFilter && !isMonthlyStockMovement && (
+        {viewerProfile.showAccountingPeriodFilter && !isMonthlyStockMovement && workspaceTab !== 'ringkasan' && (
         <section className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-white shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -4087,7 +4087,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         </section>
         )}
 
-        {reportInfoVisible && (
+        {reportInfoVisible && workspaceTab !== 'ringkasan' && (
         <section className="mt-4 text-white">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
