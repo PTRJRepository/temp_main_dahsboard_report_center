@@ -1,6 +1,7 @@
 'use client'
 
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import ReportControlBar from '@/components/report-center/ReportControlBar'
 import type { ReportFilterInput } from '@/lib/reports/report-filtering'
 
 type DbRow = Record<string, unknown>
@@ -111,64 +112,31 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
             </div>
           )}
           {isMonthlyStockMovement && (
-            <div className="grid gap-2 border-b border-white/10 px-1 pb-2 md:grid-cols-[minmax(130px,0.55fr)_minmax(170px,0.7fr)_minmax(170px,0.7fr)_auto]">
-              <label className="block min-w-0">
-                <span className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-white/35">Actual period</span>
-                <input
-                  type="month"
-                  value={String(requestFilters.period ?? payload?.metadata?.actualPeriod ?? '')}
-                  onChange={(event) => {
-                    const period = event.target.value || undefined
-                    commitReportFilters({
-                      ...appliedFilters,
-                      period,
-                      accYear: undefined,
-                      accMonth: undefined,
-                      actualYear: undefined,
-                      actualMonth: undefined,
-                    }, period ? `Actual period ${period} diterapkan dari KPI card rail.` : 'Current period diterapkan dari KPI card rail.')
-                  }}
-                  className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-bold text-white"
-                />
-              </label>
-              <label className="block min-w-0">
-                <span className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-white/35">Analysis group</span>
-                <select
-                  value={resolvedMonthlyAnalysisGroup}
-                  onChange={(event) => applyMonthlyAnalysisGroup(event.target.value)}
-                  className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-bold text-white"
-                >
-                  {MONTHLY_ANALYSIS_GROUP_OPTIONS.map((option) => (
-                    <option key={option.field} value={option.field}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block min-w-0">
-                <span className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-white/35">Movement period</span>
-                <select
-                  value={activeMonthlyMovementWindow}
-                  onChange={(event) => applyMonthlyMovementWindow(event.target.value)}
-                  className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-bold text-white"
-                >
-                  {MONTHLY_MOVEMENT_WINDOW_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReportInfoVisible(true)
-                    setReportInfoManuallyOpened(true)
-                    setManualFilterOpen(true)
-                  }}
-                  className="h-8 rounded-lg border border-white/10 bg-white/5 px-3 text-[10px] font-black text-white/65 hover:bg-white/10 hover:text-white"
-                >
-                  More filters
-                </button>
-              </div>
-            </div>
+            <ReportControlBar
+              periodValue={String(requestFilters.period ?? payload?.metadata?.actualPeriod ?? '')}
+              analysisGroupValue={resolvedMonthlyAnalysisGroup}
+              movementWindowValue={activeMonthlyMovementWindow}
+              analysisGroupOptions={MONTHLY_ANALYSIS_GROUP_OPTIONS}
+              movementWindowOptions={MONTHLY_MOVEMENT_WINDOW_OPTIONS}
+              appliedFilters={appliedFilters}
+              onPeriodChange={(period) => {
+                commitReportFilters({
+                  ...appliedFilters,
+                  period,
+                  accYear: undefined,
+                  accMonth: undefined,
+                  actualYear: undefined,
+                  actualMonth: undefined,
+                }, period ? `Actual period ${period} diterapkan dari KPI card rail.` : 'Current period diterapkan dari KPI card rail.')
+              }}
+              onAnalysisGroupChange={applyMonthlyAnalysisGroup}
+              onMovementWindowChange={applyMonthlyMovementWindow}
+              onMoreFilters={() => {
+                setReportInfoVisible(true)
+                setReportInfoManuallyOpened(true)
+                setManualFilterOpen(true)
+              }}
+            />
           )}
           {kpiCards.length > 0 && (
             <div className="space-y-2">
