@@ -134,8 +134,7 @@ const MOVEMENT_WINDOW_OPTIONS = [
 ]
 
 const INVENTORY_ANALYSIS_GROUP_OPTIONS = [
-  { value: 'StockAnalysisCode', label: 'Stock Analysis Code', description: 'Default RPTIN1000015: DEADS / MEMOV / SLMOV' },
-  { value: 'ProductTypeCode', label: 'Product Type Code', description: 'IN_ITEM.ProdTypeCode' },
+  { value: 'ProductTypeCode', label: 'Product Type Code', description: 'Official RPTIN1000015 analysis group' },
   { value: 'ProductCategoryCode', label: 'Product Category Code', description: 'IN_ITEM.ProdCatCode' },
   { value: 'ProductBrandCode', label: 'Product Brand Code', description: 'IN_ITEM.ProdBrandCode' },
   { value: 'ProductModelCode', label: 'Product Model Code', description: 'IN_ITEM.ProdModelCode' },
@@ -145,7 +144,8 @@ const INVENTORY_ANALYSIS_GROUP_OPTIONS = [
 
 type InventoryAnalysisGroup = (typeof INVENTORY_ANALYSIS_GROUP_OPTIONS)[number]['value']
 
-const STOCK_ANALYSIS_SCOPE_OPTIONS = ['DEADS', 'MEMOV', 'SLMOV'] as const
+/** @deprecated Stock Analysis Code removed from monthly path */
+const STOCK_ANALYSIS_SCOPE_OPTIONS = [] as const
 
 const FLOW_STAGES: FlowStage[] = [
   {
@@ -807,7 +807,7 @@ function normalizeReportGroup(value: string | null) {
 function normalizeAnalysisGroup(value: string | null): InventoryAnalysisGroup {
   return INVENTORY_ANALYSIS_GROUP_OPTIONS.some((option) => option.value === value)
     ? (value as InventoryAnalysisGroup)
-    : 'StockAnalysisCode'
+    : 'ProductTypeCode'
 }
 
 function cleanScopeCode(value: string | null) {
@@ -816,7 +816,6 @@ function cleanScopeCode(value: string | null) {
 
 function scopeCodeFromParams(analysisGroup: InventoryAnalysisGroup, params: { get(name: string): string | null }) {
   if (analysisGroup === 'MovementCategory') return params.get('movementCategory') ?? ''
-  if (analysisGroup === 'StockAnalysisCode') return cleanScopeCode(params.get('stockAnalysis') ?? params.get('category'))
   if (analysisGroup === 'ProductTypeCode') return cleanScopeCode(params.get('productType'))
   if (analysisGroup === 'ProductCategoryCode') return cleanScopeCode(params.get('productCategory'))
   if (analysisGroup === 'ProductBrandCode') return cleanScopeCode(params.get('productBrand'))
@@ -1443,7 +1442,6 @@ export default function InventoryReportsClient({
       itemType: itemType || undefined,
     }
 
-    if (analysisGroup === 'StockAnalysisCode') filters.stockAnalysis = code || undefined
     if (analysisGroup === 'ProductTypeCode') filters.productType = code || undefined
     if (analysisGroup === 'ProductCategoryCode') filters.productCategory = code || undefined
     if (analysisGroup === 'ProductBrandCode') filters.productBrand = code || undefined
@@ -1737,7 +1735,6 @@ export default function InventoryReportsClient({
       ...overrides,
     }
     const code = cleanScopeCode(nextScopeCode)
-    if (nextAnalysisGroup === 'StockAnalysisCode') filters.stockAnalysis = code || undefined
     if (nextAnalysisGroup === 'ProductTypeCode') filters.productType = code || undefined
     if (nextAnalysisGroup === 'ProductCategoryCode') filters.productCategory = code || undefined
     if (nextAnalysisGroup === 'ProductBrandCode') filters.productBrand = code || undefined
@@ -1749,7 +1746,7 @@ export default function InventoryReportsClient({
 
   const resetFilterHub = () => {
     const nextReport = reportForScope('all', 'all')
-    const filters = filtersForScope('StockAnalysisCode', '', { movementWindow: 'all', period: undefined })
+    const filters = filtersForScope('ProductTypeCode', '', { movementWindow: 'all', period: undefined })
     setAiInsightVisible(false)
     setActiveStage('all')
     setActiveReportGroup('all')
@@ -1758,7 +1755,7 @@ export default function InventoryReportsClient({
     setPeriodFilter('')
     setScopeCode('')
     setMovementWindowFilter('all')
-    setAnalysisGroup('StockAnalysisCode')
+    setAnalysisGroup('ProductTypeCode')
     setStaleFilter('dari-1-bulan-sampai-sekarang')
     updateUrl(selectedSource, 'all', nextReport.reportCode, filters, '', 'all', 'dari-1-bulan-sampai-sekarang')
   }
@@ -2102,21 +2099,7 @@ export default function InventoryReportsClient({
           </div>
 
           <div className="mt-3 grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)]">
-            {analysisGroup === 'StockAnalysisCode' ? (
-              <select
-                value={scopeCode}
-                onChange={(event) => {
-                  const nextCode = event.target.value
-                  const filters = filtersForScope(analysisGroup, nextCode)
-                  setScopeCode(nextCode)
-                  updateModuleScope(filters)
-                }}
-                className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
-              >
-                <option value="">Semua Stock Analysis Code</option>
-                {STOCK_ANALYSIS_SCOPE_OPTIONS.map((code) => <option key={code} value={code}>{code}</option>)}
-              </select>
-            ) : analysisGroup === 'MovementCategory' ? (
+            {analysisGroup === 'MovementCategory' ? (
               <select
                 value={scopeCode}
                 onChange={(event) => {

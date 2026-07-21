@@ -10,9 +10,10 @@ import {
 
 export const MONTHLY_STOCK_MOVEMENT_REPORT_ID = 'RPTIN1000015'
 export const MONTHLY_STOCK_MOVEMENT_REPORT_TITLE = 'MONTHLY STOCK ACCOUNT MOVEMENT DETAILS'
-export const MONTHLY_STOCK_ANALYSIS_CODES = ['DEADS', 'MEMOV', 'SLMOV'] as const
+/** @deprecated Stock Analysis Code (DEADS/MEMOV/SLMOV) removed from monthly path. Official group = Product Type Code. */
+export const MONTHLY_STOCK_ANALYSIS_CODES = [] as const
 
-export type MonthlyStockAnalysisCode = (typeof MONTHLY_STOCK_ANALYSIS_CODES)[number]
+export type MonthlyStockAnalysisCode = string
 
 export type MonthlyMovementKey =
   | 'opening'
@@ -62,6 +63,7 @@ export type MonthlyStockMovementScope = {
   openingAccountingPeriod: string
   openingActualPeriod: string
   location: string
+  /** Kept empty — Stock Analysis Code filter removed; official scope is active ItemType 1+4 + Product Type. */
   categoryCodes: MonthlyStockAnalysisCode[]
   search: string
   limit: number
@@ -69,6 +71,8 @@ export type MonthlyStockMovementScope = {
   inputMode: 'actual' | 'accounting' | 'period' | 'current'
   /** True = report untuk periode lampau; base CTE menggunakan IN_MTHENDITEM snapshot, bukan IN_ITEM live */
   snapshotMode: boolean
+  /** Official PDF default analysis group */
+  analysisGroup: string
 }
 
 export type MonthlyStockMovementPayload = {
@@ -82,9 +86,9 @@ export type MonthlyStockMovementPayload = {
 }
 
 export type MonthlyStockMovementNestedItem = {
-  stock_analysis_code: string
-  stock_analysis_name: string
-  sequence_in_analysis: number
+  product_type_code: string
+  product_type_name: string
+  sequence_in_group: number
   item_code: string
   description: string
   unit: string
@@ -98,13 +102,13 @@ export type MonthlyStockMovementNestedResponse = {
   column_definitions: Array<Pick<MonthlyMovementDefinition, 'key' | 'label' | 'quantity_unit' | 'amount_currency'> & {
     status: MonthlyMovementMeasureStatus
   }>
-  stock_analyses: Array<{
+  product_types: Array<{
     code: string
     description: string
     item_count: number
     reported_total: MonthlyMovementTotals
     calculated_total: MonthlyMovementTotals
-    totals_source: 'full_scope_stock_analysis_query'
+    totals_source: 'full_scope_product_type_query'
   }>
   items: MonthlyStockMovementNestedItem[]
 }
@@ -294,17 +298,9 @@ function periodFromActual(actualYear: number, actualMonth: number, inputMode: Mo
   }
 }
 
-export function normalizeMonthlyStockAnalysisCodes(value?: string | null): MonthlyStockAnalysisCode[] {
-  const requested = sanitizeSqlText(value ?? '', 120)
-    .toUpperCase()
-    .split(',')
-    .map((code) => code.trim())
-    .filter((code): code is MonthlyStockAnalysisCode =>
-      (MONTHLY_STOCK_ANALYSIS_CODES as readonly string[]).includes(code),
-    )
-
-  const unique = [...new Set(requested)]
-  return unique.length ? unique : [...MONTHLY_STOCK_ANALYSIS_CODES]
+/** Stock Analysis Code filter removed. Always empty — keep signature for callers. */
+export function normalizeMonthlyStockAnalysisCodes(_value?: string | null): MonthlyStockAnalysisCode[] {
+  return []
 }
 
 export function resolveMonthlyStockMovementScope({
@@ -353,14 +349,20 @@ export function resolveMonthlyStockMovementScope({
   const currentMonth = now.getMonth() + 1
   const snapshotMode = requestedYear < currentYear || (requestedYear === currentYear && requestedMonth < currentMonth)
 
+  const analysisGroupRaw = String(filters?.groupBy ?? filters?.chartDimension ?? 'ProductTypeCode').trim()
+  const analysisGroup = analysisGroupRaw && analysisGroupRaw !== 'StockAnalysisCode'
+    ? analysisGroupRaw
+    : 'ProductTypeCode'
+
   return {
     ...resolved,
     location: normalizeLocation(filters?.location),
-    categoryCodes: normalizeMonthlyStockAnalysisCodes(filters?.category ?? filters?.stockAnalysis),
+    categoryCodes: [],
     search: sanitizeSqlText(search ?? filters?.search ?? '', 120),
     limit: normalizeInventoryQueryLimit(limit, { min: 1, max: 20_000, fallback: 500 }),
     transactionAsOf: normalizeMonthlyTransactionAsOf(filters?.dateTo),
     snapshotMode,
+    analysisGroup,
   }
 }
 
@@ -411,15 +413,15 @@ function workshopStockIssueItemTypeExpression(itemAlias = 'i', stockAlias = 's')
 }
 
 /** Base CTE untuk periode lampau: pakai IN_MTHENDITEM snapshot (period-end balance). */
-function buildSnapshotBaseCte(database: string, scope: MonthlyStockMovementScope, categoryFilter: string, whereSearch: string) {
+function buildSnapshotBaseCte(database: string, scope: MonthlyStockMovementScope, _categoryFilter: string, whereSearch: string) {
   return `
       SELECT
         RTRIM(m.ItemCode) AS ItemCode,
         RTRIM(ISNULL(i.Description, m.ItemCode)) AS Description,
         RTRIM(ISNULL(i.UOMCode, '-')) AS UOM,
         RTRIM(m.LocCode) AS Location,
-        RTRIM(ISNULL(i.StockAnalysisCode, m.StockAnalysisCode)) AS StockAnalysisCode,
-        RTRIM(ISNULL(sa.Description, ISNULL(i.StockAnalysisCode, m.StockAnalysisCode))) AS StockAnalysisName,
+        RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductTypeCode,
+        RTRIM(ISNULL(pt.Description, ISNULL(i.ProdTypeCode, ''))) AS ProductTypeDescription,
         CAST(ISNULL(m.Qty, 0) AS decimal(18, 6)) AS QtyOnHand,
         CAST(0 AS decimal(18, 6)) AS QtyOnHold,
         CAST(ISNULL(m.AverageCost, 0) AS decimal(18, 6)) AS AverageCost,
@@ -428,37 +430,33 @@ function buildSnapshotBaseCte(database: string, scope: MonthlyStockMovementScope
       LEFT JOIN [${database}].[dbo].[IN_ITEM] i
         ON i.ItemCode = m.ItemCode
         AND i.LocCode = m.LocCode
-      LEFT JOIN [${database}].[dbo].[IN_STOCKANALYSIS] sa
-        ON sa.StockAnalysisCode = ISNULL(i.StockAnalysisCode, m.StockAnalysisCode)
+      LEFT JOIN [${database}].[dbo].[IN_PRODTYPE] pt
+        ON pt.ProdTypeCode = i.ProdTypeCode
       WHERE RTRIM(m.LocCode) = '${scope.location}'
         AND RTRIM(CONVERT(varchar(10), m.AccYear)) = '${scope.accYear}'
         AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${scope.accMonth}'
         ${whereSearch}
       UNION ALL
       -- Item yang ADA di IN_ITEM master tapi BELUM ada di IN_MTHENDITEM bulan tsb
-      -- (item baru dibuat setelah month-end jalan) → stock = 0, tidak masuk report lampau
       SELECT
         RTRIM(i.ItemCode) AS ItemCode,
         RTRIM(i.Description) AS Description,
         RTRIM(i.UOMCode) AS UOM,
         RTRIM(i.LocCode) AS Location,
-        RTRIM(i.StockAnalysisCode) AS StockAnalysisCode,
-        RTRIM(ISNULL(sa.Description, i.StockAnalysisCode)) AS StockAnalysisName,
+        RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductTypeCode,
+        RTRIM(ISNULL(pt.Description, ISNULL(i.ProdTypeCode, ''))) AS ProductTypeDescription,
         CAST(0 AS decimal(18, 6)) AS QtyOnHand,
         CAST(0 AS decimal(18, 6)) AS QtyOnHold,
         CAST(0 AS decimal(18, 6)) AS AverageCost,
         CAST(0 AS decimal(18, 6)) AS OnHandHoldAmount
       FROM [${database}].[dbo].[IN_ITEM] i
-      LEFT JOIN [${database}].[dbo].[IN_STOCKANALYSIS] sa
-        ON sa.StockAnalysisCode = i.StockAnalysisCode
+      LEFT JOIN [${database}].[dbo].[IN_PRODTYPE] pt
+        ON pt.ProdTypeCode = i.ProdTypeCode
       WHERE RTRIM(i.LocCode) = '${scope.location}'
-        -- RPTIN1000015 with Suppress Zero Balance = No includes inactive zero rows
-        -- such as MG28017; status 2 must stay visible for official PDF parity.
+        -- RPTIN1000015 Suppress Zero Balance = No includes inactive zero rows (status 2).
         AND RTRIM(i.Status) IN ('1', '2')
         ${inventoryValuationItemTypeFilter('i')}
-        AND RTRIM(i.StockAnalysisCode) IN (${categoryFilter})
-        AND RTRIM(i.ProdTypeCode) <> 'DC'
-        AND RTRIM(i.ItemCode) COLLATE Latin1_General_BIN LIKE 'M%'
+        AND RTRIM(ISNULL(i.ProdTypeCode, '')) <> 'DC'
         AND NOT EXISTS (
           SELECT 1 FROM [${database}].[dbo].[IN_MTHENDITEM] mx
           WHERE mx.ItemCode = i.ItemCode
@@ -471,42 +469,38 @@ function buildSnapshotBaseCte(database: string, scope: MonthlyStockMovementScope
 }
 
 /** Base CTE untuk periode berjalan: pakai IN_ITEM live. */
-function buildLiveBaseCte(database: string, scope: MonthlyStockMovementScope, categoryFilter: string, whereSearch: string) {
+function buildLiveBaseCte(database: string, scope: MonthlyStockMovementScope, _categoryFilter: string, whereSearch: string) {
   return `
       SELECT
         RTRIM(i.ItemCode) AS ItemCode,
         RTRIM(i.Description) AS Description,
         RTRIM(i.UOMCode) AS UOM,
         RTRIM(i.LocCode) AS Location,
-        RTRIM(i.StockAnalysisCode) AS StockAnalysisCode,
-        RTRIM(ISNULL(sa.Description, i.StockAnalysisCode)) AS StockAnalysisName,
+        RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductTypeCode,
+        RTRIM(ISNULL(pt.Description, ISNULL(i.ProdTypeCode, ''))) AS ProductTypeDescription,
         CAST(ISNULL(i.QtyOnHand, 0) AS decimal(18, 6)) AS QtyOnHand,
         CAST(ISNULL(i.QtyOnHold, 0) AS decimal(18, 6)) AS QtyOnHold,
         CAST(ISNULL(i.AverageCost, 0) AS decimal(18, 6)) AS AverageCost,
         CAST((ISNULL(i.QtyOnHand, 0) + ISNULL(i.QtyOnHold, 0)) * ISNULL(i.AverageCost, 0) AS decimal(18, 6)) AS OnHandHoldAmount
       FROM [${database}].[dbo].[IN_ITEM] i
-      LEFT JOIN [${database}].[dbo].[IN_STOCKANALYSIS] sa
-        ON sa.StockAnalysisCode = i.StockAnalysisCode
+      LEFT JOIN [${database}].[dbo].[IN_PRODTYPE] pt
+        ON pt.ProdTypeCode = i.ProdTypeCode
       WHERE RTRIM(i.LocCode) = '${scope.location}'
-        -- RPTIN1000015 with Suppress Zero Balance = No includes inactive zero rows
-        -- such as MG28017; status 2 must stay visible for official PDF parity.
+        -- RPTIN1000015 Suppress Zero Balance = No includes inactive zero rows (status 2).
         AND RTRIM(i.Status) IN ('1', '2')
         ${inventoryValuationItemTypeFilter('i')}
-        AND RTRIM(i.StockAnalysisCode) IN (${categoryFilter})
-        AND RTRIM(i.ProdTypeCode) <> 'DC'
-        AND RTRIM(i.ItemCode) COLLATE Latin1_General_BIN LIKE 'M%'
+        AND RTRIM(ISNULL(i.ProdTypeCode, '')) <> 'DC'
         ${whereSearch}
   `
 }
 
 export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementScope, database: string) {
-  const categoryFilter = scope.categoryCodes.map((code) => `'${code}'`).join(', ')
-  const whereSearch = monthlyTextSearch(scope.search, ['i.ItemCode', 'i.Description', 'i.StockAnalysisCode', "ISNULL(sa.Description, '')"])
+  const categoryFilter = ''
+  const whereSearch = monthlyTextSearch(scope.search, ['i.ItemCode', 'i.Description', 'i.ProdTypeCode', "ISNULL(pt.Description, '')"])
 
   // Snapshot mode: gunakan IN_MTHENDITEM sebagai sumber QtyOnHand/AverageCost.
-  // Ini akurat untuk periode lampau karena IN_MTHENDITEM menyimpan nilai AKHIR bulan tsb.
-  // Non-snapshot mode (periode berjalan): gunakan IN_ITEM live karena
-  // IN_MTHENDITEM untuk bulan berjalan belum di-generate.
+  // Non-snapshot mode (periode berjalan): gunakan IN_ITEM live.
+  // Official PDF analysis group = Product Type Code — no StockAnalysisCode filter.
   const baseCte = scope.snapshotMode
     ? buildSnapshotBaseCte(database, scope, categoryFilter, whereSearch)
     : buildLiveBaseCte(database, scope, categoryFilter, whereSearch)
@@ -709,9 +703,9 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
     final AS (
       SELECT
         b.Location,
-        b.StockAnalysisCode,
-        b.StockAnalysisName,
-        ROW_NUMBER() OVER (PARTITION BY b.StockAnalysisCode ORDER BY b.ItemCode) AS RowNo,
+        b.ProductTypeCode,
+        b.ProductTypeDescription,
+        ROW_NUMBER() OVER (PARTITION BY b.ProductTypeCode ORDER BY b.ItemCode) AS RowNo,
         b.ItemCode,
         b.Description,
         b.UOM,
@@ -760,8 +754,8 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
         '${scope.openingActualPeriod}' AS OpeningActualPeriod,
         '${scope.openingAccountingPeriod}' AS OpeningAccountingPeriod,
         Location,
-        StockAnalysisCode,
-        StockAnalysisName,
+        ProductTypeCode,
+        ProductTypeDescription,
         RowNo AS [No],
         ItemCode,
         Description AS ItemDescription,
@@ -817,7 +811,7 @@ export function monthlyStockMovementDetailSql(cte: string, limit: number) {
     ${cte}
     SELECT TOP ${normalizeInventoryQueryLimit(limit, { min: 1, max: 20_000, fallback: 500 })} *
     FROM report_rows
-    ORDER BY StockAnalysisCode, ItemCode
+    ORDER BY ProductTypeCode, ItemCode
   `
 }
 
@@ -832,7 +826,7 @@ export function monthlyStockMovementSummarySql(cte: string) {
       OpeningAccountingPeriod,
       COUNT(*) AS TotalItem,
       COUNT(DISTINCT Location) AS TotalGudang,
-      COUNT(DISTINCT StockAnalysisCode) AS TotalStockAnalysis,
+      COUNT(DISTINCT ProductTypeCode) AS TotalProductType,
       CAST(SUM(QtyOnHand) AS DECIMAL(18,2)) AS QtyOnHand,
       CAST(SUM(QtyOnHold) AS DECIMAL(18,2)) AS QtyOnHold,
       CAST(SUM(QtyOnHandHold) AS DECIMAL(18,2)) AS QtyOnHandHold,
@@ -875,12 +869,12 @@ export function monthlyStockMovementSummarySql(cte: string) {
 export function monthlyStockMovementBreakdownSql(cte: string) {
   return `
     ${cte}
-    SELECT TOP 10
-      'stock-analysis' AS DimensionId,
-      StockAnalysisCode AS DimensionValue,
-      StockAnalysisCode AS Label,
-      StockAnalysisCode,
-      StockAnalysisName,
+    SELECT TOP 25
+      'product-type' AS DimensionId,
+      ProductTypeCode AS DimensionValue,
+      ProductTypeCode AS Label,
+      ProductTypeCode,
+      ProductTypeDescription,
       COUNT(*) AS TotalItem,
       CAST(SUM(QtyOnHand) AS DECIMAL(18,2)) AS QtyOnHand,
       CAST(SUM(QtyOnHold) AS DECIMAL(18,2)) AS QtyOnHold,
@@ -917,7 +911,7 @@ export function monthlyStockMovementBreakdownSql(cte: string) {
       CAST(SUM(ClosingQty) AS DECIMAL(18,2)) AS Qty,
       CAST(SUM(ClosingAmount) AS DECIMAL(18,2)) AS Amount
     FROM report_rows
-    GROUP BY StockAnalysisCode, StockAnalysisName
+    GROUP BY ProductTypeCode, ProductTypeDescription
     ORDER BY Amount DESC
   `
 }
@@ -937,7 +931,7 @@ function normalizeSummary(row: DbRow | undefined, scope: MonthlyStockMovementSco
     OpeningAccountingPeriod: summary.OpeningAccountingPeriod ?? scope.openingAccountingPeriod,
     TotalItem: numberValue(summary.TotalItem),
     TotalGudang: numberValue(summary.TotalGudang),
-    TotalStockAnalysis: numberValue(summary.TotalStockAnalysis),
+    TotalProductType: numberValue(summary.TotalProductType ?? summary.TotalStockAnalysis),
     TotalQty: numberValue(summary.TotalQty ?? summary.ClosingQty),
     TotalAmount: numberValue(summary.TotalAmount ?? summary.ClosingAmount),
   }
@@ -951,11 +945,11 @@ function monthlyChartDimensionId(row: DbRow) {
   const normalized = normalizeMovementCategoryLabel(label)
   if ((MOVEMENT_CATEGORY_ORDER as readonly string[]).includes(String(normalized))) return 'movement-category'
 
-  return 'stock-analysis'
+  return 'product-type'
 }
 
-function isMonthlyStockAnalysisChartRow(row: DbRow) {
-  return monthlyChartDimensionId(row) === 'stock-analysis'
+function isMonthlyProductTypeChartRow(row: DbRow) {
+  return monthlyChartDimensionId(row) === 'product-type'
 }
 
 function isMonthlyMovementCategoryChartRow(row: DbRow) {
@@ -963,10 +957,10 @@ function isMonthlyMovementCategoryChartRow(row: DbRow) {
 }
 
 function analyticsBreakdowns(chart: DbRow[]) {
-  return chart.filter(isMonthlyStockAnalysisChartRow).map((row) => ({
-    DimensionId: 'stock-analysis',
-    DimensionValue: String(row.StockAnalysisCode ?? row.DimensionValue ?? row.Label ?? ''),
-    Label: String(row.StockAnalysisName ?? row.Label ?? row.StockAnalysisCode ?? ''),
+  return chart.filter(isMonthlyProductTypeChartRow).map((row) => ({
+    DimensionId: 'product-type',
+    DimensionValue: String(row.ProductTypeCode ?? row.DimensionValue ?? row.Label ?? ''),
+    Label: String(row.ProductTypeDescription ?? row.Label ?? row.ProductTypeCode ?? ''),
     TotalItem: numberValue(row.TotalItem),
     Qty: numberValue(row.Qty ?? row.ClosingQty),
     Amount: numberValue(row.Amount ?? row.ClosingAmount),
@@ -1016,34 +1010,34 @@ function monthlyDetailWindow(payload: Pick<MonthlyStockMovementPayload, 'rows' |
   }
 }
 
-function monthlyStockAnalysisFilterAction(code: string) {
+function monthlyProductTypeFilterAction(code: string) {
   return {
     type: 'set-filter' as const,
-    semanticDimensionId: 'stock-analysis',
+    semanticDimensionId: 'product-type',
     value: code,
   }
 }
 
-function monthlyStockAnalysisBreakdowns(chart: DbRow[]): InventoryAnalyticsContract['breakdowns'] {
+function monthlyProductTypeBreakdowns(chart: DbRow[]): InventoryAnalyticsContract['breakdowns'] {
   return chart
-    .filter(isMonthlyStockAnalysisChartRow)
+    .filter(isMonthlyProductTypeChartRow)
     .map((row, index) => {
-    const code = String(row.StockAnalysisCode ?? row.DimensionValue ?? row.Label ?? '').trim()
-    const label = String(row.StockAnalysisName ?? row.Label ?? code).trim() || code || `Stock analysis ${index + 1}`
+    const code = String(row.ProductTypeCode ?? row.DimensionValue ?? row.Label ?? '').trim()
+    const label = String(row.ProductTypeDescription ?? row.Label ?? code).trim() || code || `Product type ${index + 1}`
     return {
-      id: `stock-analysis-${code || index}`,
+      id: `product-type-${code || index}`,
       label: code && label !== code ? `${code} - ${label}` : label,
-      dimensionId: 'stock-analysis',
+      dimensionId: 'product-type',
       value: firstPresentNumber(row.OnHandHoldAmount, row.Amount, row.ClosingAmount),
       unit: 'IDR',
       format: 'currency',
       scope: 'full-scope',
-      filterAction: code ? monthlyStockAnalysisFilterAction(code) : undefined,
+      filterAction: code ? monthlyProductTypeFilterAction(code) : undefined,
       evidence: {
         source: 'chart',
         valuePath: `chart[${index}].Amount`,
         rowCount: 1,
-        notes: ['Breakdown full-scope dari query GROUP BY StockAnalysisCode.'],
+        notes: ['Breakdown full-scope dari query GROUP BY ProductTypeCode (official PDF analysis group).'],
       },
     }
   })
@@ -1377,7 +1371,7 @@ export function buildMonthlyStockAccountMovementAnalytics(
   ]
 
   return {
-    semanticDimensions: ['movement-category', 'stock-analysis', 'product-type', 'product-category', 'location', 'item-code'],
+    semanticDimensions: ['movement-category', 'product-type', 'product-category', 'location', 'item-code'],
     experienceProfile: {
       id: 'monthly-stock-account-movement-details',
       globalModule: 'procurement',
@@ -1388,7 +1382,7 @@ export function buildMonthlyStockAccountMovementAnalytics(
     breakdowns: [
       ...monthlyMovementCategoryBreakdowns(payload.chart ?? []),
       ...monthlyTaxonomyBreakdowns(payload.chart ?? []),
-      ...monthlyStockAnalysisBreakdowns(payload.chart ?? []),
+      ...monthlyProductTypeBreakdowns(payload.chart ?? []),
       monthlyLocationBreakdown(payload),
       ...monthlyTopItemBreakdowns(payload.rows ?? []),
       ...monthlyFlowBreakdowns(summary),
@@ -1432,14 +1426,15 @@ function buildMetadata(ctx: InventoryQueryContext, scope: MonthlyStockMovementSc
     openingActualPeriod: scope.openingActualPeriod,
     openingAccountingPeriod: scope.openingAccountingPeriod,
     location: scope.location,
-    stockAnalysisScope: scope.categoryCodes.join(', '),
+    analysisGroup: scope.analysisGroup,
+    stockAnalysisScope: '',
     inputMode: scope.inputMode,
     snapshotMode: scope.snapshotMode,
     baseDataSource: scope.snapshotMode ? 'IN_MTHENDITEM period-end snapshot' : 'IN_ITEM current live balance',
     totalRows,
     filteredRows: totalRows,
     tableRowsScope: 'full-scope-summary-with-bounded-detail-window',
-    sourceTables: 'IN_ITEM, IN_STOCKANALYSIS, IN_MTHENDITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK, WS_JOB, PU_GOODSRCV, PU_GOODSRCVLN, PU_GOODSRET, PU_GOODSRETLN, PU_POLN',
+    sourceTables: 'IN_ITEM, IN_PRODTYPE, IN_MTHENDITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK, WS_JOB, PU_GOODSRCV, PU_GOODSRCVLN, PU_GOODSRET, PU_GOODSRETLN, PU_POLN',
     periodRule: 'Filter period memakai periode aktual YYYY-MM lalu dikonversi dengan actualToAccountingPeriod.',
     baseDataSourceRule: scope.snapshotMode
       ? 'Base CTE memakai IN_MTHENDITEM snapshot (Qty/Amount period-end) karena periode yang diminta adalah bulan lampau.'
@@ -1453,6 +1448,7 @@ function buildMetadata(ctx: InventoryQueryContext, scope: MonthlyStockMovementSc
       : 'Valuasi saldo aktif dari IN_ITEM live: (QtyOnHand + QtyOnHold) * AverageCost.',
     goodsReceiveAmountRule: 'Goods receive amount = PU_GOODSRCVLN.StockQty * PU_POLN.Cost.',
     goodsReturnAmountRule: 'Goods return amount = PU_GOODSRETLN.Amount fallback ReturnStockQty * Cost; mengurangi closing.',
+    analysisGroupRule: 'Official PDF analysis group = Product Type Code. Stock Analysis Code (DEADS/MEMOV/SLMOV) removed from monthly scope.',
     movementMeasureStatus: MONTHLY_MOVEMENT_DEFINITIONS.map((definition) => ({
       key: definition.key,
       label: definition.label,
@@ -1460,7 +1456,7 @@ function buildMetadata(ctx: InventoryQueryContext, scope: MonthlyStockMovementSc
       source: definition.source,
     })),
     analyticsBreakdowns: analyticsBreakdowns(chart),
-    primaryChart: 'Closing Amount by Stock Analysis',
+    primaryChart: 'Closing Amount by Product Type',
   }
 }
 
@@ -1537,9 +1533,9 @@ export function adaptMonthlyStockMovementNestedResponse(payload: MonthlyStockMov
     const description = String(row.ItemDescription ?? '')
     const unit = String(row.UOM ?? '')
     return {
-      stock_analysis_code: String(row.StockAnalysisCode ?? ''),
-      stock_analysis_name: String(row.StockAnalysisName ?? ''),
-      sequence_in_analysis: numberValue(row.No ?? row.SeqNo) || index + 1,
+      product_type_code: String(row.ProductTypeCode ?? ''),
+      product_type_name: String(row.ProductTypeDescription ?? ''),
+      sequence_in_group: numberValue(row.No ?? row.SeqNo) || index + 1,
       item_code: String(row.ItemCode ?? ''),
       description,
       unit,
@@ -1558,8 +1554,8 @@ export function adaptMonthlyStockMovementNestedResponse(payload: MonthlyStockMov
       location: metadata.location,
       accounting_period_from: nestedAccountingLabel(metadata),
       accounting_period_to: nestedAccountingLabel(metadata),
-      analysis_group: 'Stock Analysis Code',
-      stock_analysis_code_filter: metadata.stockAnalysisScope,
+      analysis_group: 'Product Type Code',
+      stock_analysis_code_filter: '',
       account_code_filter: '',
       number_of_decimals: 2,
       suppress_zero_balance: 'No',
@@ -1576,17 +1572,17 @@ export function adaptMonthlyStockMovementNestedResponse(payload: MonthlyStockMov
       opening_actual_period: metadata.openingActualPeriod,
       opening_accounting_period: metadata.openingAccountingPeriod,
       total_rows: metadata.totalRows,
-      totals_source: 'full_scope_summary_and_stock_analysis_queries',
+      totals_source: 'full_scope_summary_and_product_type_queries',
       movement_measure_status: metadata.movementMeasureStatus,
     },
     column_definitions: columnDefinitions(),
-    stock_analyses: payload.chart.filter(isMonthlyStockAnalysisChartRow).map((row) => ({
-      code: String(row.StockAnalysisCode ?? row.DimensionValue ?? row.Label ?? ''),
-      description: String(row.StockAnalysisName ?? row.Label ?? row.StockAnalysisCode ?? ''),
+    product_types: payload.chart.filter(isMonthlyProductTypeChartRow).map((row) => ({
+      code: String(row.ProductTypeCode ?? row.DimensionValue ?? row.Label ?? ''),
+      description: String(row.ProductTypeDescription ?? row.Label ?? row.ProductTypeCode ?? ''),
       item_count: numberValue(row.TotalItem),
       reported_total: movementTotalsFromRow(row),
       calculated_total: movementTotalsFromRow(row),
-      totals_source: 'full_scope_stock_analysis_query',
+      totals_source: 'full_scope_product_type_query',
     })),
     items,
   }

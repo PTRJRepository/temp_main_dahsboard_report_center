@@ -488,11 +488,9 @@ const STOCK_AGING_REPORT_IDS = new Set(['item-movement-update-tracking', 'item-s
 const MOVEMENT_ANALYSIS_REPORT_IDS = new Set(['all-stock-movement-analysis'])
 const ASSET_VALUATION_REPORT_IDS = new Set(['asset-stock-valuasi-listing'])
 const MONTHLY_STOCK_MOVEMENT_REPORT_IDS = new Set(['monthly-stock-account-movement-details'])
-const MONTHLY_STOCK_ANALYSIS_CODES = ['DEADS', 'MEMOV', 'SLMOV'] as const
 const MONTHLY_ANALYSIS_GROUP_OPTIONS = [
   { field: 'ProductTypeCode', label: 'Product Type' },
   { field: 'MovementCategory', label: 'Actual Movement' },
-  { field: 'StockAnalysisCode', label: 'Stock Analysis' },
   { field: 'ProductCategoryCode', label: 'Product Category' },
   { field: 'ProductBrandCode', label: 'Product Brand' },
   { field: 'ProductModelCode', label: 'Product Model' },
@@ -548,8 +546,6 @@ const MONTHLY_CONTEXT_DETAIL_COLUMNS = [
   'MovementIssueQtyActual',
   'MovementIssueAmountActual',
   'MovementLastIssueDate',
-  'StockAnalysisCode',
-  'StockAnalysisName',
   'ProductTypeCode',
   'ProductTypeDescription',
   'ProductCategoryCode',
@@ -1858,127 +1854,96 @@ function pickSummaryOnly(summary: DbRow, keys: string[]) {
 /** Primary Ringkasan ≤6 — metric-dictionary (ID). Summary only; no page-row sums. */
 const FLOW_KPI_SURFACE = 'border-[color:var(--rc-forest-border,rgba(155,226,61,0.18))] bg-white/[0.04] text-white'
 
+/**
+ * Official RPTIN1000015 KPI contract (PDF extract).
+ * Every primary card = 1:1 official column from grand_total / summary.*
+ * Source of truth: IN_StdRpt_MthStkAccMoveDetails_*_extracted.json columns[].
+ */
+const OFFICIAL_MONTHLY_KPI_COLUMNS: Array<{
+  key: string
+  label: string
+  amountField: string
+  qtyField: string
+  flowSection: string
+  sourceTable: string
+}> = [
+  { key: 'opening', label: 'Opening', amountField: 'OpeningAmount', qtyField: 'OpeningQty', flowSection: 'opening', sourceTable: 'IN_MTHENDITEM' },
+  { key: 'received', label: 'Received', amountField: 'ReceivedAmount', qtyField: 'ReceivedQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
+  { key: 'return_advice', label: 'Return Advice', amountField: 'ReturnAdviceAmount', qtyField: 'ReturnAdviceQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
+  { key: 'transferred', label: 'Transferred', amountField: 'TransferredAmount', qtyField: 'TransferredQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
+  { key: 'adjustment', label: 'Adjustment', amountField: 'AdjustmentAmount', qtyField: 'AdjustmentQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
+  { key: 'issued_ledger', label: 'Issued - Ledger', amountField: 'LedgerAmount', qtyField: 'LedgerQty', flowSection: 'issued', sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK' },
+  { key: 'issued_station', label: 'Issued - Station', amountField: 'IssuedStationAmount', qtyField: 'IssuedStationQty', flowSection: 'issued', sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK' },
+  { key: 'issued_vehicle', label: 'Issued - Vehicle', amountField: 'IssuedVehicleAmount', qtyField: 'IssuedVehicleQty', flowSection: 'issued', sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK' },
+  { key: 'issued_total', label: 'Issued - Total', amountField: 'IssuedTotalAmount', qtyField: 'IssuedTotalQty', flowSection: 'issued', sourceTable: 'ledger + station + vehicle' },
+  { key: 'purchasing_return', label: 'Purchasing - Return', amountField: 'ReturnAmount', qtyField: 'ReturnQty', flowSection: 'purchasing', sourceTable: 'WS_JOBSTOCK TransType 2' },
+  { key: 'purchasing_goods_receive', label: 'Purchasing - Goods Receive', amountField: 'GoodsReceiveAmount', qtyField: 'GoodsReceiveQty', flowSection: 'purchasing', sourceTable: 'PU_GOODSRCVLN' },
+  { key: 'purchasing_goods_return', label: 'Purchasing - Goods Return', amountField: 'GoodsReturnAmount', qtyField: 'GoodsReturnQty', flowSection: 'purchasing', sourceTable: 'PU_GOODSRETLN' },
+  { key: 'purchasing_dispatch_advice', label: 'Purchasing - Dispatch Advice', amountField: 'DispatchAdvAmount', qtyField: 'DispatchAdvQty', flowSection: 'purchasing', sourceTable: 'placeholder_zero' },
+  { key: 'closing', label: 'Closing', amountField: 'ClosingAmount', qtyField: 'ClosingQty', flowSection: 'closing', sourceTable: 'IN_MTHENDITEM / reconstructed' },
+]
+
 function buildOfficialMovementFlowKpis(payload: ReportPayload): ReportKpiCard[] {
   const summary = payload.summary ?? {}
   // GUARDRAIL(flow-kpi-summary-only): page rows = TOP N window — never sum for grand totals.
   const amt = (keys: string[]) => pickSummaryOnly(summary, keys)
   const qty = (keys: string[]) => pickSummaryOnly(summary, keys)
 
-  const openingAmt = amt(['OpeningAmount'])
-  const openingQty = qty(['OpeningQty'])
-  const ledgerAmt = amt(['LedgerAmount'])
-  const stationAmt = amt(['IssuedStationAmount'])
-  const vehicleAmt = amt(['IssuedVehicleAmount'])
-  const issuedTotalAmt = amt(['IssuedTotalAmount'])
-  const returnAmt = amt(['ReturnAmount'])
-  const goodsReceiveAmt = amt(['GoodsReceiveAmount'])
-  const closingAmt = amt(['ClosingAmount'])
-  const closingQty = qty(['ClosingQty'])
-  const totalItem = amt(['TotalItem', 'FilteredRows', 'TotalRows'])
-
-  const ledgerN = toNumber(ledgerAmt?.value)
-  const stationN = toNumber(stationAmt?.value)
-  const vehicleN = toNumber(vehicleAmt?.value)
+  const ledgerN = toNumber(amt(['LedgerAmount'])?.value)
+  const stationN = toNumber(amt(['IssuedStationAmount'])?.value)
+  const vehicleN = toNumber(amt(['IssuedVehicleAmount'])?.value)
   const issuedPartsSum = ledgerN + stationN + vehicleN
-  // Prefer SQL IssuedTotalAmount; if 0 but buckets filled, sum buckets (same as report_rows formula).
-  const issuedDirect = toNumber(issuedTotalAmt?.value)
+  const issuedDirect = toNumber(amt(['IssuedTotalAmount'])?.value)
   const issuedTotalValue = issuedDirect > 0 ? issuedDirect : issuedPartsSum > 0 ? issuedPartsSum : issuedDirect
 
-  const itemCount = toNumber(totalItem?.value)
-  const cards: ReportKpiCard[] = [
-    {
-      label: 'Saldo Awal',
-      value: toNumber(openingAmt?.value),
-      description: 'Saldo pembuka · periode Acc sebelumnya',
-      tone: FLOW_KPI_SURFACE,
-      scope: 'flow',
-      flowSection: 'opening',
-      sourceTable: 'IN_MTHENDITEM',
-      sourceField: 'OpeningAmount',
+  const cards: ReportKpiCard[] = OFFICIAL_MONTHLY_KPI_COLUMNS.map((col) => {
+    const amountRaw = col.key === 'issued_total' ? issuedTotalValue : toNumber(amt([col.amountField])?.value)
+    const qtyRaw = toNumber(qty([col.qtyField])?.value)
+    return {
+      label: col.label,
+      value: amountRaw,
+      description: `Official column · ${col.key}`,
+      tone: col.key === 'closing' ? `${FLOW_KPI_SURFACE} ring-1 ring-lime-400/25` : FLOW_KPI_SURFACE,
+      scope: 'flow' as const,
+      flowSection: col.flowSection,
+      sourceTable: col.sourceTable,
+      sourceField: col.amountField,
       metrics: [
-        { key: 'OpeningAmount', label: 'Nilai', value: toNumber(openingAmt?.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'OpeningAmount' },
-        ...(openingQty ? [{ key: 'OpeningQty', label: 'Qty', value: toNumber(openingQty.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'OpeningQty' }] : []),
+        { key: col.amountField, label: 'Amount', value: amountRaw, sourceTable: col.sourceTable, sourceField: col.amountField },
+        { key: col.qtyField, label: 'Qty', value: qtyRaw, sourceTable: col.sourceTable, sourceField: col.qtyField },
       ],
-    },
-    {
-      label: 'Penerimaan',
-      value: toNumber(goodsReceiveAmt?.value),
-      description: 'Goods receive (GR) · ringkasan server',
-      tone: FLOW_KPI_SURFACE,
-      scope: 'flow',
-      flowSection: 'purchasing',
-      sourceTable: 'PU_GOODSRCVLN',
-      sourceField: 'GoodsReceiveAmount',
-      metrics: [
-        { key: 'GoodsReceiveAmount', label: 'GR', value: toNumber(goodsReceiveAmt?.value), sourceTable: 'PU_GOODSRCVLN', sourceField: 'GoodsReceiveAmount' },
-      ],
-    },
-    {
-      label: 'Pengeluaran',
-      value: issuedTotalValue,
-      description: 'Ledger + Stasiun + Kendaraan · ringkasan server',
-      tone: FLOW_KPI_SURFACE,
-      scope: 'flow',
-      flowSection: 'issued',
-      sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK',
-      sourceField: 'IssuedTotalAmount',
-      metrics: [
-        { key: 'LedgerAmount', label: 'Ledger', value: ledgerN, sourceField: 'LedgerAmount' },
-        { key: 'IssuedStationAmount', label: 'Stasiun', value: stationN, sourceField: 'IssuedStationAmount' },
-        { key: 'IssuedVehicleAmount', label: 'Kendaraan', value: vehicleN, sourceField: 'IssuedVehicleAmount' },
-        { key: 'IssuedTotalAmount', label: 'Total', value: issuedTotalValue, sourceField: 'IssuedTotalAmount' },
-      ],
-    },
-    {
-      label: 'Retur',
-      value: toNumber(returnAmt?.value),
-      description: 'Retur workshop / stock return',
-      tone: FLOW_KPI_SURFACE,
-      scope: 'flow',
-      flowSection: 'return',
-      sourceTable: 'WS_JOBSTOCK',
-      sourceField: 'ReturnAmount',
-      metrics: [
-        { key: 'ReturnAmount', label: 'Retur', value: toNumber(returnAmt?.value), sourceTable: 'WS_JOBSTOCK', sourceField: 'ReturnAmount' },
-      ],
-    },
-    {
-      label: 'Saldo Akhir',
-      value: toNumber(closingAmt?.value),
-      description: 'Closing · ringkasan server terfilter',
-      tone: `${FLOW_KPI_SURFACE} ring-1 ring-lime-400/25`,
-      scope: 'flow',
-      flowSection: 'closing',
-      sourceTable: 'IN_MTHENDITEM (prefer) / reconstructed',
-      sourceField: 'ClosingAmount',
-      metrics: [
-        { key: 'ClosingAmount', label: 'Nilai', value: toNumber(closingAmt?.value), sourceTable: 'IN_MTHENDITEM', sourceField: 'ClosingAmount' },
-        ...(closingQty ? [{ key: 'ClosingQty', label: 'Qty', value: toNumber(closingQty.value), sourceField: 'ClosingQty' }] : []),
-      ],
-    },
-    {
-      label: 'Jumlah Item',
-      value: itemCount,
-      description: 'Jumlah item pada scope terfilter',
-      tone: FLOW_KPI_SURFACE,
-      scope: 'flow',
-      flowSection: 'count',
-      sourceTable: 'summary',
-      sourceField: 'TotalItem',
-      metrics: [
-        { key: 'TotalItem', label: 'Item', value: itemCount, sourceField: 'TotalItem' },
-      ],
-    },
-  ]
+    }
+  })
+
+  const itemCount = toNumber(amt(['TotalItem', 'FilteredRows', 'TotalRows'])?.value)
+  cards.push({
+    label: 'Jumlah Item',
+    value: itemCount,
+    description: 'Count item · ringkasan server terfilter',
+    tone: FLOW_KPI_SURFACE,
+    scope: 'flow',
+    flowSection: 'count',
+    sourceTable: 'summary',
+    sourceField: 'TotalItem',
+    metrics: [{ key: 'TotalItem', label: 'Item', value: itemCount, sourceField: 'TotalItem' }],
+  })
 
   return cards
 }
 
 function monthlyStockMovementKpis(payload: ReportPayload, filters?: ReportFilterInput, tableGroupField?: string): ReportKpiCard[] {
+  // Primary = official 14 columns only. Secondary group breakdown uses ProductTypeCode default.
   const flowCards = buildOfficialMovementFlowKpis(payload)
+  const groupField = tableGroupField ?? filters?.groupBy ?? filters?.chartDimension ?? 'ProductTypeCode'
   const rest = buildDynamicGrandTotalKpis(
     payload,
-    filters,
+    {
+      ...filters,
+      groupBy: groupField === 'StockAnalysisCode' ? 'ProductTypeCode' : groupField,
+      chartDimension: groupField === 'StockAnalysisCode' ? 'ProductTypeCode' : groupField,
+      stockAnalysis: undefined,
+      category: undefined,
+    },
     [
       'ClosingAmount',
       'OpeningAmount',
@@ -1994,31 +1959,15 @@ function monthlyStockMovementKpis(payload: ReportPayload, filters?: ReportFilter
       'GoodsReturnAmount',
       'DispatchAdvAmount',
       'ReturnAmount',
-      'OnHandHoldAmount',
       'ClosingQty',
       'OpeningQty',
-      'ReceivedQty',
-      'ReturnAdviceQty',
-      'TransferredQty',
-      'AdjustmentQty',
-      'LedgerQty',
-      'IssuedTotalQty',
-      'IssuedStationQty',
-      'IssuedVehicleQty',
-      'GoodsReceiveQty',
-      'GoodsReturnQty',
-      'DispatchAdvQty',
-      'ReturnQty',
       'TotalItem',
-      'TotalStockAnalysis',
     ],
     20,
-    tableGroupField ?? filters?.groupBy ?? filters?.chartDimension ?? 'StockAnalysisCode',
+    groupField === 'StockAnalysisCode' ? 'ProductTypeCode' : groupField,
   )
-  // Official flow first (Opening→…→Closing), then ItemType breakdown + Product Type sub, etc.
   const withoutDuplicateGlobals = rest.filter((card) => {
     if (card.scope === 'flow') return false
-    // Drop flat global cards that are already nested under flow sections.
     if (card.scope !== 'global') return true
     const label = card.label.toLowerCase()
     return !/(opening|closing|issued|ledger|station|vehicle|received|return advice|transfer|adjustment|goods receive|goods return|dispatch|return amount)/i.test(
@@ -2260,24 +2209,19 @@ function getReportViewerProfile(reportId: string): ReportViewerProfile {
         'openingAccountingPeriod',
         'location',
       ],
-      preferredGroupColumns: ['StockAnalysisCode', 'MovementCategory', 'ProductTypeCode', 'ProductCategoryCode', 'ProductBrandCode', 'ProductModelCode', 'ProductMaterialCode', 'StockAnalysisName', 'ItemCode', 'KodeBarang', ...baseProfile.preferredGroupColumns],
+      preferredGroupColumns: ['ProductTypeCode', 'MovementCategory', 'ProductCategoryCode', 'ProductBrandCode', 'ProductModelCode', 'ProductMaterialCode', 'ItemCode', 'KodeBarang', ...baseProfile.preferredGroupColumns],
       loadAllRows: false,
       showAccountingPeriodFilter: true,
-      naturalPlaceholder: 'Contoh: period 2026-07, stock analysis DEADS, group StockAnalysisCode',
+      naturalPlaceholder: 'Contoh: period 2026-07, group ProductTypeCode',
       presetTitle: 'Quick Preset Monthly Movement',
       presets: [
-        { label: 'Bulan Berjalan', description: 'Reset ke periode current', filters: { period: undefined, accYear: undefined, accMonth: undefined, stockAnalysis: undefined, category: undefined, groupBy: 'StockAnalysisCode' } },
-        { label: 'Group Stock Analysis', description: 'Group dinamis DEADS/MEMOV/SLMOV', filters: { groupBy: 'StockAnalysisCode', chartDimension: 'StockAnalysisCode' } },
+        { label: 'Bulan Berjalan', description: 'Reset ke periode current', filters: { period: undefined, accYear: undefined, accMonth: undefined, stockAnalysis: undefined, category: undefined, groupBy: 'ProductTypeCode' } },
+        { label: 'Group Product Type', description: 'Official PDF analysis group', filters: { groupBy: 'ProductTypeCode', chartDimension: 'ProductTypeCode' } },
         { label: 'Group Movement Actual', description: 'Group item by MovementCategory aktual periodik', filters: { groupBy: 'MovementCategory', chartDimension: 'MovementCategory', movementWindow: 'all' } },
-        { label: 'Group Product Type', description: 'Group item by IN_ITEM.ProdTypeCode', filters: { groupBy: 'ProductTypeCode', chartDimension: 'ProductTypeCode' } },
         { label: 'Match JSON Product Type', description: 'ProductTypeCode + Include Workshop Item: No seperti PDF resmi', filters: { period: '2026-07', location: 'PTRJ', itemType: 'gudang', includeWorkshopItem: 'no', groupBy: 'ProductTypeCode', chartDimension: 'ProductTypeCode' } },
         { label: 'Group Product Brand', description: 'Group item by IN_ITEM.ProdBrandCode', filters: { groupBy: 'ProductBrandCode', chartDimension: 'ProductBrandCode' } },
         { label: 'Group Product Model', description: 'Group item by IN_ITEM.ProdModelCode', filters: { groupBy: 'ProductModelCode', chartDimension: 'ProductModelCode' } },
         { label: 'Group Product Material', description: 'Group item by IN_ITEM.ProdMatCode', filters: { groupBy: 'ProductMaterialCode', chartDimension: 'ProductMaterialCode' } },
-        { label: 'DEADS only', description: 'Filter stock analysis DEADS', filters: { stockAnalysis: 'DEADS', groupBy: 'StockAnalysisCode' } },
-        { label: 'MEMOV only', description: 'Filter stock analysis MEMOV', filters: { stockAnalysis: 'MEMOV', groupBy: 'StockAnalysisCode' } },
-        { label: 'SLMOV only', description: 'Filter stock analysis SLMOV', filters: { stockAnalysis: 'SLMOV', groupBy: 'StockAnalysisCode' } },
-        { label: 'All SA codes', description: 'DEADS+MEMOV+SLMOV', filters: { stockAnalysis: undefined, category: undefined, groupBy: 'StockAnalysisCode' } },
       ],
       rowDetail: 'movement',
       topRowsTitle: 'Top Monthly Movement',
@@ -2285,9 +2229,12 @@ function getReportViewerProfile(reportId: string): ReportViewerProfile {
         payload,
         {
           ...filters,
-          groupBy: filters?.groupBy ?? filters?.chartDimension ?? 'StockAnalysisCode',
+          groupBy: filters?.groupBy === 'StockAnalysisCode' ? 'ProductTypeCode' : (filters?.groupBy ?? filters?.chartDimension ?? 'ProductTypeCode'),
+          chartDimension: filters?.chartDimension === 'StockAnalysisCode' ? 'ProductTypeCode' : (filters?.chartDimension ?? filters?.groupBy ?? 'ProductTypeCode'),
+          stockAnalysis: undefined,
+          category: undefined,
         },
-        filters?.groupBy ?? filters?.chartDimension ?? 'StockAnalysisCode',
+        filters?.groupBy === 'StockAnalysisCode' ? 'ProductTypeCode' : (filters?.groupBy ?? filters?.chartDimension ?? 'ProductTypeCode'),
       ),
       qualityBuilder: (payload, rows) => [
         ['Actual Period', payload?.metadata?.actualPeriod ?? payload?.summary?.ActualPeriod],
@@ -3433,13 +3380,6 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
       MOVEMENT_ANALYSIS_REPORT_IDS.has(report.id),
     [payload?.analytics?.semanticDimensions, payloadColumns, report.id],
   )
-  const stockAnalysisFilterAvailable = useMemo(
-    () =>
-      isMonthlyStockMovement ||
-      payloadColumns.includes('StockAnalysisCode') ||
-      payloadColumns.includes('StockAnalysisName'),
-    [isMonthlyStockMovement, payloadColumns],
-  )
   const groupByColumns = useMemo<DynamicFilterColumn[]>(() => {
     let cols = dynamicFilterColumns
     if (movementCategoryAvailable && !cols.some((column) => column.field === 'MovementCategory')) {
@@ -3453,19 +3393,9 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         ...cols,
       ]
     }
-    if (stockAnalysisFilterAvailable && !cols.some((column) => column.field === 'StockAnalysisCode')) {
-      cols = [
-        {
-          field: 'StockAnalysisCode',
-          label: 'Stock Analysis',
-          type: 'string',
-          options: [...MONTHLY_STOCK_ANALYSIS_CODES],
-        },
-        ...cols,
-      ]
-    }
-    return cols
-  }, [dynamicFilterColumns, movementCategoryAvailable, stockAnalysisFilterAvailable])
+    // Stock Analysis Code removed from monthly path — never inject SA filter column.
+    return cols.filter((column) => column.field !== 'StockAnalysisCode' && column.field !== 'StockAnalysisName')
+  }, [dynamicFilterColumns, movementCategoryAvailable])
   const selectedFilterColumn = dynamicFilterColumns.find((column) => column.field === columnFilterDraft.field)
   const manualColumnOperators = operatorsForManualType(selectedFilterColumn?.type ?? 'string')
   const aggregatableColumns = reportSchemaColumns
@@ -3890,11 +3820,15 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     if (!payload) return [] as ReportKpiCard[]
     // User analysis-group pick wins over table auto-group so Product Type sub-KPI
     // never silently becomes MovementCategory from preferredGroupColumn fallback.
-    const groupForKpi =
+    const rawGroup =
       requestFilters.groupBy ||
       requestFilters.chartDimension ||
       activeTableGroupColumn ||
-      (MONTHLY_STOCK_MOVEMENT_REPORT_IDS.has(report.id) ? 'StockAnalysisCode' : undefined)
+      (MONTHLY_STOCK_MOVEMENT_REPORT_IDS.has(report.id) ? 'ProductTypeCode' : undefined)
+    const groupForKpi =
+      rawGroup === 'StockAnalysisCode' || rawGroup === 'StockAnalysisName'
+        ? 'ProductTypeCode'
+        : rawGroup
     const period = resolveKpiSqlPeriod(payload, requestFilters)
     return viewerProfile.kpiBuilder(payload, {
       ...requestFilters,
@@ -4604,17 +4538,20 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                     <span>Ringkasan</span>
                     <span className="rc-scope-chip text-[10px] text-lime-100/80">
                       {isMonthlyStockMovement
-                        ? 'Saldo Awal → Penerimaan → Pengeluaran → Retur → Saldo Akhir'
+                        ? '14 kolom resmi PDF · Opening → Issued → Purchasing → Closing'
                         : 'Alur stok'}
                     </span>
                     {isMonthlyStockMovement && (
                       <span className="rc-scope-chip">Ringkasan server (terfilter) · bukan sampel</span>
                     )}
                   </p>
-                  <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'xl:grid-cols-6' : 'xl:grid-cols-5'}`}>
-                    {(isMonthlyStockMovement ? flowKpiCards.slice(0, 6) : flowKpiCards).map((kpi) => {
-                      const showNested = !isMonthlyStockMovement || kpi.flowSection === 'issued'
-                      const nested = showNested ? (kpi.metrics ?? []).filter((m) => m.key !== 'IssuedTotalAmount' && m.key !== 'TotalItem') : []
+                  <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7' : 'xl:grid-cols-5'}`}>
+                    {(isMonthlyStockMovement ? flowKpiCards : flowKpiCards).map((kpi) => {
+                      // Official monthly: each card already carries Amount + Qty metrics.
+                      const showNested = !isMonthlyStockMovement || (kpi.metrics?.length ?? 0) > 1
+                      const nested = showNested
+                        ? (kpi.metrics ?? []).filter((m) => m.key !== 'TotalItem' && (isMonthlyStockMovement ? true : m.key !== 'IssuedTotalAmount'))
+                        : []
                       return (
                       <div
                         key={`flow-${kpi.flowSection ?? kpi.label}`}
@@ -5172,11 +5109,11 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               {isMonthlyStockMovement && (
                 <div className="mb-4 rounded-xl border border-sky-500/25 bg-sky-500/10 p-3">
                   <p className="mb-1 text-[10px] font-black uppercase tracking-[0.18em] text-sky-300">
-                    Stock Analysis (master field)
+                    Official PDF scope
                   </p>
                   <p className="mb-3 text-xs font-semibold text-sky-100/85">
-                    Bukan MovementCategory dinamis. Ini field <span className="font-black">IN_ITEM.StockAnalysisCode</span> (DEADS / MEMOV / SLMOV)
-                    + nama dari IN_STOCKANALYSIS. Mutasi actual = kolom Opening/Received/Issued/Closing (hitung SQL per bulan aktual).
+                    Analysis group resmi = <span className="font-black">Product Type Code</span>.
+                    Stock Analysis Code (DEADS/MEMOV/SLMOV) dihapus. KPI = 14 kolom resmi Opening→Closing.
                   </p>
                   <div className="mb-3 flex flex-wrap gap-2">
                     <button
@@ -5189,6 +5126,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                         includeWorkshopItem: 'no',
                         groupBy: 'ProductTypeCode',
                         chartDimension: 'ProductTypeCode',
+                        stockAnalysis: undefined,
+                        category: undefined,
                         accYear: undefined,
                         accMonth: undefined,
                       }, 'Mode pembanding JSON/PDF aktif: ProductTypeCode + Include Workshop Item: No (ItemType 1).')}
@@ -5202,103 +5141,32 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                         ...manualFilters,
                         itemType: undefined,
                         includeWorkshopItem: undefined,
-                      }, 'Scope kembali ke default Report Center: ItemType 1+4.')}
+                        stockAnalysis: undefined,
+                        category: undefined,
+                        groupBy: 'ProductTypeCode',
+                        chartDimension: 'ProductTypeCode',
+                      }, 'Scope default Report Center: ItemType 1+4 + Product Type.')}
                       className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/70 hover:bg-white/10"
                     >
                       Default Inventory 1+4
                     </button>
                   </div>
-                  <div className="grid gap-2 md:grid-cols-[minmax(0,1.2fr)_auto_auto]">
-                    <label className="block">
-                      <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-white/40">Filter StockAnalysisCode</span>
-                      <select
-                        value={manualFilters.stockAnalysis ?? manualFilters.category ?? ''}
-                        onChange={(event) => {
-                          const code = event.target.value
-                          setManualFilters((prev) => ({
-                            ...prev,
-                            stockAnalysis: code || undefined,
-                            category: code || undefined,
-                            groupBy: 'StockAnalysisCode',
-                            chartDimension: 'StockAnalysisCode',
-                          }))
-                        }}
-                        className="h-10 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-medium text-white"
-                      >
-                        <option value="">Semua (DEADS + MEMOV + SLMOV)</option>
-                        <option value="DEADS">DEADS — Dead Stock (master)</option>
-                        <option value="MEMOV">MEMOV — Medium Moving (master)</option>
-                        <option value="SLMOV">SLMOV — Slow Moving (master)</option>
-                      </select>
-                    </label>
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => commitReportFilters({
-                          ...manualFilters,
-                          stockAnalysis: manualFilters.stockAnalysis || manualFilters.category || undefined,
-                          category: manualFilters.stockAnalysis || manualFilters.category || undefined,
-                          groupBy: 'StockAnalysisCode',
-                          chartDimension: 'StockAnalysisCode',
-                          accYear: undefined,
-                          accMonth: undefined,
-                        }, 'Stock Analysis master filter + group dinamis diterapkan.')}
-                        className="h-10 rounded-lg bg-sky-400 px-3 text-xs font-black text-slate-950 hover:bg-sky-300"
-                      >
-                        Apply SA
-                      </button>
-                    </div>
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => commitReportFilters({
-                          ...manualFilters,
-                          stockAnalysis: undefined,
-                          category: undefined,
-                          groupBy: 'StockAnalysisCode',
-                          chartDimension: 'StockAnalysisCode',
-                        }, 'Semua Stock Analysis + group StockAnalysisCode.')}
-                        className="h-10 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-bold text-white/70 hover:bg-white/10"
-                      >
-                        All SA
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {MONTHLY_STOCK_ANALYSIS_CODES.map((code) => {
-                      const active = (manualFilters.stockAnalysis ?? manualFilters.category ?? '') === code
-                      return (
-                        <button
-                          key={code}
-                          type="button"
-                          onClick={() => commitReportFilters({
-                            ...manualFilters,
-                            stockAnalysis: code,
-                            category: code,
-                            groupBy: 'StockAnalysisCode',
-                            chartDimension: 'StockAnalysisCode',
-                            accYear: undefined,
-                            accMonth: undefined,
-                          }, `Filter master ${code}.`)}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-bold ${active ? 'border border-sky-300 bg-sky-400 text-slate-950' : 'border border-white/15 bg-white/5 text-white/75 hover:bg-white/10'}`}
-                        >
-                          {code}
-                        </button>
-                      )
-                    })}
+                  <div className="mt-1 flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
-                        setTableGroupMode('StockAnalysisCode')
+                        setTableGroupMode('ProductTypeCode')
                         commitReportFilters({
                           ...manualFilters,
-                          groupBy: 'StockAnalysisCode',
-                          chartDimension: 'StockAnalysisCode',
-                        }, 'Table/KPI group by StockAnalysisCode (master).')
+                          groupBy: 'ProductTypeCode',
+                          chartDimension: 'ProductTypeCode',
+                          stockAnalysis: undefined,
+                          category: undefined,
+                        }, 'Table/KPI group by ProductTypeCode (official PDF).')
                       }}
                       className="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-200 hover:bg-emerald-500/25"
                     >
-                      Group table: Stock Analysis
+                      Group table: Product Type
                     </button>
                   </div>
                 </div>

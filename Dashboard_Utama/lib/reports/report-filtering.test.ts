@@ -247,17 +247,23 @@ assert.equal(productTypeScope.productType, 'CHEM-O')
 assert.equal(productTypeScope.groupBy, 'ProductTypeCode')
 assert.equal(productTypeScope.chartDimension, 'ProductTypeCode')
 
+// Stock Analysis Code removed — legacy SA group maps to ProductTypeCode and SA filters clear.
 const stockAnalysisScope = normalizeInventoryAnalysisGroupFilters({
   stockAnalysis: 'MEMOV',
   productType: 'CHEM-O',
   groupBy: 'StockAnalysisCode',
 })
-assert.equal(stockAnalysisScope.stockAnalysis, 'MEMOV')
-assert.equal(stockAnalysisScope.productType, undefined)
-assert.equal(stockAnalysisScope.chartDimension, 'StockAnalysisCode')
+assert.equal(stockAnalysisScope.stockAnalysis, undefined)
+assert.equal(stockAnalysisScope.category, undefined)
+assert.equal(stockAnalysisScope.groupBy, 'ProductTypeCode')
+assert.equal(stockAnalysisScope.chartDimension, 'ProductTypeCode')
 
 const stockAnalysisParams = filtersFromSearchParams(new URLSearchParams('stockAnalysis=DEADS'))
+// URL may still parse the raw param, but normalize path clears SA on analysis-group normalize.
 assert.equal(stockAnalysisParams.stockAnalysis, 'DEADS')
+const stockAnalysisNormalized = normalizeInventoryAnalysisGroupFilters(stockAnalysisParams)
+assert.equal(stockAnalysisNormalized.stockAnalysis, undefined)
+assert.equal(stockAnalysisNormalized.category, undefined)
 
 const movementFilterAction = filtersFromReportFilterAction({
   type: 'set-filter',

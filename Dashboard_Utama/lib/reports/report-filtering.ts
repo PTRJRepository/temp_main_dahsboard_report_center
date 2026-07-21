@@ -511,6 +511,10 @@ type InventoryAnalysisGroupKey = keyof typeof inventoryAnalysisGroupScopeKeys
 
 function normalizeInventoryAnalysisGroup(value?: string) {
   const normalized = String(value ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase()
+  // StockAnalysisCode removed from monthly — map legacy to ProductTypeCode.
+  if (normalized === 'stockanalysiscode' || normalized === 'stockanalysisname') {
+    return 'ProductTypeCode' as InventoryAnalysisGroupKey
+  }
   const match = (Object.keys(inventoryAnalysisGroupScopeKeys) as InventoryAnalysisGroupKey[])
     .find((key) => key.replace(/[^a-z0-9]/gi, '').toLowerCase() === normalized)
   return match
@@ -518,7 +522,13 @@ function normalizeInventoryAnalysisGroup(value?: string) {
 
 export function normalizeInventoryAnalysisGroupFilters(filters: ReportFilterInput): ReportFilterInput {
   const analysisGroup = normalizeInventoryAnalysisGroup(filters.groupBy ?? filters.chartDimension)
-  if (!analysisGroup) return filters
+  if (!analysisGroup) {
+    // Always strip SA codes from monthly filter state.
+    const stripped: ReportFilterInput = { ...filters }
+    delete stripped.stockAnalysis
+    delete stripped.category
+    return normalizeReportFilters(stripped)
+  }
 
   const next: ReportFilterInput = {
     ...filters,
@@ -526,10 +536,9 @@ export function normalizeInventoryAnalysisGroupFilters(filters: ReportFilterInpu
     chartDimension: analysisGroup,
   }
 
-  if (analysisGroup !== 'StockAnalysisCode') {
-    delete next.stockAnalysis
-    delete next.category
-  }
+  // Stock Analysis Code removed — always clear SA filters.
+  delete next.stockAnalysis
+  delete next.category
   if (analysisGroup !== 'ProductTypeCode') delete next.productType
   if (analysisGroup !== 'ProductCategoryCode') delete next.productCategory
   if (analysisGroup !== 'ProductBrandCode') delete next.productBrand

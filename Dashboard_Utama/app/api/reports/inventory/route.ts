@@ -192,7 +192,6 @@ function cleanInventoryCode(value?: string) {
 }
 
 const monthlyAnalysisGroups = {
-  StockAnalysisCode: { dimensionId: 'stock-analysis', label: 'Stock Analysis Code', sql: 'StockAnalysisCode', nameSql: 'StockAnalysisName' },
   ProductTypeCode: { dimensionId: 'product-type', label: 'Product Type Code', sql: 'ProductTypeCode', nameSql: 'ProductTypeDescription' },
   ProductCategoryCode: { dimensionId: 'product-category', label: 'Product Category Code', sql: 'ProductCategoryCode', nameSql: undefined },
   ProductBrandCode: { dimensionId: 'product-brand', label: 'Product Brand Code', sql: 'ProductBrandCode', nameSql: undefined },
@@ -206,9 +205,11 @@ type MonthlyAnalysisGroupKey = keyof typeof monthlyAnalysisGroups
 
 function cleanMonthlyAnalysisGroup(value?: string): MonthlyAnalysisGroupKey {
   const normalized = String(value ?? '').trim()
+  // StockAnalysisCode removed — official PDF analysis group = Product Type Code.
+  if (normalized === 'StockAnalysisCode' || normalized === 'StockAnalysisName') return 'ProductTypeCode'
   return Object.prototype.hasOwnProperty.call(monthlyAnalysisGroups, normalized)
     ? (normalized as MonthlyAnalysisGroupKey)
-    : 'StockAnalysisCode'
+    : 'ProductTypeCode'
 }
 
 function cleanMonthlyMovementCategory(value?: string) {
@@ -842,11 +843,11 @@ function monthlyStockAccountMovementCtes({
 }) {
   const reportAccountingPeriod = formatPeriod(reportAccYear, reportAccMonth)
   const openingAccountingPeriod = formatPeriod(openingAccYear, openingAccMonth)
+  // Stock Analysis Code removed from monthly path — never default DEADS/MEMOV/SLMOV.
+  // Optional single-code filter only if client still sends stockAnalysis (legacy URLs).
   const analysisFilter = stockAnalysisCode
     ? `AND RTRIM(i.StockAnalysisCode) = '${stockAnalysisCode}'`
-    : stockAnalysisDefaultScope
-      ? "AND RTRIM(i.StockAnalysisCode) IN ('DEADS', 'MEMOV', 'SLMOV')"
-      : ''
+    : ''
   const productTypeFilter = productTypeCode ? `AND RTRIM(ISNULL(i.ProdTypeCode, '')) = '${productTypeCode}'` : ''
   const productCategoryFilter = productCategoryCode ? `AND RTRIM(ISNULL(i.ProdCatCode, '')) = '${productCategoryCode}'` : ''
   const productBrandFilter = productBrandCode ? `AND RTRIM(ISNULL(i.ProdBrandCode, '')) = '${productBrandCode}'` : ''
@@ -2791,8 +2792,8 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
   const movementThresholds = movementThresholdsFromFilters(filters)
   const analysisGroupKey = cleanMonthlyAnalysisGroup(filters?.groupBy ?? filters?.chartDimension)
   const analysisGroup = monthlyAnalysisGroups[analysisGroupKey]
-  const stockAnalysisDefaultScope = analysisGroupKey === 'StockAnalysisCode' && !stockAnalysisCode
-  const rowNumberPartitionSql = analysisGroupKey === 'MovementCategory' ? 'b.StockAnalysisCode' : `b.${analysisGroup.sql}`
+  const stockAnalysisDefaultScope = false
+  const rowNumberPartitionSql = analysisGroupKey === 'MovementCategory' ? 'b.ProductTypeCode' : `b.${analysisGroup.sql}`
   const reportOrderSql = analysisGroupKey === 'MovementCategory'
     ? `${movementCategoryRankSqlCase('MovementCategory')}, ItemCode`
     : `${analysisGroup.sql}, ItemCode`
@@ -2913,22 +2914,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
   `)
 
   // Full group charts (no TOP) so Product Type sub-KPI sum == summary ClosingAmount
-  // and matches official export grand total (e.g. 42 ProductType rows).
-  const stockAnalysisChart = await rows(ctx, `
-    ${ctes}
-    SELECT
-      'stock-analysis' AS DimensionId,
-      StockAnalysisCode AS Label,
-      StockAnalysisCode AS DimensionValue,
-      StockAnalysisCode,
-      StockAnalysisName,
-      ${monthlyStockMovementChartMetricSelect}
-    FROM report_rows
-    ${movementCategoryWhere}
-    GROUP BY StockAnalysisCode, StockAnalysisName
-    ORDER BY Amount DESC
-  `)
-
+  // and matches official export grand total.
   const movementCategoryChart = await rows(ctx, `
     ${ctes}
     SELECT
@@ -2943,7 +2929,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
     ORDER BY ${movementCategoryRankSqlCase('MovementCategory')}, Amount DESC
   `)
 
-  const analysisGroupChart = analysisGroupKey === 'StockAnalysisCode' || analysisGroupKey === 'MovementCategory'
+  const analysisGroupChart = analysisGroupKey === 'MovementCategory'
     ? []
     : await rows(ctx, `
       ${ctes}
@@ -2960,41 +2946,23 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       ORDER BY Amount DESC
     `)
 
-  const itemTypeChart = await rows(ctx, `
-    ${ctes}
-    SELECT
-      'item-type' AS DimensionId,
-      ItemTypeName AS Label,
-      ItemType AS DimensionValue,
-      ItemType,
-      ItemTypeName,
-      ${monthlyStockMovementChartMetricSelect}
-    FROM report_rows
-    ${movementCategoryWhere}
-    GROUP BY ItemType, ItemTypeName
-    ORDER BY ItemType
-  `)
-
   // Return ONLY the selected analysis-group chart for sub-KPI / table sync.
-  // Mixed packs (ProductType + MovementCategory + ItemType) leak "Dead Stock" /
-  // "Workshop Mesin" labels into Product Type sub-category cards on the client.
+  // Stock Analysis Code removed — default Product Type Code.
   const chart =
-    analysisGroupKey === 'StockAnalysisCode'
-      ? stockAnalysisChart
-      : analysisGroupKey === 'MovementCategory'
-        ? movementCategoryChart
-        : analysisGroupChart
+    analysisGroupKey === 'MovementCategory'
+      ? movementCategoryChart
+      : analysisGroupChart
 
   return {
     title: 'MONTHLY STOCK ACCOUNT MOVEMENT DETAILS',
-    description: 'RPTIN1000015: mutasi actual per bulan (Opening/Issue/Receive/Closing dihitung SQL). StockAnalysisCode (DEADS/MEMOV/SLMOV) = master field IN_ITEM, BUKAN MovementCategory dinamis dari aktivitas movement.',
+    description: 'RPTIN1000015: mutasi actual per bulan (Opening/Issue/Receive/Closing dihitung SQL). Official analysis group = Product Type Code. KPI = 14 kolom resmi PDF.',
     rows: reportRows,
     columns: columnsFrom(reportRows),
     summary,
     chart,
     metadata: metadata(ctx, {
       period: actualPeriod,
-      sourceTables: 'IN_ITEM, IN_PRODTYPE, IN_STOCKANALYSIS, IN_MTHENDITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK, WS_JOB, PU_GOODSRCV, PU_GOODSRCVLN, PU_GOODSRET, PU_GOODSRETLN, PU_POLN',
+      sourceTables: 'IN_ITEM, IN_PRODTYPE, IN_MTHENDITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK, WS_JOB, PU_GOODSRCV, PU_GOODSRCVLN, PU_GOODSRET, PU_GOODSRETLN, PU_POLN',
       reportReference: 'RPTIN1000015',
       actualPeriod,
       accountingPeriod: reportPeriod.accountingPeriod,
@@ -3006,11 +2974,9 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       openingActualPeriod,
       openingAccountingPeriod: formatPeriod(openingPeriod.accYear, openingPeriod.accMonth),
       location,
-      stockAnalysisScope: stockAnalysisCode || (stockAnalysisDefaultScope ? 'DEADS, MEMOV, SLMOV' : 'all stock analysis codes'),
-      stockAnalysisSource: 'master_field',
-      stockAnalysisRule: stockAnalysisDefaultScope
-        ? 'Mode StockAnalysisCode memakai scope default DEADS/MEMOV/SLMOV dari IN_ITEM + IN_STOCKANALYSIS.'
-        : 'Mode taxonomy seperti ProductTypeCode memakai full active ItemType 1+4 scope; StockAnalysisCode hanya menjadi kolom referensi bila tidak dipilih sebagai group/filter.',
+      stockAnalysisScope: '',
+      stockAnalysisSource: 'removed',
+      stockAnalysisRule: 'Stock Analysis Code (DEADS/MEMOV/SLMOV) dihapus dari path monthly. Default group = ProductTypeCode.',
       itemTypeScope: itemTypeScope || '1,4',
       includeWorkshopItem: filters?.includeWorkshopItem ?? (itemTypeScope === '1' ? 'No' : 'Yes'),
       itemTypeScopeRule: itemTypeScope === '1'
@@ -3018,9 +2984,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
         : itemTypeScope === '4'
           ? 'Scope item dibatasi ke ItemType 4 Workshop/Mesin.'
           : 'Scope item default report center mencakup ItemType 1 Stock/Gudang dan ItemType 4 Workshop/Mesin.',
-      baseItemScopeRule: analysisGroupKey === 'StockAnalysisCode'
-        ? `Base item: LocCode PTRJ, Status 1/2, ItemType ${itemTypeScope || '1+4'}, dan StockAnalysisCode default DEADS/MEMOV/SLMOV kecuali filter spesifik dikirim.`
-        : `Base item: LocCode PTRJ, Status 1/2, ItemType ${itemTypeScope || '1+4'}, tidak suppress zero balance, tanpa default StockAnalysis/DC/M-only filter.`,
+      baseItemScopeRule: `Base item: LocCode PTRJ, Status 1/2, ItemType ${itemTypeScope || '1+4'}, tidak suppress zero balance, tanpa StockAnalysis filter. Analysis group = ${analysisGroupKey}.`,
       officialJsonComparisonRule: 'Untuk match JSON/PDF RPTIN1000015 dengan header Include Workshop Item: No, gunakan includeWorkshopItem=no atau itemType=gudang. Default Report Center tetap ItemType 1+4 karena inventory procurement merangkum Gudang + Workshop/Mesin.',
       valuationBreakdown: {
         scope: itemTypeScope || 'ItemType 1 Stock/Gudang + ItemType 4 Workshop/Mesin',

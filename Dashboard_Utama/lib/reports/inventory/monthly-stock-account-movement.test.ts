@@ -17,6 +17,7 @@ const scope = resolveMonthlyStockMovementScope({
     location: 'ptrj',
     category: 'DEADS,MEMOV,INVALID',
     dateTo: '2026-07-16T08:59:29',
+    groupBy: 'ProductTypeCode',
   },
   search: "seal'",
   limit: 25,
@@ -27,7 +28,9 @@ assert.equal(scope.actualPeriod, '2026-07')
 assert.equal(scope.accountingPeriod, '2027-04')
 assert.equal(scope.openingAccountingPeriod, '2027-03')
 assert.equal(scope.openingActualPeriod, '2026-06')
-assert.deepEqual(scope.categoryCodes, ['DEADS', 'MEMOV'])
+// Stock Analysis Code removed — categoryCodes always empty.
+assert.deepEqual(scope.categoryCodes, [])
+assert.equal(scope.analysisGroup, 'ProductTypeCode')
 assert.equal(scope.search, "seal''")
 assert.equal(scope.limit, 25)
 assert.equal(scope.transactionAsOf, '2026-07-16T08:59:29')
@@ -44,12 +47,17 @@ assert.equal(scopePast.accYear, 2027)
 assert.equal(scopePast.accMonth, 2)
 assert.equal(scopePast.openingAccYear, 2027)
 assert.equal(scopePast.openingAccMonth, 1)
-assert.deepEqual(normalizeMonthlyStockAnalysisCodes('unknown'), ['DEADS', 'MEMOV', 'SLMOV'])
+assert.deepEqual(normalizeMonthlyStockAnalysisCodes('unknown'), [])
+assert.deepEqual(normalizeMonthlyStockAnalysisCodes('DEADS,MEMOV'), [])
 
 const cte = buildMonthlyStockAccountMovementCte(scope, 'db_ptrj_mill')
 // scope is 2026-07 (same as now 2026-07-19) → live mode → IN_ITEM
 assert.match(cte, /\[db_ptrj_mill\]\.\[dbo\]\.\[IN_ITEM\]/)
-assert.match(cte, /RTRIM\(i\.StockAnalysisCode\) IN \('DEADS', 'MEMOV'\)/)
+// SA filter removed
+assert.doesNotMatch(cte, /StockAnalysisCode\) IN \(/)
+assert.doesNotMatch(cte, /DEADS/)
+assert.match(cte, /ProductTypeCode/)
+assert.match(cte, /IN_PRODTYPE/)
 assert.match(cte, /RTRIM\(i\.Status\) IN \('1', '2'\)/)
 assert.match(cte, /CONVERT\(varchar\(10\), i\.ItemType\)\), ''\) IN \('1', '4'\)/)
 assert.doesNotMatch(cte, /CONVERT\(varchar\(10\), i\.ItemType\)\), ''\) = '1'/)
@@ -71,6 +79,7 @@ assert.match(cteSnapshot, /AccMonth.*=.*'2'/, 'filters AccMonth 2')
 // Opening balance from prev month (Jan 2027)
 assert.match(cteSnapshot, /AccYear.*=.*'2027'/, 'opening AccYear 2027') // same '2027'
 assert.match(cteSnapshot, /AccMonth.*=.*'1'/, 'opening AccMonth 1 (Jan)')
+assert.match(cteSnapshot, /ProductTypeCode/)
 
 const ctx = getInventoryQueryContext('pabrik', { SQL_GATEWAY_API_KEY: 'test' })
 const calls: string[] = []
@@ -79,8 +88,8 @@ const executeQuery: MonthlyStockMovementQueryExecutor = async (_ctx, sql) => {
   if (sql.includes('SELECT TOP 25 *')) {
     return [
       {
-        StockAnalysisCode: 'DEADS',
-        StockAnalysisName: 'DEAD STOCK',
+        ProductTypeCode: 'BENSIN',
+        ProductTypeDescription: 'PETROL',
         No: 1,
         ItemCode: 'M001',
         ItemDescription: 'Seal kit',
@@ -94,8 +103,8 @@ const executeQuery: MonthlyStockMovementQueryExecutor = async (_ctx, sql) => {
         ClosingAmount: 800,
       },
       {
-        StockAnalysisCode: 'MEMOV',
-        StockAnalysisName: 'MEDIUM MOVING',
+        ProductTypeCode: 'SPARE',
+        ProductTypeDescription: 'SPARE PART',
         No: 1,
         ItemCode: 'M002',
         ItemDescription: 'Bearing',
@@ -111,14 +120,14 @@ const executeQuery: MonthlyStockMovementQueryExecutor = async (_ctx, sql) => {
     ]
   }
 
-  if (sql.includes("'stock-analysis' AS DimensionId")) {
+  if (sql.includes("'product-type' AS DimensionId")) {
     return [
       {
-        DimensionId: 'stock-analysis',
-        DimensionValue: 'DEADS',
-        Label: 'DEADS',
-        StockAnalysisCode: 'DEADS',
-        StockAnalysisName: 'DEAD STOCK',
+        DimensionId: 'product-type',
+        DimensionValue: 'BENSIN',
+        Label: 'BENSIN',
+        ProductTypeCode: 'BENSIN',
+        ProductTypeDescription: 'PETROL',
         TotalItem: 70,
         OpeningQty: 100,
         OpeningAmount: 10000,
@@ -158,7 +167,7 @@ const executeQuery: MonthlyStockMovementQueryExecutor = async (_ctx, sql) => {
         OpeningAccountingPeriod: '2027-03',
         TotalItem: 80,
         TotalGudang: 1,
-        TotalStockAnalysis: 2,
+        TotalProductType: 2,
         QtyOnHandHold: 123,
         OnHandHoldAmount: 888888,
         OpeningAmount: 120000,
@@ -182,7 +191,7 @@ async function main() {
     filters: {
       period: '2026-07',
       location: 'PTRJ',
-      category: 'DEADS,MEMOV',
+      groupBy: 'ProductTypeCode',
     },
     search: 'seal',
     limit: 25,
@@ -194,20 +203,22 @@ async function main() {
   assert.equal(payload.summary.TotalItem, 80)
   assert.equal(payload.summary.TotalAmount, 999999)
   assert.equal(payload.metadata.totalRows, 80)
-  assert.equal(payload.metadata.stockAnalysisScope, 'DEADS, MEMOV')
+  assert.equal(payload.metadata.stockAnalysisScope, '')
+  assert.equal(payload.metadata.analysisGroup, 'ProductTypeCode')
 
   const breakdowns = payload.metadata.analyticsBreakdowns as Array<Record<string, unknown>>
-  assert.equal(breakdowns[0].DimensionId, 'stock-analysis')
+  assert.equal(breakdowns[0].DimensionId, 'product-type')
   assert.equal(breakdowns[0].Amount, 8000)
 
   const analytics = buildMonthlyStockAccountMovementAnalytics(payload)
-  assert.deepEqual(analytics.semanticDimensions, ['movement-category', 'stock-analysis', 'product-type', 'product-category', 'location', 'item-code'])
+  assert.ok(analytics.semanticDimensions.includes('product-type'))
+  assert.ok(analytics.semanticDimensions.includes('movement-category'))
   assert.equal(analytics.kpis.find((kpi) => kpi.id === 'monthly-stock-onhand-hold-value')?.value, 888888)
   assert.equal(analytics.kpis.find((kpi) => kpi.id === 'monthly-stock-issued-value')?.value, 2200)
   assert.equal(analytics.kpis.find((kpi) => kpi.id === 'monthly-actual-dead-stock-item')?.filterAction?.semanticDimensionId, 'movement-category')
   assert.equal(analytics.breakdowns.some((entry) => entry.id === 'monthly-flow-closing'), true)
   assert.equal(analytics.breakdowns.find((entry) => entry.id === 'movement-category-dead-stock')?.filterAction?.semanticDimensionId, 'movement-category')
-  assert.equal(analytics.breakdowns.find((entry) => entry.id === 'stock-analysis-DEADS')?.filterAction?.semanticDimensionId, 'stock-analysis')
+  assert.equal(analytics.breakdowns.find((entry) => entry.id === 'product-type-BENSIN')?.filterAction?.semanticDimensionId, 'product-type')
   assert.equal(analytics.detailWindow?.totalRows, 80)
   assert.equal(analytics.detailWindow?.returnedRows, 2)
 
@@ -221,22 +232,23 @@ async function main() {
   const groupedMovementAnalytics = buildMonthlyStockAccountMovementAnalytics(groupedMovementPayload)
   assert.equal(groupedMovementAnalytics.breakdowns.find((entry) => entry.id === 'movement-category-dead-stock')?.dimensionId, 'movement-category')
   assert.equal(groupedMovementAnalytics.breakdowns.find((entry) => entry.id === 'movement-category-stale')?.dimensionId, 'movement-category')
-  assert.equal(groupedMovementAnalytics.breakdowns.some((entry) => entry.id === 'stock-analysis-Dead Stock'), false)
 
   const analyticsPayload = attachInventoryAnalytics(payload, analytics)
   assert.equal(validateInventoryAnalyticsPayload(analyticsPayload).valid, true)
 
   const nested = adaptMonthlyStockMovementNestedResponse(payload)
   assert.equal(nested.metadata.report_id, 'RPTIN1000015')
-  assert.equal(nested.metadata.totals_source, 'full_scope_summary_and_stock_analysis_queries')
+  assert.equal(nested.metadata.analysis_group, 'Product Type Code')
+  assert.equal(nested.metadata.totals_source, 'full_scope_summary_and_product_type_queries')
   assert.equal(nested.column_definitions.some((column) => column.status === 'placeholder_zero'), true)
   assert.equal(nested.items.length, 2)
   assert.equal(nested.items[0].movements.closing.amount_idr, 800)
-  assert.equal(nested.stock_analyses.length, 1)
-  assert.equal(nested.stock_analyses[0].item_count, 70)
-  assert.equal(nested.stock_analyses[0].reported_total.closing.amount_idr, 8000)
-  assert.equal(nested.stock_analyses[0].totals_source, 'full_scope_stock_analysis_query')
-  assert.equal(adaptMonthlyStockMovementNestedResponse(groupedMovementPayload).stock_analyses.length, 0)
+  assert.equal(nested.items[0].product_type_code, 'BENSIN')
+  assert.equal(nested.product_types.length, 1)
+  assert.equal(nested.product_types[0].item_count, 70)
+  assert.equal(nested.product_types[0].reported_total.closing.amount_idr, 8000)
+  assert.equal(nested.product_types[0].totals_source, 'full_scope_product_type_query')
+  assert.equal(adaptMonthlyStockMovementNestedResponse(groupedMovementPayload).product_types.length, 0)
 
   console.info('monthly stock account movement tests passed')
 }
