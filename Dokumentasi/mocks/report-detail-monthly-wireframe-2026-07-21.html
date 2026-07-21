@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wireframe — Monthly Stock Movement Detail (target)</title>
+  <style>
+    :root {
+      --bg: #040e0a;
+      --surface: #0b1a14;
+      --surface2: #10241c;
+      --border: rgba(155, 226, 61, 0.16);
+      --text: #e8f5e9;
+      --muted: rgba(232, 245, 233, 0.62);
+      --faint: rgba(232, 245, 233, 0.42);
+      --accent: #7dd3a0;
+      --accent2: #9be23d;
+      --danger: #fb7185;
+      --warn: #d6b85c;
+      --radius: 14px;
+      --font: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: radial-gradient(circle at 80% 0%, rgba(24,185,107,.12), transparent 28rem), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+    .side {
+      border-right: 1px solid var(--border);
+      background: #06120d;
+      padding: 16px 12px;
+    }
+    .side .brand { font-weight: 800; font-size: 13px; letter-spacing: .08em; color: var(--accent2); margin-bottom: 18px; }
+    .nav a {
+      display: block; padding: 10px 12px; border-radius: 10px; color: var(--muted);
+      text-decoration: none; font-size: 13px; font-weight: 600; margin-bottom: 4px;
+    }
+    .nav a.active { background: rgba(24,185,107,.14); color: var(--text); border: 1px solid var(--border); }
+    .main { display: flex; flex-direction: column; min-width: 0; }
+    .top {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      background: rgba(4,14,10,.85); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 40;
+    }
+    .top .crumb { font-size: 12px; color: var(--faint); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border);
+      background: var(--surface2); border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--muted);
+    }
+    .content { padding: 18px 20px 40px; max-width: 1400px; }
+    .header {
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 14px;
+    }
+    .header h1 { margin: 0; font-size: 22px; letter-spacing: -0.03em; }
+    .header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; max-width: 52ch; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+    button, .btn {
+      border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+      border-radius: 10px; padding: 9px 12px; font-weight: 700; font-size: 12px; cursor: default;
+    }
+    button.primary { background: linear-gradient(180deg, #1fb86a, #148a4d); border-color: transparent; color: #03130b; }
+    .control {
+      position: sticky; top: 52px; z-index: 30;
+      display: grid; grid-template-columns: repeat(4, minmax(0,1fr)) 1.2fr auto auto;
+      gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius);
+      background: rgba(7,26,20,.94); backdrop-filter: blur(10px); margin-bottom: 10px;
+    }
+    label.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    label.field span { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+    select, input {
+      height: 36px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,.04);
+      color: var(--text); padding: 0 10px; font-weight: 600; font-size: 12px; width: 100%;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid rgba(125,211,160,.35);
+      background: rgba(125,211,160,.1); padding: 5px 10px; font-size: 12px; font-weight: 700;
+    }
+    .chip x { opacity: .7; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .tab {
+      padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; color: var(--muted); border: 1px solid transparent;
+    }
+    .tab.active { color: #03130b; background: var(--accent2); }
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; margin-bottom: 12px;
+    }
+    .kpi {
+      border: 1px solid var(--border); border-radius: 14px; padding: 12px 12px 14px;
+      background: linear-gradient(145deg, rgba(24,185,107,.07), transparent 55%), var(--surface);
+      min-height: 118px;
+    }
+    .kpi .lbl { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+    .kpi .val { margin-top: 10px; font-size: 22px; font-weight: 900; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: var(--accent); }
+    .kpi .help { margin-top: 6px; font-size: 11px; color: var(--muted); line-height: 1.35; }
+    .scope { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .note {
+      border: 1px dashed var(--border); border-radius: 12px; padding: 12px 14px; color: var(--muted); font-size: 12px; line-height: 1.45;
+      background: rgba(255,255,255,.02);
+    }
+    .table-shell {
+      border: 1px solid rgba(214,184,92,.28); border-radius: 16px; overflow: hidden; background: #0b1018; margin-top: 8px;
+    }
+    .table-tools {
+      display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(214,184,92,.2);
+      background: #071426; align-items: center;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      text-align: left; padding: 10px; background: #0b1018; color: #fde68a; font-size: 10px; letter-spacing: .08em;
+      text-transform: uppercase; border-bottom: 1px solid rgba(245,158,11,.25); position: sticky; top: 0;
+    }
+    td { padding: 9px 10px; border-bottom: 1px solid rgba(148,163,184,.12); color: #cbd5e1; }
+    tr:nth-child(even) td { background: #111827; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: #e2e8f0; }
+    .sub td { background: rgba(214,184,92,.12) !important; box-shadow: inset 3px 0 0 rgba(214,184,92,.75); font-weight: 700; color: #f8fafc; }
+    .banner {
+      margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(41,199,200,.1);
+      border: 1px solid rgba(41,199,200,.25); color: #a5f3fc; font-size: 12px; font-weight: 600;
+    }
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; }
+      .side { display: none; }
+      .control { grid-template-columns: 1fr 1fr; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="brand">REPORT CENTER</div>
+      <nav class="nav">
+        <a href="#">Dashboard Report</a>
+        <a class="active" href="#">Inventory Live</a>
+        <a href="#">Favorit</a>
+        <a href="#">Pengaturan</a>
+      </nav>
+    </aside>
+    <div class="main">
+      <div class="top">
+        <div>
+          <div class="crumb">Report Center / Inventory / Detail</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="pill">Sumber: Pabrik</span>
+          <span class="pill">User · Admin</span>
+        </div>
+      </div>
+      <div class="content">
+        <div class="banner">TARGET WIREFRAME (bukan UI production) — monthly-stock-account-movement-details / RPTIN1000015</div>
+
+        <div class="header">
+          <div>
+            <h1>MONTHLY STOCK ACCOUNT MOVEMENT DETAILS</h1>
+            <p>Ringkasan open → in → out → close untuk periode aktual (Acc dihitung server). Tanpa SQL di wajah eksekutif.</p>
+          </div>
+          <div class="actions">
+            <button type="button">★ Favorit</button>
+            <button class="primary" type="button">Export ▾</button>
+            <button type="button">⋯</button>
+          </div>
+        </div>
+
+        <div class="control" aria-label="Control bar sticky">
+          <label class="field"><span>Periode aktual</span><input type="month" value="2026-07" /></label>
+          <label class="field"><span>Analysis group</span>
+            <select><option>Stock Analysis Code</option><option>Product Type</option></select>
+          </label>
+          <label class="field"><span>Movement window</span>
+            <select><option>All period</option><option>3 bulan</option></select>
+          </label>
+          <label class="field"><span>Cari</span><input placeholder="Kode / nama item…" /></label>
+          <label class="field" style="grid-column: span 1"><span>Filter lanjutan</span><button type="button" style="height:36px">Buka (2 aktif)</button></label>
+          <label class="field"><span>&nbsp;</span><button type="button" style="height:36px">Reset</button></label>
+        </div>
+
+        <div class="chips">
+          <span class="chip">DEADS <x>×</x></span>
+          <span class="chip">Sumber Pabrik <x>×</x></span>
+          <button type="button" style="margin-left:auto">Clear all</button>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active">Ringkasan</div>
+          <div class="tab">Analisis</div>
+          <div class="tab">Detail Data</div>
+          <div class="tab">Audit</div>
+        </div>
+
+        <div class="scope">
+          <span class="pill">Ringkasan server (terfilter)</span>
+          <span class="pill">Bukan sampel AI</span>
+          <span class="pill">Acc auto: 2027-04</span>
+        </div>
+
+        <div class="kpi-grid">
+          <article class="kpi"><div class="lbl">Saldo Awal</div><div class="val">Rp 12,4 M</div><div class="help">OpeningAmount · prev Acc</div></article>
+          <article class="kpi"><div class="lbl">Penerimaan</div><div class="val">Rp 3,1 M</div><div class="help">GoodsReceiveAmount</div></article>
+          <article class="kpi"><div class="lbl">Pengeluaran</div><div class="val">Rp 4,8 M</div><div class="help">IssuedTotal · rincian on-demand</div></article>
+          <article class="kpi"><div class="lbl">Retur</div><div class="val">Rp 0,2 M</div><div class="help">ReturnAmount</div></article>
+          <article class="kpi"><div class="lbl">Saldo Akhir</div><div class="val">Rp 10,9 M</div><div class="help">ClosingAmount</div></article>
+          <article class="kpi"><div class="lbl">Jumlah Item</div><div class="val">1.248</div><div class="help">count · tanpa Rp</div></article>
+        </div>
+
+        <div class="note">
+          <strong style="color:var(--text)">Pengeluaran · rincian</strong> (collapsed by default di target): Ledger · Station · Vehicle —
+          tidak diulang sebagai panel full-width terpisah. Placeholder movement (Received/Transfer/Adj = 0) tidak dijual sebagai KPI utama.
+        </div>
+
+        <div class="table-shell" style="margin-top:16px">
+          <div class="table-tools">
+            <input placeholder="Search dalam table…" style="max-width:240px" />
+            <button type="button">Group</button>
+            <button type="button">Kolom</button>
+            <button type="button">Compact</button>
+            <button type="button">⋮</button>
+            <button class="primary" type="button" style="margin-left:auto">Layar penuh</button>
+          </div>
+          <div style="padding:8px 12px;font-size:11px;color:var(--muted);border-bottom:1px solid rgba(148,163,184,.12)">
+            Menampilkan 1.248 / 1.248 baris · stream selesai · KPI dari ringkasan server
+          </div>
+          <div style="max-height:280px;overflow:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Nama</th>
+                  <th class="num">Opening</th>
+                  <th class="num">GR</th>
+                  <th class="num">Issued</th>
+                  <th class="num">Closing</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="6" style="color:#fde68a;font-weight:800">Stock Analysis: DEADS · 420 item</td></tr>
+                <tr><td>A100</td><td>Bearing 6205</td><td class="num">12.000.000</td><td class="num">0</td><td class="num">500.000</td><td class="num">11.500.000</td></tr>
+                <tr><td>A101</td><td>Seal Kit</td><td class="num">4.200.000</td><td class="num">800.000</td><td class="num">200.000</td><td class="num">4.800.000</td></tr>
+                <tr class="sub"><td>Subtotal DEADS</td><td></td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
