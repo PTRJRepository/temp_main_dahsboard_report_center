@@ -720,7 +720,7 @@ function movementAnalysisKpis(summary: DbRow, rows: DbRow[] = [], groupBy?: stri
   const dim = resolveGroupDimension(
     rows,
     groupBy,
-    groupBy ? [] : ['ProductTypeCode', 'ProductType', 'Gudang', 'StockAnalysisCode', 'KodeKategori', 'MovementCategory'],
+    groupBy ? [] : ['ProductTypeCode', 'ProductType', 'Gudang', 'KodeKategori', 'MovementCategory'],
   )
   // Default MC cards already cover MovementCategory; only rebuild when user groups on other dim.
   if (dim && dim !== 'MovementCategory') {
@@ -1369,7 +1369,7 @@ function buildDynamicGrandTotalKpis(
     selectedIsItemType || selectedIsComputedMovement ? undefined : selectedGroup,
     selectedGroup && !selectedIsItemType && !selectedIsComputedMovement
       ? []
-      : ['StockAnalysisCode', 'StockAnalysisName', 'ProductTypeCode', 'ProductType', 'Gudang', 'Location'],
+      : ['ProductTypeCode', 'ProductType', 'Gudang', 'Location'],
   )
   const breakdownCards = buildItemTypeBreakdownCards(summary, rows, metricKeys)
   const subCards =
@@ -1603,7 +1603,7 @@ function genericKpis(payload: ReportPayload, filters?: ReportFilterInput): Repor
   const groupCards = groupedKpiCards(
     payload.rows,
     filters?.groupBy ?? filters?.chartDimension,
-    ['MovementCategory', 'StockAnalysisCode', 'Gudang', 'Location', 'ProductType', 'KodeKategori', 'SupplierName'],
+    ['MovementCategory', 'ProductTypeCode', 'Gudang', 'Location', 'ProductType', 'KodeKategori', 'SupplierName'],
     6,
   )
 
@@ -2811,8 +2811,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     Object.entries(requestFilters).forEach(([key, value]) => {
       if (value === undefined || value === null || value === '') return
       if (key === 'naturalQuery') return
-      // category mirrors stockAnalysis for SA master filter — show one chip only.
-      if (key === 'category' && requestFilters.stockAnalysis) return
+      // Stock Analysis Code removed from monthly path — never surface SA chips.
+      if (key === 'stockAnalysis' || key === 'category') return
       if (key === 'columnFilters' && Array.isArray(value)) {
         value.forEach((item, index) => {
           const filter = item as ReportColumnFilter
@@ -2888,8 +2888,13 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     if (key === 'productBrand') return `Product Brand: ${String(value)}`
     if (key === 'productModel') return `Product Model: ${String(value)}`
     if (key === 'productMaterial') return `Product Material: ${String(value)}`
-    if (key === 'stockAnalysis' || key === 'category') return `Stock Analysis: ${String(value)}`
-    if (key === 'groupBy') return `Group: ${displayColumnLabel(String(value))}`
+    if (key === 'stockAnalysis' || key === 'category') return `Legacy filter ignored: ${key}`
+    if (key === 'groupBy') {
+      const group = String(value) === 'StockAnalysisCode' || String(value) === 'StockAnalysisName'
+        ? 'ProductTypeCode'
+        : String(value)
+      return `Group: ${displayColumnLabel(group)}`
+    }
     if (key === 'chartDimension') return `Chart: ${displayColumnLabel(String(value))}`
     if (key === 'movementCategory') return `Movement Category: ${String(value)}`
     if (key === 'movementWindow') return `Movement Window: ${String(value)}`
@@ -3295,8 +3300,12 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     requestFilters.chartDimension ??
     activeTableGroupColumn ??
     payload?.metadata?.analysisGroup ??
-    'StockAnalysisCode',
+    'ProductTypeCode',
   )
+  const resolvedMonthlyAnalysisGroup =
+    activeMonthlyAnalysisGroup === 'StockAnalysisCode' || activeMonthlyAnalysisGroup === 'StockAnalysisName'
+      ? 'ProductTypeCode'
+      : activeMonthlyAnalysisGroup
   const activeMonthlyMovementWindow = String(
     requestFilters.movementWindow ??
     payload?.metadata?.movementWindow ??
@@ -3898,7 +3907,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               <label className="block min-w-0">
                 <span className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-white/35">Analysis group</span>
                 <select
-                  value={activeMonthlyAnalysisGroup}
+                  value={resolvedMonthlyAnalysisGroup}
                   onChange={(event) => applyMonthlyAnalysisGroup(event.target.value)}
                   className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-bold text-white"
                 >
