@@ -8,20 +8,15 @@ import {
   type DbRow,
   type ReportPayload,
 } from '@/lib/reports/ai-dashboard'
+import { buildAiEvidenceBundle, formatAiEvidenceForPrompt } from '@/lib/reports/ai-evidence'
+import { callAnthropicMessages, getAnthropicProviderConfig } from '@/lib/reports/ai-provider'
 import { compactReportPayloadForAi } from '@/lib/reports/report-detail-performance'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const DISPLAY_PROVIDER = 'local-llm'
-const PROVIDER_ENGINE = '9router'
-const ADACODE_URL = process.env.ADACODE_BASE_URL ?? process.env.LOCAL_LLM_BASE_URL ?? 'https://api.local-llm.ai/v1/chat/completions'
-const rawAdaCodeModel = (process.env.ADACODE_MODEL ?? process.env.LOCAL_LLM_MODEL ?? '').trim()
-const ADACODE_MODEL =
-  ['minimax m2.5', 'minimax/minimax-m2.5', 'minimax-m2.5'].includes(rawAdaCodeModel.toLowerCase())
-    ? 'minimax-m2.5'
-    : rawAdaCodeModel || 'minimax-m2.5'
-const ADACODE_API_KEY = process.env.ADACODE_API_KEY ?? process.env.LOCAL_LLM_API_KEY
+const DISPLAY_PROVIDER = 'anthropic'
+const PROVIDER_ENGINE = 'anthropic-messages'
 
 type AiAnalysisRequestBody = {
   filters?: DbRow
@@ -34,74 +29,11 @@ type AiAnalysisRequestBody = {
   }
 }
 
-type AdaCodeResponse = {
-  choices?: Array<{
-    finish_reason?: string
-    text?: string
-    content?: string
-    message?: {
-      content?: unknown
-    }
-  }>
-  error?: {
-    message?: string
-  }
-  content?: unknown
-  message?: unknown
-  output_text?: unknown
-  response?: unknown
-  data?: unknown
-}
-
 function compactJson(value: unknown) {
   return JSON.stringify(value, (_key, item) => {
     if (typeof item === 'string' && item.length > 220) return `${item.slice(0, 220)}...`
     return item
   })
-}
-
-function contentToString(value: unknown): string | undefined {
-  if (typeof value === 'string') return value.trim() || undefined
-  if (Array.isArray(value)) {
-    const text = value
-      .map((item) => {
-        if (typeof item === 'string') return item
-        if (item && typeof item === 'object') {
-          const entry = item as Record<string, unknown>
-          return contentToString(entry.text ?? entry.content ?? entry.output_text)
-        }
-        return undefined
-      })
-      .filter(Boolean)
-      .join('')
-      .trim()
-    return text || undefined
-  }
-  if (value && typeof value === 'object') {
-    const entry = value as Record<string, unknown>
-    return contentToString(entry.content ?? entry.text ?? entry.message ?? entry.output_text ?? entry.response)
-  }
-  return undefined
-}
-
-function extractAdaCodeContent(result: AdaCodeResponse) {
-  const choice = result.choices?.[0]
-  return (
-    contentToString(choice?.message?.content) ??
-    contentToString(choice?.text) ??
-    contentToString(choice?.content) ??
-    contentToString(result.output_text) ??
-    contentToString(result.content) ??
-    contentToString(result.response) ??
-    contentToString(result.message) ??
-    contentToString(result.data)
-  )
-}
-
-function adaCodeErrorMessage(result: AdaCodeResponse, status: number) {
-  const finishReason = result.choices?.[0]?.finish_reason
-  if (finishReason === 'length') return 'AI output terpotong karena batas token.'
-  return result.error?.message ?? `AdaCode API HTTP ${status}${finishReason ? ` (${finishReason})` : ''}`
 }
 
 function reportCodeFromPath(request: NextRequest) {
@@ -117,30 +49,6 @@ function hasPayload(payload?: ReportPayload) {
         Object.keys(payload.summary ?? {}).length > 0 ||
         (payload.chart?.length ?? 0) > 0),
   )
-}
-
-async function callAdaCode(messages: Array<{ role: 'system' | 'user'; content: string }>, maxTokens = 5200) {
-  if (!ADACODE_API_KEY) return { content: undefined, warning: 'ADACODE_API_KEY/LOCAL_LLM_API_KEY belum dikonfigurasi.' }
-
-  const response = await fetch(ADACODE_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${ADACODE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: ADACODE_MODEL,
-      temperature: 0.1,
-      max_tokens: maxTokens,
-      messages,
-    }),
-    cache: 'no-store',
-  })
-
-  const result = (await response.json().catch(() => ({}))) as AdaCodeResponse
-  const content = extractAdaCodeContent(result)
-  if (!response.ok || !content) return { content: undefined, warning: adaCodeErrorMessage(result, response.status) }
-  return { content }
 }
 
 export async function POST(request: NextRequest) {
@@ -174,9 +82,16 @@ export async function POST(request: NextRequest) {
     payload,
     filters: body.filters ?? {},
   })
+  const evidence = buildAiEvidenceBundle(rawPayload, {
+    filters: body.filters ?? {},
+    reportCode,
+    sampleRows: 12,
+    maxColumns: 24,
+  })
   const fallback = generateLocalDashboardDefinition(analysisPayload, options)
+  const providerConfig = getAnthropicProviderConfig()
 
-  if (!ADACODE_API_KEY) {
+  if (!providerConfig.configured) {
     return NextResponse.json(sanitizeDashboardDefinition(fallback, analysisPayload, options, undefined, payload.rows))
   }
 
@@ -335,17 +250,21 @@ Deep analysis playbook:
 
   const userPrompt = [
     `Report payload compact: ${compactJson(analysisPayload)}`,
+    `Evidence scope terbatas: ${formatAiEvidenceForPrompt(evidence)}`,
     `Fallback local yang sudah valid dan bisa dipakai jika ragu: ${compactJson(fallback)}`,
-    `Provider display: ${DISPLAY_PROVIDER}; engine: ${PROVIDER_ENGINE}; model: ${ADACODE_MODEL}.`,
+    `Provider display: ${DISPLAY_PROVIDER}; engine: ${PROVIDER_ENGINE}; model: ${providerConfig.model}.`,
   ].join('\n\n')
 
   try {
-    const first = await callAdaCode([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ])
+    const first = await callAnthropicMessages({
+      config: providerConfig,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      maxTokens: 5200,
+      temperature: 0.1,
+    })
 
-    if (!first.content) {
+    if (!first.ok || !first.content) {
       return NextResponse.json(sanitizeDashboardDefinition(fallback, analysisPayload, options, undefined, payload.rows))
     }
 
@@ -353,28 +272,29 @@ Deep analysis playbook:
       const parsed = parseDashboardJson(first.content)
       return NextResponse.json(sanitizeDashboardDefinition(parsed, analysisPayload, options, fallback, payload.rows))
     } catch (parseError) {
-      const repair = await callAdaCode(
-        [
-          { role: 'system', content: `Perbaiki output menjadi JSON valid saja. ${schemaInstruction}` },
-          {
-            role: 'user',
-            content: [
-              `Output sebelumnya error: ${parseError instanceof Error ? parseError.message : 'JSON invalid'}`,
-              `Output sebelumnya: ${first.content.slice(0, 8000)}`,
-              `Field dan dataSource valid: ${compactJson({
-                fields: analysisPayload.fields,
-                summaryFields: Object.keys(analysisPayload.summary),
-                groupings: Object.fromEntries(Object.entries(analysisPayload.groupings).map(([key, rows]) => [key, Object.keys(rows[0] ?? {})])),
-                chartFields: Object.keys(analysisPayload.chart[0] ?? {}),
-              })}`,
-              `Fallback valid: ${compactJson(fallback)}`,
-            ].join('\n\n'),
-          },
-        ],
-        5200,
-      )
+      const repair = await callAnthropicMessages({
+        config: providerConfig,
+        system: `Perbaiki output menjadi JSON valid saja. ${schemaInstruction}`,
+        messages: [{
+          role: 'user',
+          content: [
+            `Output sebelumnya error: ${parseError instanceof Error ? parseError.message : 'JSON invalid'}`,
+            `Output sebelumnya: ${first.content.slice(0, 8000)}`,
+            `Field dan dataSource valid: ${compactJson({
+              fields: analysisPayload.fields,
+              summaryFields: Object.keys(analysisPayload.summary),
+              groupings: Object.fromEntries(Object.entries(analysisPayload.groupings).map(([key, rows]) => [key, Object.keys(rows[0] ?? {})])),
+              chartFields: Object.keys(analysisPayload.chart[0] ?? {}),
+            })}`,
+            `Evidence scope terbatas: ${formatAiEvidenceForPrompt(evidence)}`,
+            `Fallback valid: ${compactJson(fallback)}`,
+          ].join('\n\n'),
+        }],
+        maxTokens: 5200,
+        temperature: 0.1,
+      })
 
-      if (!repair.content) {
+      if (!repair.ok || !repair.content) {
         return NextResponse.json(sanitizeDashboardDefinition(fallback, analysisPayload, options, undefined, payload.rows))
       }
 

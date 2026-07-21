@@ -10,6 +10,31 @@ export type MovementCategory = (typeof MOVEMENT_CATEGORY_ORDER)[number]
 
 export const LEGACY_NO_MOVEMENT_CATEGORY = 'No Movement'
 
+export const MOVEMENT_CATEGORY_CLASSIFICATION_VERSION = 'movement-category:v4-periodic-window'
+
+export type MovementCategoryThresholds = {
+  fastMinIssueCount: number
+  movingMinIssueCount: number
+  movingMaxIssueCount: number
+  slowIssueCount: number
+  deadStockIssueCount: 0
+}
+
+export const MOVEMENT_CATEGORY_THRESHOLDS: MovementCategoryThresholds = {
+  fastMinIssueCount: 6,
+  movingMinIssueCount: 2,
+  movingMaxIssueCount: 5,
+  slowIssueCount: 1,
+  deadStockIssueCount: 0,
+}
+
+export type MovementCategoryThresholdInput = Partial<{
+  fastMinIssueCount: unknown
+  movingMinIssueCount: unknown
+  movingMaxIssueCount: unknown
+  slowIssueCount: unknown
+}>
+
 const movementCategoryRanks = new Map<string, number>(
   MOVEMENT_CATEGORY_ORDER.map((category, index) => [category, index + 1]),
 )
@@ -17,6 +42,44 @@ const movementCategoryRanks = new Map<string, number>(
 function numericValue(value: unknown) {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric : 0
+}
+
+function boundedIssueCount(value: unknown, fallback: number, min = 1, max = 999) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Math.min(Math.max(Math.trunc(numeric), min), max)
+}
+
+export function normalizeMovementCategoryThresholds(input: MovementCategoryThresholdInput = {}): MovementCategoryThresholds {
+  const slowIssueCount = boundedIssueCount(input.slowIssueCount, MOVEMENT_CATEGORY_THRESHOLDS.slowIssueCount)
+  const movingMinIssueCount = boundedIssueCount(
+    input.movingMinIssueCount,
+    MOVEMENT_CATEGORY_THRESHOLDS.movingMinIssueCount,
+    slowIssueCount + 1,
+  )
+  const movingMaxIssueCount = boundedIssueCount(
+    input.movingMaxIssueCount,
+    MOVEMENT_CATEGORY_THRESHOLDS.movingMaxIssueCount,
+    movingMinIssueCount,
+  )
+  const fastMinIssueCount = boundedIssueCount(
+    input.fastMinIssueCount,
+    MOVEMENT_CATEGORY_THRESHOLDS.fastMinIssueCount,
+    movingMaxIssueCount + 1,
+  )
+
+  return {
+    fastMinIssueCount,
+    movingMinIssueCount,
+    movingMaxIssueCount,
+    slowIssueCount,
+    deadStockIssueCount: MOVEMENT_CATEGORY_THRESHOLDS.deadStockIssueCount,
+  }
+}
+
+export function movementCategoryThresholdLabel(thresholds: MovementCategoryThresholdInput = {}) {
+  const normalized = normalizeMovementCategoryThresholds(thresholds)
+  return `Fast >= ${normalized.fastMinIssueCount}, Moving ${normalized.movingMinIssueCount}-${normalized.movingMaxIssueCount}, Slow = ${normalized.slowIssueCount}, Dead/Stale = 0 issue`
 }
 
 export function normalizeMovementCategoryLabel(value: unknown): MovementCategory | string {
@@ -30,32 +93,47 @@ export function movementCategoryRank(value: unknown) {
   return movementCategoryRanks.get(String(label)) ?? Number.MAX_SAFE_INTEGER
 }
 
-export function movementCategoryFromIssueCount(issueCount: unknown, quantityClosing: unknown): MovementCategory {
+export function movementCategoryFromIssueCount(
+  issueCount: unknown,
+  quantityClosing: unknown,
+  thresholdsInput: MovementCategoryThresholdInput = {},
+): MovementCategory {
+  const thresholds = normalizeMovementCategoryThresholds(thresholdsInput)
   const count = Math.max(0, Math.trunc(numericValue(issueCount)))
   const quantity = numericValue(quantityClosing)
 
-  if (count >= 6) return 'Fast Moving'
-  if (count >= 2) return 'Moving'
-  if (count === 1) return 'Slow Moving'
+  if (count >= thresholds.fastMinIssueCount) return 'Fast Moving'
+  if (count >= thresholds.movingMinIssueCount && count <= thresholds.movingMaxIssueCount) return 'Moving'
+  if (count === thresholds.slowIssueCount) return 'Slow Moving'
   if (quantity > 0) return 'Dead Stock'
   return 'Stale'
 }
 
-export function movementCategorySqlCase(issueCountExpression: string, quantityExpression: string) {
+export function movementCategorySqlCase(
+  issueCountExpression: string,
+  quantityExpression: string,
+  thresholdsInput: MovementCategoryThresholdInput = {},
+) {
+  const thresholds = normalizeMovementCategoryThresholds(thresholdsInput)
   return `CASE
-        WHEN ${issueCountExpression} >= 6 THEN 'Fast Moving'
-        WHEN ${issueCountExpression} BETWEEN 2 AND 5 THEN 'Moving'
-        WHEN ${issueCountExpression} = 1 THEN 'Slow Moving'
+        WHEN ${issueCountExpression} >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving'
+        WHEN ${issueCountExpression} BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving'
+        WHEN ${issueCountExpression} = ${thresholds.slowIssueCount} THEN 'Slow Moving'
         WHEN ${quantityExpression} > 0 THEN 'Dead Stock'
         ELSE 'Stale'
       END`
 }
 
-export function movementAnalysisSqlCase(issueCountExpression: string, quantityExpression: string) {
+export function movementAnalysisSqlCase(
+  issueCountExpression: string,
+  quantityExpression: string,
+  thresholdsInput: MovementCategoryThresholdInput = {},
+) {
+  const thresholds = normalizeMovementCategoryThresholds(thresholdsInput)
   return `CASE
-        WHEN ${issueCountExpression} >= 6 THEN 'Fast Moving: StockIssue Movement >= 6'
-        WHEN ${issueCountExpression} BETWEEN 2 AND 5 THEN 'Moving: StockIssue Movement 2-5'
-        WHEN ${issueCountExpression} = 1 THEN 'Slow Moving: StockIssue Movement 1'
+        WHEN ${issueCountExpression} >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving: StockIssue Movement >= ${thresholds.fastMinIssueCount}'
+        WHEN ${issueCountExpression} BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving: StockIssue Movement ${thresholds.movingMinIssueCount}-${thresholds.movingMaxIssueCount}'
+        WHEN ${issueCountExpression} = ${thresholds.slowIssueCount} THEN 'Slow Moving: StockIssue Movement ${thresholds.slowIssueCount}'
         WHEN ${quantityExpression} > 0 THEN 'Dead Stock: stok ada, StockIssue Movement 0'
         ELSE 'Stale: stok dan StockIssue Movement 0'
       END`

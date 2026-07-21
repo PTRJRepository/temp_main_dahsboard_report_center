@@ -11,7 +11,7 @@ import {
   Table2,
 } from 'lucide-react'
 import type { InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
-import type { ReportBreakdownEntry, ReportFilterAction, ReportKpiEntry } from '@/lib/reports/report-experience'
+import type { ReportBreakdownEntry, ReportFilterAction } from '@/lib/reports/report-experience'
 import type { ReportFilterInput } from '@/lib/reports/report-filtering'
 
 type ReportAnalysisBandProps = {
@@ -80,9 +80,12 @@ function formatMetric(value: unknown, format?: string) {
   const numeric = toNumber(value)
   if (!numeric && typeof value === 'string' && !/^[\d.,\s-]+$/.test(value)) return value
   if (format === 'currency') {
-    if (Math.abs(numeric) >= 1_000_000_000) return `Rp${(numeric / 1_000_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}M`
-    if (Math.abs(numeric) >= 1_000_000) return `Rp${(numeric / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}Jt`
-    return `Rp${numeric.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    }).format(numeric)
   }
   if (format === 'quantity') return numeric.toLocaleString('id-ID', { maximumFractionDigits: 2 })
   return numeric.toLocaleString('id-ID', { maximumFractionDigits: 0 })
@@ -95,14 +98,6 @@ function cleanBreakdownLabel(entry: ReportBreakdownEntry) {
     if (stripped !== entry.label) return stripped
   }
   return entry.label.replace(/^[^-]+-\s*/, '').trim()
-}
-
-function kpiTone(kpi: ReportKpiEntry) {
-  const text = `${kpi.id} ${kpi.label}`.toLowerCase()
-  if (/risk|dead|stale|exception/.test(text)) return 'border-rose-300/25 bg-rose-400/10 text-rose-100'
-  if (/event|movement|quantity|qty/.test(text)) return 'border-amber-300/25 bg-amber-400/10 text-amber-100'
-  if (/location|lokasi|gudang/.test(text)) return 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100'
-  return 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100'
 }
 
 function activeFilterCount(filters: ReportFilterInput) {
@@ -163,13 +158,14 @@ export function ReportAnalysisBand({
   const monthlyFlowBreakdowns = breakdowns
     .filter((entry) => entry.dimensionId === 'chart' && entry.id.startsWith('monthly-flow-'))
     .slice(0, 5)
-  const hasMonthlyStockFlow = monthlyFlowBreakdowns.length > 0 && !movementTop
+  const hasMonthlyStockFlow = monthlyFlowBreakdowns.length > 0
   const topBreakdowns = breakdowns
     .filter((entry) => entry.filterAction)
     .sort((left, right) => toNumber(right.value) - toNumber(left.value))
     .slice(0, 8)
+  // Movement Category always in analysis text rail (even when monthly flow present).
   const textAlternativeDimensions = hasMonthlyStockFlow
-    ? ['stock-analysis', 'location', 'item-code', 'chart']
+    ? ['movement-category', 'stock-analysis', 'location', 'item-code', 'chart']
     : ['movement-category', 'stock-analysis', 'product-type', 'product-category', 'location']
   const title = reportTitle?.trim() || 'Ringkasan Report'
   const description = reportDescription?.trim()
@@ -207,47 +203,12 @@ export function ReportAnalysisBand({
             </div>
           </div>
 
-          {loading && kpis.length === 0 ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-28 animate-pulse rounded-2xl bg-white/[0.06]" />
-              ))}
-            </div>
-          ) : kpis.length > 0 ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
-              {kpis.slice(0, 6).map((kpi) => {
-                const interactive = Boolean(kpi.filterAction)
-                const card = (
-                  <>
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="truncate text-[10px] font-black uppercase tracking-[0.16em] opacity-75">{kpi.label}</span>
-                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase">{kpi.scope}</span>
-                    </span>
-                    <strong className="mt-3 block truncate text-2xl font-black tracking-[-0.04em]">{formatMetric(kpi.value, kpi.format)}</strong>
-                    <span className="mt-2 block truncate text-[11px] font-semibold opacity-70">{kpi.evidence.source} | {kpi.evidence.valuePath ?? 'summary'}</span>
-                  </>
-                )
-                return interactive && kpi.filterAction ? (
-                  <button
-                    key={kpi.id}
-                    type="button"
-                    onClick={() => onFilterAction(kpi.filterAction as ReportFilterAction, kpi.label)}
-                    className={cx('rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-lime-300/50', kpiTone(kpi))}
-                  >
-                    {card}
-                  </button>
-                ) : (
-                  <article key={kpi.id} className={cx('rounded-2xl border p-3', kpiTone(kpi))}>
-                    {card}
-                  </article>
-                )
-              })}
-            </div>
-          ) : (
+          {/* KPI numbers live in sticky top rail only — avoid duplicate cards here. */}
+          {!loading && kpis.length === 0 ? (
             <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm font-semibold text-white/55">
               Analytics contract belum tersedia dari API untuk report ini. Tabel dan export tetap memakai payload report aktif.
             </div>
-          )}
+          ) : null}
 
           <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
             <div className="rounded-2xl border border-white/10 bg-black/18 p-4">
@@ -317,35 +278,29 @@ export function ReportAnalysisBand({
                     ))}
                   </div>
                   <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs font-semibold leading-5 text-white/58">
-                    RPTIN1000015 merangkum stock account movement bulanan: opening, issued, goods receive, return, dan closing. Ini bukan Movement Category periodik Fast/Slow/Dead Stock.
+                    Flow bulanan (opening → issue → receive → closing) terpisah dari Movement Category periodik. Kedua analisis tetap ditampilkan.
                   </p>
                 </>
-              ) : (
-                <>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/70">Movement Category</p>
-                      <p className="mt-2 truncate text-lg font-black text-emerald-50">{movementTop ? cleanBreakdownLabel(movementTop) : '-'}</p>
-                      <p className="mt-1 text-xs font-semibold text-emerald-50/65">Periodik, dihitung dari movement dalam periode aktif.</p>
-                    </div>
-                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-100/70">Stock Analysis Code</p>
-                      <p className="mt-2 truncate text-lg font-black text-amber-50">{stockAnalysisTop ? cleanBreakdownLabel(stockAnalysisTop) : '-'}</p>
-                      <p className="mt-1 text-xs font-semibold text-amber-50/65">Taxonomy tersimpan dari master/account, bukan hasil periode.</p>
-                    </div>
-                  </div>
-                  <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs font-semibold leading-5 text-white/58">
-                    Jika kedua field ada, viewer menampilkan perbandingan ini tanpa menyatukan maknanya. Filter movement dan stock analysis tetap dikirim sebagai parameter berbeda atau column filter.
-                  </p>
-                </>
-              )}
-              {hasMonthlyStockFlow && stockAnalysisTop ? (
-                <div className="mt-3 rounded-2xl border border-amber-300/20 bg-black/18 p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-100/70">Stock Analysis terbesar</p>
-                  <p className="mt-2 truncate text-lg font-black text-amber-50">{cleanBreakdownLabel(stockAnalysisTop)}</p>
-                  <p className="mt-1 text-xs font-semibold text-amber-50/65">Taxonomy tersimpan dari master/account, bukan movement periodik.</p>
-                </div>
               ) : null}
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/70">Movement Actual · computed</p>
+                  <p className="mt-2 truncate text-lg font-black text-emerald-50">{movementTop ? cleanBreakdownLabel(movementTop) : '-'}</p>
+                  <p className="mt-1 text-xs font-semibold text-emerald-50/65">
+                    Fast/Slow/Dead/Stale dihitung otomatis dari StockIssue window — bukan kolom master.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-100/70">Stock Analysis · stored</p>
+                  <p className="mt-2 truncate text-lg font-black text-amber-50">{stockAnalysisTop ? cleanBreakdownLabel(stockAnalysisTop) : '-'}</p>
+                  <p className="mt-1 text-xs font-semibold text-amber-50/65">
+                    Kode di master/item (DEADS/MEMOV/…) — data tabel, bukan auto-calc.
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs font-semibold leading-5 text-white/58">
+                Taxonomy tersimpan (Stock Analysis, Product Type/Category) ≠ analisis computed (Movement Actual). Sub-category KPI = stored only. Computed analysis = rail sendiri; analisis auto-calc lain nanti juga terpisah, tidak digabung ke sub.
+              </p>
               {onAskQuestion ? (
                 <button
                   type="button"

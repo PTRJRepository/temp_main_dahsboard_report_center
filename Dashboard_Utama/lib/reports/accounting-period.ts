@@ -31,6 +31,10 @@ function padMonth(month: number) {
   return String(month).padStart(2, '0')
 }
 
+function nextActualMonth(year: number, month: number) {
+  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
+}
+
 export function normalizeAccountingMonth(value: string | number | null | undefined) {
   const month = toInteger(value)
   return month !== null && month >= 1 && month <= 12 ? month : null
@@ -89,6 +93,21 @@ export function actualToAccountingPeriod(
     accYear,
     accMonth,
     accountingPeriod: `${accYear}-${padMonth(accMonth)}`,
+  }
+}
+
+export function actualPeriodBounds(
+  actualYearValue: string | number | null | undefined,
+  actualMonthValue: string | number | null | undefined,
+) {
+  const actualYear = normalizeAccountingYear(actualYearValue)
+  const actualMonth = normalizeAccountingMonth(actualMonthValue)
+  if (actualYear === null || actualMonth === null) return null
+
+  const next = nextActualMonth(actualYear, actualMonth)
+  return {
+    startInclusive: `${actualYear}-${padMonth(actualMonth)}-01`,
+    endExclusive: `${next.year}-${padMonth(next.month)}-01`,
   }
 }
 

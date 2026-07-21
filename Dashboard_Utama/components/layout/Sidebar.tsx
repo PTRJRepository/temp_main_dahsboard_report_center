@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import {
   BarChart3,
   ChevronLeft,
@@ -82,10 +82,12 @@ function normalizeReportSource(value: string | null) {
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const sourceParam = searchParams.get('source')
   const { sidebarCollapsed, toggleSidebar } = useReportStore()
   const { logout } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [reportSource, setReportSource] = useState('estate')
+  const [reportSource, setReportSource] = useState(() => normalizeReportSource(sourceParam))
 
   useEffect(() => {
     window.queueMicrotask(() => {
@@ -99,7 +101,7 @@ export default function Sidebar() {
     }
     window.addEventListener('report-center-source-change', handleSourceChange)
     return () => window.removeEventListener('report-center-source-change', handleSourceChange)
-  }, [])
+  }, [sourceParam])
 
   const isActive = (href: string) => {
     const path = href.split('#')[0]

@@ -15,7 +15,7 @@ export default function ReportCenterShell({
   const { sidebarCollapsed } = useReportStore()
 
   return (
-    <div className={`report-center-dark ${REPORT_CENTER_THEME_V2 ? 'report-center-forest' : ''} flex h-screen overflow-hidden bg-[var(--rc-bg)] text-[var(--rc-text)]`}>
+    <div className={`report-center-dark rc-shell ${REPORT_CENTER_THEME_V2 ? 'report-center-forest' : ''} flex h-screen overflow-hidden bg-[var(--rc-bg)] text-[var(--rc-text)]`}>
       <Sidebar />
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_0%,rgba(16,185,129,0.11),transparent_28rem)]" />
@@ -25,7 +25,7 @@ export default function ReportCenterShell({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="relative flex-1 overflow-y-auto"
+          className="rc-scroll-root relative flex-1 overflow-y-auto"
         >
           {children}
         </motion.main>

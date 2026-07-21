@@ -1,3 +1,6 @@
+import type { ReportCapabilityId, ReportExperienceProfile } from "../report-experience";
+import type { InventorySemanticDimensionId } from "./semantic-dimensions";
+
 export type InventoryReportStatus = "live" | "update" | "hold";
 export type InventoryReportPriority = "critical" | "high" | "medium";
 export type InventoryReportCadence = "Harian" | "Bulanan" | "On demand";
@@ -39,6 +42,9 @@ export type InventoryReport = {
   dataGrain: string;
   validated: boolean;
   availableFilters?: InventoryAvailableFilter[];
+  semanticDimensions?: InventorySemanticDimensionId[];
+  capabilities?: ReportCapabilityId[];
+  defaultGroupBy?: InventorySemanticDimensionId | string;
   chartDefinitions: InventoryChartDefinition[];
   qualityNotes: string[];
   readOnly: true;
@@ -66,27 +72,27 @@ export const inventoryReports: InventoryReport[] = [
     code: "INV-01",
     group: "executive",
     groupTitle: inventoryGroups.executive,
-    title: "Posisi Stok & Nilai Gudang",
-    description: "Executive view nilai persediaan, stok, gudang dominan, top item, dan risiko kualitas master dari IN_ITEM.",
+    title: "Posisi Stok & Nilai Inventory",
+    description: "Executive view nilai persediaan inventory, stok Gudang + Workshop/Mesin, lokasi dominan, top item, dan risiko kualitas master dari IN_ITEM.",
     executiveQuestion: "Berapa nilai inventory saat ini, gudang mana yang paling material, dan item apa yang perlu perhatian?",
     status: "live",
     priority: "critical",
-    tags: ["Stok", "Gudang", "Nilai Persediaan", "Executive"],
+    tags: ["Stok", "Gudang", "Workshop", "Nilai Persediaan", "Executive"],
     sourceTables: ["IN_ITEM", "IN_PRODCAT", "IN_STOCKISSUE", "IN_STOCKISSUELN", "WS_JOBSTOCK"],
     lastUpdated: "Mengikuti MAX(IN_ITEM.UpdateDate)",
     owner: "Inventory Control",
     cadence: "Harian",
-    dataGrain: "Item per gudang/lokasi",
+    dataGrain: "Item per lokasi untuk ItemType 1 Stock/Gudang dan ItemType 4 Workshop/Mesin",
     validated: true,
     chartDefinitions: [
       {
         id: "stock-value-by-warehouse",
-        title: "Nilai Persediaan per Gudang",
+        title: "Nilai Persediaan per Lokasi",
         type: "bar",
         metric: "SUM((QtyOnHand + QtyOnHold + QtyOnOrder) * AverageCost)",
         dimension: "LocCode",
         sourceTables: ["IN_ITEM", "IN_STOCKISSUE", "IN_STOCKISSUELN", "WS_JOBSTOCK"],
-        insightFocus: "Konsentrasi nilai inventory per gudang.",
+        insightFocus: "Konsentrasi nilai inventory per lokasi untuk Gudang dan Workshop/Mesin.",
       },
       {
         id: "stock-value-by-category",
@@ -372,29 +378,33 @@ export const inventoryReports: InventoryReport[] = [
     groupTitle: inventoryGroups.transaction,
     title: "MONTHLY STOCK ACCOUNT MOVEMENT DETAILS",
     description: "Report khusus rekonstruksi stock account movement pabrik: opening month-end, issue station/vehicle, ledger, return, goods receive, closing hasil hitung, dan valuasi QtyOnHand + QtyOnHold.",
-    executiveQuestion: "Bagaimana opening, movement, dan closing item M untuk DEADS/MEMOV/SLMOV pada periode accounting yang sesuai?",
+    executiveQuestion: "Bagaimana opening, issue, receive, dan closing inventory berdasarkan analysis group yang dipilih pada periode accounting yang sesuai?",
     status: "live",
     priority: "critical",
     tags: ["RPTIN1000015", "Monthly Stock", "Stock Movement", "Accounting Period", "Pabrik", "PTRJ"],
-    sourceTables: ["IN_ITEM", "IN_STOCKANALYSIS", "IN_MTHENDITEM", "IN_STOCKISSUE", "IN_STOCKISSUELN", "WS_JOBSTOCK", "WS_JOB", "PU_GOODSRCV", "PU_GOODSRCVLN", "PU_POLN"],
+    sourceTables: ["IN_ITEM", "IN_STOCKANALYSIS", "IN_PRODTYPE", "IN_MTHENDITEM", "IN_STOCKISSUE", "IN_STOCKISSUELN", "IN_FUELISSUE", "IN_FUELISSUELN", "WS_JOBSTOCK", "WS_JOB", "PU_GOODSRCV", "PU_GOODSRCVLN", "PU_POLN"],
     lastUpdated: "Mengikuti periode aktual yang dikonversi ke AccYear/AccMonth",
     owner: "Inventory Accounting",
     cadence: "Bulanan",
-    dataGrain: "Item aktif uppercase M per StockAnalysisCode dan lokasi",
+    dataGrain: "Item aktif per lokasi dan analysis group; default StockAnalysisCode memakai DEADS/MEMOV/SLMOV, taxonomy group memakai full active ItemType 1+4 scope",
     validated: true,
     availableFilters: [
       { field: "location", label: "Lokasi", type: "select", options: ["PTRJ"], default: "PTRJ" },
       { field: "category", label: "Stock Analysis", type: "select", options: ["DEADS", "MEMOV", "SLMOV"] },
+      { field: "period", label: "Actual Period", type: "select", default: "Bulan berjalan" },
+      { field: "groupBy", label: "Analysis Group", type: "select", options: ["StockAnalysisCode", "ProductTypeCode", "ProductCategoryCode", "ProductBrandCode", "ProductModelCode", "ProductMaterialCode", "MovementCategory"], default: "StockAnalysisCode" },
+      { field: "itemType", label: "Item Scope", type: "select", options: ["", "gudang", "workshop"], default: "Inventory 1+4" },
+      { field: "includeWorkshopItem", label: "Official PDF Include Workshop Item", type: "select", options: ["yes", "no"], default: "yes" },
     ],
     chartDefinitions: [
       {
         id: "closing-by-stock-analysis",
-        title: "Closing Amount by Stock Analysis",
+        title: "Closing Amount by Analysis Group",
         type: "bar",
         metric: "SUM(ClosingAmount), SUM((QtyOnHand + QtyOnHold) * AverageCost)",
-        dimension: "StockAnalysisCode",
-        sourceTables: ["IN_ITEM", "IN_MTHENDITEM", "IN_STOCKISSUE", "WS_JOBSTOCK", "PU_GOODSRCV"],
-        insightFocus: "Komposisi nilai closing per DEADS, MEMOV, dan SLMOV.",
+        dimension: "StockAnalysisCode / Product taxonomy code / MovementCategory",
+        sourceTables: ["IN_ITEM", "IN_MTHENDITEM", "IN_STOCKISSUE", "IN_FUELISSUE", "WS_JOBSTOCK", "PU_GOODSRCV"],
+        insightFocus: "Komposisi nilai closing sesuai analysis group yang dipilih sebelum membuka report.",
       },
       {
         id: "issued-vs-receive",
@@ -402,16 +412,18 @@ export const inventoryReports: InventoryReport[] = [
         type: "bar",
         metric: "SUM(IssuedTotalAmount), SUM(GoodsReceiveAmount)",
         dimension: "StockAnalysisCode",
-        sourceTables: ["IN_STOCKISSUE", "WS_JOBSTOCK", "PU_GOODSRCV"],
+        sourceTables: ["IN_STOCKISSUE", "IN_FUELISSUE", "WS_JOBSTOCK", "PU_GOODSRCV"],
         insightFocus: "Perbandingan nilai keluar dan penerimaan pada periode accounting.",
       },
     ],
     qualityNotes: [
       "Filter period memakai periode aktual YYYY-MM, lalu dikonversi ke AccYear/AccMonth dengan helper accounting-period.",
       "Opening diambil dari IN_MTHENDITEM accounting period sebelumnya; closing dihitung, bukan diambil dari IN_ITEM.",
-      "IN_STOCKISSUE/IN_STOCKISSUELN hanya untuk item non-workshop; ItemType 4 Workshop memakai WS_JOBSTOCK.",
+      "Issue non-workshop dihitung dari IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM dari IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.",
       "Valuasi saldo aktif juga ditampilkan dari IN_ITEM: (QtyOnHand + QtyOnHold) x AverageCost.",
-      "Base item: LocCode PTRJ, Status aktif, StockAnalysisCode DEADS/MEMOV/SLMOV, ProdTypeCode bukan DC, dan ItemCode uppercase mulai M.",
+      "Base item: mode StockAnalysisCode memakai default DEADS/MEMOV/SLMOV; mode taxonomy seperti ProductTypeCode memakai LocCode aktif, ItemType 1+4, tanpa default StockAnalysis/DC/M-only filter.",
+      "Guardrail: default Report Center tetap ItemType 1+4. Untuk match JSON/PDF RPTIN1000015 dengan Include Workshop Item: No, kirim includeWorkshopItem=no atau itemType=gudang.",
+      "Analysis group bisa memakai IN_ITEM code: ProdTypeCode, ProdCatCode, ProdBrandCode, ProdModelCode, ProdMatCode, StockAnalysisCode, atau MovementCategory aktual.",
       "Goods receive amount memakai PU_GOODSRCVLN.StockQty x PU_POLN.Cost.",
     ],
     readOnly,
@@ -1070,6 +1082,73 @@ function reportOrder(report: InventoryReport) {
 export const liveInventoryReports = inventoryReports
   .filter((report) => report.status !== "hold")
   .sort((a, b) => reportOrder(a) - reportOrder(b));
+
+const defaultInventorySemanticDimensions: InventorySemanticDimensionId[] = [
+  "item-code",
+  "item-type",
+  "location",
+];
+
+function reportConfigText(report: InventoryReport) {
+  return [
+    report.id,
+    report.apiReport,
+    report.code,
+    report.group,
+    report.title,
+    report.description,
+    report.dataGrain,
+    report.tags.join(" "),
+    report.qualityNotes.join(" "),
+    report.availableFilters?.map((filter) => filter.field).join(" ") ?? "",
+    report.chartDefinitions.map((chart) => `${chart.dimension} ${chart.metric} ${chart.insightFocus}`).join(" "),
+  ].join(" ");
+}
+
+export function getInventoryReportSemanticDimensions(report: InventoryReport): InventorySemanticDimensionId[] {
+  if (report.semanticDimensions) return report.semanticDimensions;
+
+  const text = reportConfigText(report);
+  const dimensions = new Set<InventorySemanticDimensionId>(defaultInventorySemanticDimensions);
+
+  if (/product[_ -]?type|prodtype/i.test(text)) dimensions.add("product-type");
+  if (/category|kategori|prodcat/i.test(text)) dimensions.add("product-category");
+  if (/stock\s*analysis|stockanalysis|analysiscode|deads|memov|slmov/i.test(text)) dimensions.add("stock-analysis");
+  if (/movementcategory|fast moving|slow moving|dead stock|stale/i.test(text)) dimensions.add("movement-category");
+
+  return [...dimensions];
+}
+
+export function getInventoryReportCapabilities(report: InventoryReport): ReportCapabilityId[] {
+  if (report.capabilities) return report.capabilities;
+
+  const capabilities = new Set<ReportCapabilityId>(["detail-window", "export"]);
+  if (report.availableFilters?.length) capabilities.add("semantic-filters");
+  if (report.chartDefinitions.length) capabilities.add("breakdowns");
+  if (report.status === "live") {
+    capabilities.add("interactive-kpis");
+    capabilities.add("drill-down");
+    capabilities.add("natural-language-filter");
+    capabilities.add("ai-insight");
+  }
+
+  return [...capabilities];
+}
+
+export function getInventoryReportExperienceProfile(report: InventoryReport): ReportExperienceProfile {
+  return {
+    id: report.id,
+    title: report.title,
+    globalModule: "procurement",
+    moduleLabel: "Procurement",
+    submodule: "inventory",
+    submoduleLabel: "Inventory",
+    capabilities: getInventoryReportCapabilities(report),
+    primaryDimensions: getInventoryReportSemanticDimensions(report),
+    defaultGroupBy: report.defaultGroupBy ?? report.availableFilters?.find((filter) => filter.field === "groupBy")?.default,
+    defaultDetailWindowStrategy: "window",
+  };
+}
 
 export const inventoryReportsByGroup = Object.entries(inventoryGroups).map(([group, title]) => ({
   group,

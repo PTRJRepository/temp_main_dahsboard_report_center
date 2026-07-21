@@ -3,8 +3,10 @@ import {
   buildReportTableGroups,
   buildReportTableRows,
   buildReportSummaryTotals,
+  buildReportDetailWindowMetadata,
   compactReportPayloadForAi,
   formatInventoryQuantityBreakdown,
+  mergeReportFilterAction,
   normalizeReportTableWindow,
   selectSubtotalColumns,
   type DbRow,
@@ -83,6 +85,21 @@ const empty = normalizeReportTableWindow(undefined, 0, 100)
 assert.equal(empty.totalRows, 0)
 assert.equal(empty.pageCount, 1)
 
+const detailWindow = buildReportDetailWindowMetadata({
+  metadata: { totalRows: 200, filteredRows: 120, maxLoadedRows: 50, windowed: true },
+  returnedRows: 25,
+  pageSize: 25,
+  page: 2,
+  strategy: 'window',
+  reason: 'bounded-detail-window',
+})
+assert.equal(detailWindow.totalRows, 200)
+assert.equal(detailWindow.filteredRows, 120)
+assert.equal(detailWindow.returnedRows, 25)
+assert.equal(detailWindow.reachableRows, 50)
+assert.equal(detailWindow.partial, true)
+assert.equal(detailWindow.strategy, 'window')
+
 const movementRows: DbRow[] = [
   { id: 'dead-1', MovementCategory: 'Dead Stock', StockIssueMovementCount: 0, AmountItem: 500 },
   { id: 'dead-2', MovementCategory: 'Dead Stock', StockIssueMovementCount: 0, AmountItem: 400 },
@@ -139,7 +156,59 @@ assert.deepEqual(
   ),
   { Amount: 2600, QtyFuel: 190 },
 )
+// Scoped filter: preferRows must use filtered row sums, not global summary.
+assert.deepEqual(
+  buildReportSummaryTotals(
+    { TotalAssetAmount: 9999, total_quantity: 999 },
+    [
+      { AmountItem: 100, QtyOnHandHold: 4 },
+      { AmountItem: 50, QtyOnHandHold: 2 },
+    ],
+    ['AmountItem', 'QtyOnHandHold'],
+    { preferRows: true },
+  ),
+  { AmountItem: 150, QtyOnHandHold: 6 },
+)
 assert.equal(formatInventoryQuantityBreakdown({ QtyOnHandHold: 6, QtyOnHand: 4, QtyOnHold: 2 }), '6(4+2)')
 assert.equal(formatInventoryQuantityBreakdown({ total_quantity: 7, quantity_on_hand: 7, quantity_on_hold: 0 }), '7(7+0)')
+
+const scopedMovementFilter = mergeReportFilterAction(
+  { period: '2026-07', stale: 'semua', groupBy: 'MovementCategory' },
+  {
+    type: 'set-filter',
+    semanticDimensionId: 'movement-category',
+    field: 'MovementCategory',
+    value: 'Slow Moving',
+  },
+)
+assert.equal(scopedMovementFilter.period, '2026-07')
+assert.equal(scopedMovementFilter.stale, 'semua')
+assert.equal(scopedMovementFilter.groupBy, 'MovementCategory')
+assert.equal(scopedMovementFilter.movementCategory, 'Slow Moving')
+
+const scopedStockAnalysisFilter = mergeReportFilterAction(
+  {
+    period: '2026-07',
+    movementCategory: 'Slow Moving',
+    columnFilters: [{ field: 'Gudang', operator: 'equals', value: 'ARA' }],
+  },
+  {
+    type: 'set-filter',
+    semanticDimensionId: 'stock-analysis',
+    field: 'StockAnalysisCode',
+    value: 'DEADS',
+  },
+)
+assert.equal(scopedStockAnalysisFilter.movementCategory, 'Slow Moving')
+assert.deepEqual(scopedStockAnalysisFilter.columnFilters, [
+  { field: 'Gudang', operator: 'equals', value: 'ARA', valueTo: undefined },
+  { field: 'StockAnalysisCode', operator: 'equals', value: 'DEADS', valueTo: undefined },
+])
+assert.equal(scopedStockAnalysisFilter.stockAnalysis, undefined)
+
+const clearedFilter = mergeReportFilterAction(scopedStockAnalysisFilter, { type: 'clear-filter' })
+assert.equal(clearedFilter.period, undefined)
+assert.equal(clearedFilter.movementCategory, undefined)
+assert.equal(clearedFilter.columnFilters, undefined)
 
 console.log('report-detail-performance tests passed')

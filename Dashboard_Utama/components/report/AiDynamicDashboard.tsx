@@ -57,7 +57,8 @@ function formatValue(value: unknown, format?: AiFormat | 'currency' | 'number' |
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
     }).format(toNumber(value))
   }
   if (format === 'percentage') return `${toNumber(value).toLocaleString('id-ID', { maximumFractionDigits: 2 })}%`

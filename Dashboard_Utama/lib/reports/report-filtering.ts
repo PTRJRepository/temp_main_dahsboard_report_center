@@ -1,3 +1,5 @@
+import type { ReportFilterAction } from './report-experience'
+
 export type DbRow = Record<string, unknown>
 
 export type ReportColumnType = 'string' | 'number' | 'date' | 'boolean'
@@ -53,7 +55,22 @@ export type ReportFilterInput = {
   supplier?: string
   status?: string
   vehicle?: string
+  itemType?: string
+  includeWorkshopItem?: string
+  productType?: string
+  productCategory?: string
+  productBrand?: string
+  productModel?: string
+  productMaterial?: string
   movementCategory?: string
+  /** Movement Category issue-count window: all | 1m | 3m | 6m | 12m | custom */
+  movementWindow?: string
+  /** Dynamic Movement Category issue-count definition. Default: Fast >= 6, Moving 2-5, Slow = 1. */
+  movementFastMin?: number
+  movementMovingMin?: number
+  movementMovingMax?: number
+  movementSlowCount?: number
+  stockAnalysis?: string
   blankField?: string
   minQty?: number
   minAmount?: number
@@ -170,6 +187,12 @@ const fieldAliases: Record<string, string[]> = {
   supplier: ['SupplierCode', 'SupplierName', 'LastSupplierCode', 'LastSupplierName'],
   status: ['Status', 'StatusBarang', 'StatusSupplier', 'StatusKendaraan'],
   vehicle: ['Kendaraan', 'VehCode', 'VehicleCode', 'NamaKendaraan'],
+  productType: ['ProductTypeCode', 'ProductTypeDescription', 'ProdTypeCode', 'product_type_code', 'product_type_description'],
+  productCategory: ['ProductCategoryCode', 'ProductCategoryDescription', 'ProdCatCode', 'KodeKategori', 'Kategori', 'product_category_code'],
+  productBrand: ['ProductBrandCode', 'ProdBrandCode', 'product_brand_code'],
+  productModel: ['ProductModelCode', 'ProdModelCode', 'product_model_code'],
+  productMaterial: ['ProductMaterialCode', 'ProdMatCode', 'product_material_code'],
+  stockAnalysis: ['StockAnalysisCode', 'StockAnalysisDescription', 'AnalysisCode', 'stock_analysis_code'],
   amount: ['Amount', 'amount', 'total_amount', 'unit_cost', 'AmountCurrent', 'TotalAmount', 'NilaiFuel', 'NilaiStok', 'NilaiPersediaan', 'NilaiKeluar', 'NilaiMasuk', 'NilaiTransfer', 'NilaiReturn', 'NilaiPR', 'POAmount', 'WorkshopAmount', 'UsageAmount', 'StockIssueAmountAllPeriod', 'MovementAmountAll', 'OutstandingInvoice', 'LastPOAmount', 'Cost', 'UnitCost', 'AverageCost', 'HargaSatuan'],
   qty: ['Qty', 'qty', 'Quantity', 'quantity_on_hand', 'quantity_on_hold', 'total_quantity', 'ItemCurrent', 'QuantityClosing', 'MovementGapQty', 'StockIssueQtyAllPeriod', 'MovementQtyAll', 'MovementEventCountAll', 'QtyFuel', 'TotalQtyFuel', 'QtyTransfer', 'QtyReturn', 'QtyOutstanding', 'TotalQty', 'TotalStok', 'StokAkhir', 'TotalUsageUnit', 'UsageUnit', 'WorkshopQty', 'QtyOrder', 'QtyReceive'],
   date: dateFields,
@@ -321,6 +344,12 @@ function cleanText(value: unknown, max = 80) {
   return text || undefined
 }
 
+function includeWorkshopItemToItemType(value: unknown) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (['no', 'n', 'false', '0', 'tidak', 'exclude', 'without', 'tanpa'].includes(normalized)) return 'gudang'
+  return undefined
+}
+
 function cleanNumber(value: unknown) {
   if (value === null || value === undefined || value === '') return undefined
   const numeric = typeof value === 'number' ? value : Number(String(value).replace(',', '.'))
@@ -417,6 +446,8 @@ function cleanPositiveInt(value: unknown, min: number, max: number) {
 
 export function normalizeReportFilters(input: Partial<Record<keyof ReportFilterInput, unknown>>): ReportFilterInput {
   const top = cleanNumber(input.top)
+  const includeWorkshopItem = cleanText(input.includeWorkshopItem, 16)
+  const itemType = cleanText(input.itemType) ?? includeWorkshopItemToItemType(includeWorkshopItem)
   return {
     search: cleanText(input.search),
     period: cleanText(input.period, 16),
@@ -424,14 +455,27 @@ export function normalizeReportFilters(input: Partial<Record<keyof ReportFilterI
     accMonth: cleanPositiveInt(input.accMonth, 1, 12),
     actualYear: cleanPositiveInt(input.actualYear, 1, 9999),
     actualMonth: cleanPositiveInt(input.actualMonth, 1, 12),
-    dateFrom: cleanText(input.dateFrom, 16),
-    dateTo: cleanText(input.dateTo, 16),
+    dateFrom: cleanText(input.dateFrom, 32),
+    dateTo: cleanText(input.dateTo, 32),
     location: cleanText(input.location),
     category: cleanText(input.category),
     supplier: cleanText(input.supplier),
     status: cleanText(input.status),
     vehicle: cleanText(input.vehicle),
+    itemType,
+    includeWorkshopItem,
+    productType: cleanText(input.productType, 80),
+    productCategory: cleanText(input.productCategory, 80),
+    productBrand: cleanText(input.productBrand, 80),
+    productModel: cleanText(input.productModel, 80),
+    productMaterial: cleanText(input.productMaterial, 80),
     movementCategory: cleanText(input.movementCategory, 80),
+    movementWindow: cleanText(input.movementWindow, 16),
+    movementFastMin: cleanPositiveInt(input.movementFastMin, 1, 999),
+    movementMovingMin: cleanPositiveInt(input.movementMovingMin, 1, 999),
+    movementMovingMax: cleanPositiveInt(input.movementMovingMax, 1, 999),
+    movementSlowCount: cleanPositiveInt(input.movementSlowCount, 1, 999),
+    stockAnalysis: cleanText(input.stockAnalysis, 80),
     blankField: cleanText(input.blankField),
     minQty: cleanNumber(input.minQty),
     minAmount: cleanNumber(input.minAmount),
@@ -453,6 +497,49 @@ export function normalizeReportFilters(input: Partial<Record<keyof ReportFilterI
   }
 }
 
+const inventoryAnalysisGroupScopeKeys = {
+  StockAnalysisCode: ['stockAnalysis', 'category'],
+  ProductTypeCode: ['productType'],
+  ProductCategoryCode: ['productCategory'],
+  ProductBrandCode: ['productBrand'],
+  ProductModelCode: ['productModel'],
+  ProductMaterialCode: ['productMaterial'],
+  MovementCategory: ['movementCategory'],
+} as const
+
+type InventoryAnalysisGroupKey = keyof typeof inventoryAnalysisGroupScopeKeys
+
+function normalizeInventoryAnalysisGroup(value?: string) {
+  const normalized = String(value ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase()
+  const match = (Object.keys(inventoryAnalysisGroupScopeKeys) as InventoryAnalysisGroupKey[])
+    .find((key) => key.replace(/[^a-z0-9]/gi, '').toLowerCase() === normalized)
+  return match
+}
+
+export function normalizeInventoryAnalysisGroupFilters(filters: ReportFilterInput): ReportFilterInput {
+  const analysisGroup = normalizeInventoryAnalysisGroup(filters.groupBy ?? filters.chartDimension)
+  if (!analysisGroup) return filters
+
+  const next: ReportFilterInput = {
+    ...filters,
+    groupBy: analysisGroup,
+    chartDimension: analysisGroup,
+  }
+
+  if (analysisGroup !== 'StockAnalysisCode') {
+    delete next.stockAnalysis
+    delete next.category
+  }
+  if (analysisGroup !== 'ProductTypeCode') delete next.productType
+  if (analysisGroup !== 'ProductCategoryCode') delete next.productCategory
+  if (analysisGroup !== 'ProductBrandCode') delete next.productBrand
+  if (analysisGroup !== 'ProductModelCode') delete next.productModel
+  if (analysisGroup !== 'ProductMaterialCode') delete next.productMaterial
+  if (analysisGroup !== 'MovementCategory') delete next.movementCategory
+
+  return normalizeReportFilters(next)
+}
+
 export function filtersFromSearchParams(params: { get(name: string): string | null }): ReportFilterInput {
   return normalizeReportFilters({
     search: params.get('search') ?? undefined,
@@ -468,15 +555,28 @@ export function filtersFromSearchParams(params: { get(name: string): string | nu
     supplier: params.get('supplier') ?? undefined,
     status: params.get('status') ?? undefined,
     vehicle: params.get('vehicle') ?? undefined,
+    itemType: params.get('itemType') ?? undefined,
+    includeWorkshopItem: params.get('includeWorkshopItem') ?? params.get('include_workshop_item') ?? undefined,
+    productType: params.get('productType') ?? params.get('productTypeCode') ?? params.get('prodTypeCode') ?? params.get('ProdTypeCode') ?? undefined,
+    productCategory: params.get('productCategory') ?? params.get('productCategoryCode') ?? params.get('prodCatCode') ?? params.get('ProdCatCode') ?? undefined,
+    productBrand: params.get('productBrand') ?? params.get('productBrandCode') ?? params.get('prodBrandCode') ?? params.get('ProdBrandCode') ?? undefined,
+    productModel: params.get('productModel') ?? params.get('productModelCode') ?? params.get('prodModelCode') ?? params.get('ProdModelCode') ?? undefined,
+    productMaterial: params.get('productMaterial') ?? params.get('productMaterialCode') ?? params.get('prodMatCode') ?? params.get('ProdMatCode') ?? undefined,
     movementCategory: params.get('movementCategory') ?? undefined,
+    movementWindow: params.get('movementWindow') ?? undefined,
+    movementFastMin: params.get('movementFastMin') ?? undefined,
+    movementMovingMin: params.get('movementMovingMin') ?? undefined,
+    movementMovingMax: params.get('movementMovingMax') ?? undefined,
+    movementSlowCount: params.get('movementSlowCount') ?? undefined,
+    stockAnalysis: params.get('stockAnalysis') ?? undefined,
     blankField: params.get('blankField') ?? undefined,
     minQty: params.get('minQty') ?? undefined,
     minAmount: params.get('minAmount') ?? undefined,
     sortMetric: params.get('sortMetric') ?? undefined,
     sortColumn: params.get('sortColumn') ?? undefined,
     sortDirection: params.get('sortDirection') ?? undefined,
-    chartDimension: params.get('chartDimension') ?? undefined,
-    groupBy: params.get('groupBy') ?? undefined,
+    chartDimension: params.get('chartDimension') ?? params.get('analysisDimension') ?? undefined,
+    groupBy: params.get('groupBy') ?? params.get('analysisGroup') ?? params.get('analysis_group') ?? undefined,
     aggregateField: params.get('aggregateField') ?? undefined,
     aggregateFn: params.get('aggregateFn') ?? undefined,
     top: params.get('top') ?? undefined,
@@ -504,8 +604,153 @@ export function activeFiltersToRecord(filters: ReportFilterInput) {
   return active
 }
 
+function summaryAffectingFiltersToRecord(filters: ReportFilterInput) {
+  const active: Record<string, string | number | ReportColumnFilter[]> = {}
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key === 'naturalQuery') return
+    if (key === 'stale') return
+    if (
+      key === 'sortMetric' ||
+      key === 'sortColumn' ||
+      key === 'sortDirection' ||
+      key === 'chartDimension' ||
+      key === 'groupBy' ||
+      key === 'aggregateField' ||
+      key === 'aggregateFn' ||
+      key === 'top' ||
+      key === 'resultLimit' ||
+      key === 'rowStart' ||
+      key === 'rowEnd' ||
+      key === 'analysis'
+    ) return
+
+    if (Array.isArray(value)) {
+      if (value.length > 0) active[key] = value as ReportColumnFilter[]
+    } else if (value !== undefined && value !== null && value !== '') {
+      active[key] = value as string | number
+    }
+  })
+  return active
+}
+
 export function hasActiveReportFilters(filters: ReportFilterInput) {
   return Object.keys(activeFiltersToRecord(filters)).length > 0
+}
+
+function filterActionValue(value: ReportFilterAction['value']): string | number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value === 'boolean') return String(value)
+  return value
+}
+
+function filterActionColumnFilter(action: ReportFilterAction): ReportColumnFilter | undefined {
+  if (!action.field) return undefined
+  return {
+    field: action.field,
+    operator: action.operator ?? 'equals',
+    value: filterActionValue(action.value),
+    valueTo: filterActionValue(action.valueTo),
+  }
+}
+
+export function filtersFromReportFilterAction(action: ReportFilterAction): ReportFilterInput {
+  if (action.type === 'clear-filter') return normalizeReportFilters({})
+
+  const value = filterActionValue(action.value)
+  const valueText = value === undefined ? undefined : String(value)
+
+  if (action.type === 'set-group') {
+    return normalizeReportFilters({
+      groupBy: action.field ?? valueText,
+    })
+  }
+
+  if (action.type === 'open-detail') {
+    return normalizeReportFilters({
+      resultLimit: typeof value === 'number' ? value : undefined,
+    })
+  }
+
+  const columnFilter = filterActionColumnFilter(action)
+
+  // GUARDRAIL(report-analysis-group-action):
+  // Semantic breakdown clicks must carry the matching groupBy/chartDimension
+  // so KPI cards, table group totals, export, and AI evidence stay aligned.
+  if (action.semanticDimensionId === 'movement-category') {
+    return normalizeReportFilters({
+      movementCategory: valueText,
+      groupBy: 'MovementCategory',
+      chartDimension: 'MovementCategory',
+    })
+  }
+
+  if (action.semanticDimensionId === 'stock-analysis') {
+    return normalizeReportFilters({
+      stockAnalysis: columnFilter ? undefined : valueText,
+      columnFilters: columnFilter ? [columnFilter] : undefined,
+      groupBy: 'StockAnalysisCode',
+      chartDimension: 'StockAnalysisCode',
+    })
+  }
+
+  if (action.semanticDimensionId === 'location') {
+    return normalizeReportFilters({
+      location: valueText,
+      groupBy: 'Location',
+      chartDimension: 'Location',
+    })
+  }
+
+  if (action.semanticDimensionId === 'product-type') {
+    return normalizeReportFilters({
+      productType: columnFilter ? undefined : valueText,
+      columnFilters: columnFilter ? [columnFilter] : undefined,
+      groupBy: 'ProductTypeCode',
+      chartDimension: 'ProductTypeCode',
+    })
+  }
+
+  if (action.semanticDimensionId === 'product-category') {
+    return normalizeReportFilters({
+      productCategory: columnFilter ? undefined : valueText,
+      columnFilters: columnFilter ? [columnFilter] : undefined,
+      groupBy: 'ProductCategoryCode',
+      chartDimension: 'ProductCategoryCode',
+    })
+  }
+
+  if (action.semanticDimensionId === 'product-brand') {
+    return normalizeReportFilters({
+      productBrand: columnFilter ? undefined : valueText,
+      columnFilters: columnFilter ? [columnFilter] : undefined,
+      groupBy: 'ProductBrandCode',
+      chartDimension: 'ProductBrandCode',
+    })
+  }
+
+  if (action.semanticDimensionId === 'product-model') {
+    return normalizeReportFilters({
+      productModel: columnFilter ? undefined : valueText,
+      columnFilters: columnFilter ? [columnFilter] : undefined,
+      groupBy: 'ProductModelCode',
+      chartDimension: 'ProductModelCode',
+    })
+  }
+
+  if (action.semanticDimensionId === 'product-material') {
+    return normalizeReportFilters({
+      productMaterial: columnFilter ? undefined : valueText,
+      columnFilters: columnFilter ? [columnFilter] : undefined,
+      groupBy: 'ProductMaterialCode',
+      chartDimension: 'ProductMaterialCode',
+    })
+  }
+
+  if (columnFilter) {
+    return normalizeReportFilters({ columnFilters: [columnFilter] })
+  }
+
+  return normalizeReportFilters({ search: valueText })
 }
 
 function isDateLikeKey(key: string) {
@@ -774,7 +1019,13 @@ function rowPassesFilters(row: DbRow, filters: ReportFilterInput) {
   if (!rowContains(row, fieldAliases.supplier, filters.supplier)) return false
   if (!rowContains(row, fieldAliases.status, filters.status)) return false
   if (!rowContains(row, fieldAliases.vehicle, filters.vehicle)) return false
+  if (!rowContains(row, fieldAliases.productType, filters.productType)) return false
+  if (!rowContains(row, fieldAliases.productCategory, filters.productCategory)) return false
+  if (!rowContains(row, fieldAliases.productBrand, filters.productBrand)) return false
+  if (!rowContains(row, fieldAliases.productModel, filters.productModel)) return false
+  if (!rowContains(row, fieldAliases.productMaterial, filters.productMaterial)) return false
   if (filters.movementCategory && normalizeText(row.MovementCategory) !== normalizeText(filters.movementCategory)) return false
+  if (!rowContains(row, fieldAliases.stockAnalysis, filters.stockAnalysis)) return false
   if (!passesDateFilters(row, filters)) return false
   if (filters.blankField && !fieldIsBlank(row, filters.blankField)) return false
   if (!passesColumnFilters(row, filters.columnFilters)) return false
@@ -808,6 +1059,8 @@ function windowRows(rows: DbRow[], filters: ReportFilterInput) {
 
 function dimensionAliases(filters: ReportFilterInput) {
   const dimension = normalizeText(filters.chartDimension)
+  if (dimension.includes('movement')) return ['MovementCategory']
+  if (dimension.includes('stockanalysis') || dimension.includes('analysis')) return fieldAliases.stockAnalysis
   if (dimension.includes('kendaraan') || dimension.includes('veh')) return fieldAliases.vehicle
   if (dimension.includes('gudang') || dimension.includes('lokasi') || dimension.includes('loc')) return fieldAliases.location
   if (dimension.includes('supplier')) return fieldAliases.supplier
@@ -916,6 +1169,7 @@ export function applyReportFilters<T extends FilterablePayload>(payload: T, inpu
   const sanitized = sanitizeFiltersForSchema(normalizeReportFilters(input), schema)
   const filters = sanitized.filters
   const activeFilters = activeFiltersToRecord(filters)
+  const summaryFilters = summaryAffectingFiltersToRecord(filters)
 
   if (Object.keys(activeFilters).length === 0) {
     return {
@@ -934,12 +1188,19 @@ export function applyReportFilters<T extends FilterablePayload>(payload: T, inpu
   const matchedRows = sortRows(payload.rows.filter((row) => rowPassesFilters(row, filters)), filters)
   const displayRows = windowRows(matchedRows, filters)
   const windowed = displayRows.length < matchedRows.length
+  const shouldRecomputeSummary = Object.keys(summaryFilters).length > 0
+  const metadataFilteredRows = shouldRecomputeSummary
+    ? matchedRows.length
+    : payload.metadata.filteredRows ?? payload.metadata.totalRows ?? matchedRows.length
+  const metadataTotalRowsBeforeFilter = shouldRecomputeSummary
+    ? payload.rows.length
+    : payload.metadata.totalRowsBeforeFilter ?? payload.metadata.totalRows ?? payload.rows.length
 
   return {
     ...payload,
     rows: displayRows,
     columns: displayRows[0] ? Object.keys(displayRows[0]) : payload.columns,
-    summary: createFilteredSummary(matchedRows, payload.rows.length, filters),
+    summary: shouldRecomputeSummary ? createFilteredSummary(matchedRows, payload.rows.length, filters) : payload.summary,
     chart: createFilteredChart(matchedRows, filters, payload.chart),
     metadata: {
       ...payload.metadata,
@@ -947,12 +1208,12 @@ export function applyReportFilters<T extends FilterablePayload>(payload: T, inpu
       appliedFilters: activeFilters,
       rejectedColumnFilters: sanitized.rejectedColumnFilters,
       naturalQuery: filters.naturalQuery,
-      filteredRows: matchedRows.length,
+      filteredRows: metadataFilteredRows,
       displayRows: displayRows.length,
       returnedRows: displayRows.length,
       rangeLimitedRows: windowed ? displayRows.length : undefined,
       matchedRowsBeforeRange: matchedRows.length,
-      totalRowsBeforeFilter: payload.rows.length,
+      totalRowsBeforeFilter: metadataTotalRowsBeforeFilter,
       chartSource: 'filtered report payload full matched rows',
       querySafety: readOnlyQuerySafety,
       filterMode: 'allowlisted read-only payload filter',
@@ -1352,6 +1613,7 @@ export function parseNaturalFilterLocally(query: string, now = new Date(), colum
   const dayRange = dayRangeFromText(text, now)
   const location = termAfter(text, /\b(?:gudang|lokasi|warehouse|site)\s+([a-z0-9_-]+)/i)
   const vehicle = termAfter(text, /\b(?:kendaraan|vehicle|vehcode)\s+([a-z0-9_-]+)/i)
+  const stockAnalysis = termAfter(text, /\bstock\s*analysis\s+([a-z0-9_-]+)/i)
   const minQty = numberFrom(text, /\b(?:qty|quantity|stok|pemakaian)\s*(?:di atas|lebih dari|>=|>)\s*(\d+(?:[.,]\d+)?)/i)
   const minAmount = numberFrom(text, /\b(?:amount|nilai|biaya|cost)\s*(?:di atas|lebih dari|>=|>)\s*(\d+(?:[.,]\d+)?)/i)
   const category = /diesel/i.test(text) ? 'diesel' : /solar/i.test(text) ? 'solar' : undefined
@@ -1403,6 +1665,7 @@ export function parseNaturalFilterLocally(query: string, now = new Date(), colum
       ...dayRange,
       location,
       vehicle,
+      stockAnalysis,
       category,
       search: category,
       blankField: blankField ?? dynamicBlankField,

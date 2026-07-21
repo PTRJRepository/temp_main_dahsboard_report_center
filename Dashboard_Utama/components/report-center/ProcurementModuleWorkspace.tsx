@@ -1,14 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
   ClipboardList,
   FileText,
-  GitBranch,
   Layers3,
   Package,
   ShieldCheck,
@@ -16,11 +15,13 @@ import {
   Wrench,
 } from 'lucide-react'
 import {
+  createProcurementGroupHref,
   createProcurementReportHref,
   getProcurementWorkspace,
   type ProcurementStockGroup,
   type ReportSource,
 } from '@/lib/reports/procurement-workspace'
+import InventoryReportsClient from '@/app/(report-center)/report-center/inventory/InventoryReportsClient'
 import InventoryOverview from './InventoryOverview'
 import ProcurementKpiStrip, {
   createDefaultProcurementKpiFilters,
@@ -196,70 +197,47 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
         />
 
         <section className="rc-panel overflow-hidden rounded-[28px] border border-[var(--rc-forest-border)]">
-          <div className="grid gap-0 lg:grid-cols-[380px_minmax(0,1fr)]">
-            <aside className="border-b border-[var(--rc-border)] bg-[rgba(5,17,10,.74)] p-4 lg:border-b-0 lg:border-r">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--rc-forest-accent)]">Pilih grup kerja</p>
-              <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-[var(--rc-text)]">Inventory, Gudang, Workshop, atau Process</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--rc-text-muted)]">
-                Default Inventory membaca Gudang + Workshop. Gunakan Gudang atau Workshop hanya kalau ingin isolasi scope.
-              </p>
-
-              <div className="mt-5 space-y-3">
-                {workspace.groups.map((group) => {
-                  const Icon = groupIcon[group.id]
+          <div className="border-b border-[var(--rc-border)] bg-[rgba(5,17,10,.74)] p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--rc-forest-accent)]">Area kerja</p>
+                <h2 className="mt-1 text-xl font-black tracking-[-0.04em] text-[var(--rc-text)]">
+                  {activeGroup.id === 'process' ? 'Ordering' : activeGroup.id === 'gudang' ? 'Inventory · Gudang' : activeGroup.id === 'workshop' ? 'Inventory · Workshop' : 'Inventory · Semua'}
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-1.5 rounded-2xl border border-white/10 bg-black/20 p-1.5">
+                {([
+                  { id: 'inventory' as const, label: 'Semua', hint: 'ItemType 1+4' },
+                  { id: 'gudang' as const, label: 'Gudang', hint: 'ItemType 1' },
+                  { id: 'workshop' as const, label: 'Workshop', hint: 'ItemType 4' },
+                  { id: 'process' as const, label: 'Ordering', hint: 'PR / PO / GR' },
+                ]).map((tab) => {
+                  const Icon = groupIcon[tab.id]
+                  const active = activeGroup.id === tab.id
                   return (
                     <Link
-                      key={group.id}
-                      href={group.href}
-                      className={`group block rounded-3xl border p-4 transition hover:-translate-y-0.5 ${
-                        group.active
-                          ? 'border-[var(--rc-forest-border-strong)] bg-[rgba(24,185,107,.14)]'
-                          : 'border-white/10 bg-white/[0.04] hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.07]'
-                      }`}
+                      key={tab.id}
+                      href={createProcurementGroupHref(tab.id, source)}
+                      title={tab.hint}
+                      className={[
+                        'inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-black transition',
+                        active
+                          ? 'bg-[var(--rc-forest-primary)] text-[#03130c]'
+                          : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
+                      ].join(' ')}
                     >
-                      <div className="flex items-start gap-3">
-                        <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl border ${
-                          group.active
-                            ? 'border-[var(--rc-forest-border-strong)] bg-[var(--rc-forest-primary)] text-[#03130c]'
-                            : 'border-white/10 bg-black/20 text-[var(--rc-forest-accent)]'
-                        }`}>
-                          <Icon size={21} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-[11px] font-black uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">{group.eyebrow}</span>
-                          <strong className="mt-1 block text-base font-black text-[var(--rc-text)]">{group.label}</strong>
-                          <span className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--rc-text-muted)]">{group.description}</span>
-                        </span>
-                        <span className="ml-auto rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black text-[var(--rc-text-muted)]">
-                          {group.count}
-                        </span>
-                      </div>
+                      <Icon size={15} />
+                      {tab.label}
                     </Link>
                   )
                 })}
               </div>
-            </aside>
+            </div>
+          </div>
 
-            <div className="p-4 sm:p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[var(--rc-forest-accent)]">
-                    <GitBranch size={14} />
-                    {activeGroup.label}
-                  </div>
-                  <h2 className="mt-3 text-3xl font-black tracking-[-0.05em] text-[var(--rc-text)]">{activeGroup.title}</h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--rc-text-muted)]">{activeGroup.description}</p>
-                </div>
-                <Link
-                  href={`/report-center/inventory?source=${source}`}
-                  className="inline-flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
-                >
-                  Semua inventory
-                  <ArrowRight size={15} />
-                </Link>
-              </div>
-
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="p-4 sm:p-5">
+              {activeGroup.id === 'process' ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {activeGroup.reports.map((report) => (
                   <Link
                     key={`${activeGroup.id}-${report.id}-${report.metricLabel}`}
@@ -300,7 +278,15 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
                   </Link>
                 ))}
               </div>
-            </div>
+              ) : (
+              <Suspense fallback={<div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-[var(--rc-text-muted)]">Memuat inventory catalog…</div>}>
+                <InventoryReportsClient
+                  embedded
+                  fixedSource={source}
+                  itemType={activeGroup.id === 'gudang' ? 'gudang' : activeGroup.id === 'workshop' ? 'workshop' : undefined}
+                />
+              </Suspense>
+              )}
           </div>
         </section>
 

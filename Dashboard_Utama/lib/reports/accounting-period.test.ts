@@ -3,6 +3,7 @@ import {
   accountingActualPeriodSelectSql,
   accountingMonthToActualMonth,
   accountingToActualPeriod,
+  actualPeriodBounds,
   actualToAccountingPeriod,
 } from './accounting-period'
 
@@ -44,6 +45,16 @@ assert.deepEqual(actualToAccountingPeriod('2027', '03'), {
   accYear: 2027,
   accMonth: 12,
   accountingPeriod: '2027-12',
+})
+
+assert.deepEqual(actualPeriodBounds(2026, 7), {
+  startInclusive: '2026-07-01',
+  endExclusive: '2026-08-01',
+})
+
+assert.deepEqual(actualPeriodBounds(2026, 12), {
+  startInclusive: '2026-12-01',
+  endExclusive: '2027-01-01',
 })
 
 const selectSql = accountingActualPeriodSelectSql({

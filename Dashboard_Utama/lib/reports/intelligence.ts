@@ -6,12 +6,13 @@ import {
   Wallet,
 } from 'lucide-react'
 import { liveInventoryReports } from '@/lib/reports/inventory/config'
+import {
+  REPORT_GLOBAL_MODULES,
+  getReportModuleConfig,
+  type ReportGlobalModuleId,
+} from './module-registry'
 
-export type IntelligenceModuleId =
-  | 'procurement'
-  | 'financial'
-  | 'human-resources'
-  | 'budget'
+export type IntelligenceModuleId = ReportGlobalModuleId
 
 export type VisualPoint = {
   label: string
@@ -46,15 +47,23 @@ export type IntelligenceModule = {
   insight: InsightContent
 }
 
+const moduleConfig = (id: IntelligenceModuleId) => {
+  const config = getReportModuleConfig(id)
+  if (!config) throw new Error(`Report module config not found: ${id}`)
+  return config
+}
+
+const totalRegistryReports = REPORT_GLOBAL_MODULES.reduce((total, module) => total + module.reportCount, 0)
+
 export const intelligenceModules: IntelligenceModule[] = [
   {
     id: 'procurement',
-    route: '/report-center/procurement',
-    name: 'Procurement',
-    reportCount: liveInventoryReports.length,
+    route: moduleConfig('procurement').route,
+    name: moduleConfig('procurement').name,
+    reportCount: moduleConfig('procurement').reportCount,
     icon: Package,
-    accent: '#167A3A',
-    description: 'Inventory live dalam satu workspace Procurement.',
+    accent: moduleConfig('procurement').color,
+    description: moduleConfig('procurement').description,
     primaryChart: 'procurement_inventory_monitor',
     available: true,
     kpis: [
@@ -90,13 +99,57 @@ export const intelligenceModules: IntelligenceModule[] = [
     },
   },
   {
-    id: 'financial',
-    route: '/report-center/financial',
-    name: 'Financial',
-    reportCount: 16,
+    id: 'payroll',
+    route: moduleConfig('payroll').route,
+    name: moduleConfig('payroll').name,
+    reportCount: moduleConfig('payroll').reportCount,
     icon: Wallet,
-    accent: '#2563EB',
-    description: 'Produktivitas dan efisiensi biaya ditempatkan di modul Financial.',
+    accent: moduleConfig('payroll').color,
+    description: moduleConfig('payroll').description,
+    primaryChart: 'payroll_wage_monitor',
+    available: false,
+    kpis: [
+      { label: 'Sub-modul', value: String(moduleConfig('payroll').submodules.length), tone: 'green' },
+      { label: 'Report', value: String(moduleConfig('payroll').reportCount), tone: 'blue' },
+      { label: 'RBAC', value: 'Payroll', tone: 'gold' },
+      { label: 'Query', value: 'Preview', tone: 'slate' },
+    ],
+    trend: [
+      { label: 'Payroll Run', value: 8 },
+      { label: 'Wage Register', value: 10 },
+      { label: 'Audit', value: 6 },
+    ],
+    breakdown: moduleConfig('payroll').submodules.map((submodule) => ({
+      label: submodule.name,
+      value: submodule.reportCount,
+    })),
+    composition: [
+      { label: 'Payroll', value: 34 },
+      { label: 'Wages', value: 42 },
+      { label: 'Audit', value: 24 },
+    ],
+    ranking: [
+      { label: 'Payroll Run Summary', value: 'Preview', note: 'Gate permission Payroll' },
+      { label: 'Wage Register', value: 'Preview', note: 'Daftar upah dan comparison' },
+      { label: 'Payroll Audit', value: 'Preview', note: 'Exception dan validasi' },
+    ],
+    alerts: [{ title: 'Payroll terpisah', detail: 'Payroll menjadi modul global sendiri dan tidak lagi dihitung sebagai sub-modul HR.', tone: 'gold' }],
+    insight: {
+      summary: 'Payroll disiapkan sebagai modul global terpisah dengan permission payroll.',
+      trendDetection: 'Katalog payroll dipisahkan dari HR agar route dan RBAC tidak drift.',
+      anomalyDetection: 'Query real Payroll belum diaktifkan.',
+      recommendation: 'Gunakan modul Payroll untuk wage register dan payroll run saat query siap.',
+      dataQualityNote: 'Akses mengikuti permission payroll yang sudah ada.',
+    },
+  },
+  {
+    id: 'financial',
+    route: moduleConfig('financial').route,
+    name: moduleConfig('financial').name,
+    reportCount: moduleConfig('financial').reportCount,
+    icon: Wallet,
+    accent: moduleConfig('financial').color,
+    description: moduleConfig('financial').description,
     primaryChart: 'financial_productivity_monitor',
     available: false,
     kpis: [
@@ -138,39 +191,35 @@ export const intelligenceModules: IntelligenceModule[] = [
   },
   {
     id: 'human-resources',
-    route: '/report-center/human-resources',
-    name: 'Human Resources',
-    reportCount: 94,
+    route: moduleConfig('human-resources').route,
+    name: moduleConfig('human-resources').name,
+    reportCount: moduleConfig('human-resources').reportCount,
     icon: Users,
-    accent: '#DB2777',
-    description: 'Payroll, daftar upah, absensi, premi, lembur, summary, wages, dan dampak report.',
+    accent: moduleConfig('human-resources').color,
+    description: moduleConfig('human-resources').description,
     primaryChart: 'hr_wages_monitor',
     available: false,
     kpis: [
-      { label: 'Sub-modul', value: '8', tone: 'green' },
-      { label: 'Report', value: '94', tone: 'blue' },
-      { label: 'Payroll', value: '24', tone: 'gold' },
+      { label: 'Sub-modul', value: String(moduleConfig('human-resources').submodules.length), tone: 'green' },
+      { label: 'Report', value: String(moduleConfig('human-resources').reportCount), tone: 'blue' },
+      { label: 'Payroll', value: 'Terpisah', tone: 'gold' },
       { label: 'Query', value: 'Preview', tone: 'slate' },
     ],
     trend: [
-      { label: 'Payroll', value: 24 },
-      { label: 'Upah', value: 15 },
       { label: 'Absensi', value: 18 },
       { label: 'Premi', value: 12 },
-      { label: 'Analisis', value: 20 },
+      { label: 'Lembur', value: 10 },
+      { label: 'Analisis', value: 30 },
     ],
     breakdown: [
-      { label: 'Payroll', value: 24 },
-      { label: 'Daftar Upah', value: 15 },
       { label: 'Absensi', value: 18 },
       { label: 'Premi/Lembur', value: 17 },
-      { label: 'Summary/Wages/Dampak', value: 20 },
+      { label: 'Summary/Wages/Dampak', value: 35 },
     ],
     composition: [
-      { label: 'Payroll & Upah', value: 42 },
-      { label: 'Absensi', value: 19 },
-      { label: 'Premi/Lembur', value: 18 },
-      { label: 'Analisis', value: 21 },
+      { label: 'Absensi', value: 26 },
+      { label: 'Premi/Lembur', value: 24 },
+      { label: 'Analisis', value: 50 },
     ],
     ranking: [
       { label: 'Summary Report', value: 'HR', note: 'Sudah masuk Human Resources' },
@@ -179,21 +228,21 @@ export const intelligenceModules: IntelligenceModule[] = [
     ],
     alerts: [{ title: 'HR digabung', detail: 'Premi, lembur, summary, wages, dan dampak report sudah berada di HR.', tone: 'green' }],
     insight: {
-      summary: 'Human Resources menjadi modul utama untuk seluruh report karyawan dan upah.',
-      trendDetection: 'Report analisis wages dan dampak kini tidak berdiri sendiri.',
+      summary: 'Human Resources menjadi modul utama untuk workforce non-payroll.',
+      trendDetection: 'Absensi, premi, lembur, dan dampak report berada di HR; Payroll punya modul sendiri.',
       anomalyDetection: 'Query real HR belum diaktifkan.',
-      recommendation: 'Gunakan sub-modul untuk memilih Payroll, Daftar Upah, Premi, Lembur, atau analisis.',
-      dataQualityNote: 'Katalog HR siap disambungkan ke query payroll/absensi.',
+      recommendation: 'Gunakan sub-modul untuk memilih Absensi, Premi, Lembur, atau analisis workforce.',
+      dataQualityNote: 'Katalog HR siap disambungkan ke query absensi dan workforce.',
     },
   },
   {
     id: 'budget',
-    route: '/report-center/budget',
-    name: 'Budget',
-    reportCount: 12,
+    route: moduleConfig('budget').route,
+    name: moduleConfig('budget').name,
+    reportCount: moduleConfig('budget').reportCount,
     icon: BarChart3,
-    accent: '#D99A00',
-    description: 'Budget planning, budget realization, dan variance analysis.',
+    accent: moduleConfig('budget').color,
+    description: moduleConfig('budget').description,
     primaryChart: 'budget_variance_monitor',
     available: false,
     kpis: [
@@ -239,13 +288,14 @@ export const getIntelligenceModule = (id: string) =>
 
 export const overviewIntelligence = {
   kpis: [
-    { label: 'Modul utama', value: '4', tone: 'green' as const },
-    { label: 'Katalog report', value: '157', tone: 'blue' as const },
+    { label: 'Modul utama', value: String(REPORT_GLOBAL_MODULES.length), tone: 'green' as const },
+    { label: 'Katalog report', value: String(totalRegistryReports), tone: 'blue' as const },
     { label: 'Live inventory', value: `${liveInventoryReports.length} report`, tone: 'gold' as const },
     { label: 'Health score', value: '96%', tone: 'green' as const },
   ],
   trend: [
     { label: 'Procurement', value: 88 },
+    { label: 'Payroll', value: 70 },
     { label: 'Financial', value: 78 },
     { label: 'HR', value: 82 },
     { label: 'Budget', value: 64 },
@@ -256,20 +306,20 @@ export const overviewIntelligence = {
   })),
   composition: [
     { label: 'Live', value: 27 },
-    { label: 'Preview ready', value: 130 },
-    { label: 'Main modules', value: 4 },
+    { label: 'Preview ready', value: Math.max(0, totalRegistryReports - liveInventoryReports.length) },
+    { label: 'Main modules', value: REPORT_GLOBAL_MODULES.length },
   ],
   ranking: [
-    { label: 'Human Resources', value: '94 report', note: 'Katalog terbesar' },
+    { label: 'Human Resources', value: `${moduleConfig('human-resources').reportCount} report`, note: 'Workforce non-payroll' },
+    { label: 'Payroll', value: `${moduleConfig('payroll').reportCount} report`, note: 'Permission payroll terpisah' },
     { label: 'Procurement', value: `${liveInventoryReports.length} live`, note: 'Inventory live di dalamnya' },
-    { label: 'Financial', value: '16 report', note: 'Produktivitas dipindah ke sini' },
   ],
   alerts: [
-    { title: 'Modul utama disederhanakan', detail: 'Portal memakai Procurement, Financial, Human Resources, dan Budget.', tone: 'green' as const },
+    { title: 'Modul utama disederhanakan', detail: 'Portal memakai Procurement, Payroll, Human Resources, Financial, dan Budget.', tone: 'green' as const },
     { title: 'Inventory tetap live', detail: 'Report inventory berada di Procurement > Inventory.', tone: 'gold' as const },
   ],
   insight: {
-    summary: 'Report Center memakai 4 modul utama dengan sub-modul di dalamnya.',
+    summary: 'Report Center memakai 5 modul utama dengan sub-modul di dalamnya.',
     trendDetection: 'Inventory tetap menjadi sub-modul live di bawah Procurement.',
     anomalyDetection: 'Sub-modul non-inventory masih berupa katalog preview sampai query real disambungkan.',
     recommendation: 'Mulai dari Procurement > Inventory untuk report yang sudah live.',

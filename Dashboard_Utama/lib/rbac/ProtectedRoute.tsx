@@ -11,14 +11,15 @@
 import React from 'react'
 import { redirect } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { canAccessModule } from './permissions'
-import type { ModuleId } from './types'
+import { canAccessModule, canAccessReportCenterModule } from './permissions'
+import type { ModuleId, ReportCenterModuleId, Role } from './types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface ProtectedRouteProps {
   children: React.ReactNode
   module?: ModuleId
+  reportModule?: ReportCenterModuleId
   allowedRoles?: string[]
   loginPrompt?: React.ReactNode
   unauthorized?: React.ReactNode
@@ -49,6 +50,7 @@ export interface ProtectedRouteProps {
 export function ProtectedRoute({
   children,
   module,
+  reportModule,
   allowedRoles,
   loginPrompt = (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -86,8 +88,10 @@ export function ProtectedRoute({
   let granted = false
   if (allowedRoles !== undefined) {
     granted = allowedRoles.includes(user.role)
+  } else if (reportModule !== undefined) {
+    granted = canAccessReportCenterModule(user.role as Role, reportModule)
   } else if (module !== undefined) {
-    granted = canAccessModule(user.role as import('./types').Role, module)
+    granted = canAccessModule(user.role as Role, module)
   } else {
     // Neither gate provided — treat as public (allow)
     granted = true

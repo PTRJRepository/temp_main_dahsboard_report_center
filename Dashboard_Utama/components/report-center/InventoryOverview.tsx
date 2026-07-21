@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Activity, CalendarDays, Database, Layers3, Package, RefreshCw, Search, TrendingUp, Wallet } from 'lucide-react'
-import AnalyticsKpiStrip, { type AnalyticsKpiItem } from './AnalyticsKpiStrip'
+import { CalendarDays, Database, RefreshCw, Search, TrendingUp } from 'lucide-react'
 import ExceptionQueue, { type InventoryExceptionItem } from './ExceptionQueue'
 import MovementComposition, { movementTone, type MovementCompositionSegment } from './MovementComposition'
 
@@ -182,9 +181,12 @@ function numberValue(value: unknown) {
 function formatMetric(value: unknown, format?: string) {
   const numeric = numberValue(value)
   if (format === 'currency') {
-    if (Math.abs(numeric) >= 1_000_000_000) return `Rp${(numeric / 1_000_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}M`
-    if (Math.abs(numeric) >= 1_000_000) return `Rp${(numeric / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}Jt`
-    return `Rp${numeric.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    }).format(numeric)
   }
   if (format === 'quantity') return numeric.toLocaleString('id-ID', { maximumFractionDigits: 2 })
   return numeric.toLocaleString('id-ID', { maximumFractionDigits: 0 })
@@ -398,8 +400,6 @@ export function InventoryOverview({
 
   const movementRows = useMemo(() => inventoryMovementBreakdowns(payload), [payload])
   const movementTotal = movementRows.reduce((sum, row) => sum + breakdownValue(row), 0)
-  const fastMovingItem = numberValue(inventoryKpiValue(payload, 'fast-moving-item', ['FastMovingItem']))
-  const deadMovementItem = numberValue(inventoryKpiValue(payload, 'dead-movement-item', ['DeadMovementItem']))
   const movementSegments: MovementCompositionSegment[] = movementRows.slice(0, 6).map((breakdown) => {
     const label = cleanMovementLabel(breakdown.label)
     const value = breakdownValue(breakdown)
@@ -440,49 +440,6 @@ export function InventoryOverview({
   const generatedAt = String(payload?.metadata?.queryTiming && typeof payload.metadata.queryTiming === 'object'
     ? (payload.metadata.queryTiming as { generatedAt?: unknown }).generatedAt ?? ''
     : payload?.metadata?.generatedAt ?? '')
-
-  const kpiItems: AnalyticsKpiItem[] = [
-    {
-      id: 'total-valuation',
-      label: 'Total valuasi',
-      value: loading && !payload ? null : formatMetric(inventoryKpiValue(payload, 'total-valuation', ['total_amount', 'TotalAssetAmount', 'TotalAmount', 'NilaiPersediaan', 'TotalAmountItem']), 'currency'),
-      helper: `Full-scope stock value · ${itemTypeLabel(itemType)}`,
-      status: 'success',
-      icon: <Wallet size={16} />,
-      loading: loading && !payload,
-      onSelect: () => openReport(undefined, VALUATION_REPORT_ID),
-    },
-    {
-      id: 'unique-item-count',
-      label: 'Jumlah item',
-      value: loading && !payload ? null : formatMetric(inventoryKpiValue(payload, 'unique-item-count', ['total_item', 'TotalItem', 'FilteredRows'])),
-      helper: 'Bukan jumlah tile',
-      status: 'info',
-      icon: <Package size={16} />,
-      loading: loading && !payload,
-      onSelect: () => openReport(undefined, VALUATION_REPORT_ID),
-    },
-    {
-      id: 'total-quantity',
-      label: 'Total quantity',
-      value: loading && !payload ? null : formatMetric(inventoryKpiValue(payload, 'total-quantity', ['total_quantity', 'TotalQty', 'TotalQuantityClosing', 'TotalStok']), 'quantity'),
-      helper: 'Full-scope quantity',
-      status: 'neutral',
-      icon: <Layers3 size={16} />,
-      loading: loading && !payload,
-      onSelect: () => openReport(undefined, VALUATION_REPORT_ID),
-    },
-    {
-      id: 'movement-event-count',
-      label: 'Movement event',
-      value: loading && !payload ? null : formatMetric(inventoryKpiValue(payload, 'movement-event-count', ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'])),
-      helper: `${formatMetric(fastMovingItem)} fast · ${formatMetric(deadMovementItem)} dead · MC ${movementWindow || 'all'}`,
-      status: 'warning',
-      icon: <Activity size={16} />,
-      loading: loading && !payload,
-      onSelect: () => openReport({ groupBy: 'MovementCategory' }),
-    },
-  ]
 
   return (
     <section className={cx('rc-panel rc-panel-active overflow-hidden rounded-[30px] p-4 sm:p-5', className)} aria-label="Inventory analytics overview">
@@ -629,12 +586,9 @@ export function InventoryOverview({
             ) : null}
           </div>
 
-          <AnalyticsKpiStrip
-            className="mt-4"
-            title="Inventory KPI"
-            description="Klik KPI untuk membuka report live dengan source dan period yang sama."
-            items={kpiItems}
-          />
+          <p className="mt-4 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2 text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">
+            KPI valuasi/item/quantity/movement ada di Procurement command deck di atas, dikelompokkan per konteks. Panel ini fokus movement mix + exception queue.
+          </p>
         </div>
 
         <ExceptionQueue

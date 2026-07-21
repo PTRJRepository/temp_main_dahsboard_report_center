@@ -457,6 +457,11 @@ function fuelIssueStatusFilter(alias = 'h') {
   return `AND RTRIM(ISNULL(${alias}.Status, '')) IN ('2', '6')`
 }
 
+/** Issue money: prefer line Amount; if 0/NULL use Qty * Cost (matches official RPTIN valuation). */
+function issueLineAmountExpression(lineAlias = 'l') {
+  return `COALESCE(NULLIF(${lineAlias}.Amount, 0), ISNULL(${lineAlias}.Qty, 0) * ISNULL(${lineAlias}.Cost, 0), 0)`
+}
+
 function workshopStockIssueItemTypeExpression(itemAlias = 'i', stockAlias = 's') {
   return `COALESCE(
             NULLIF(RTRIM(CONVERT(varchar(10), ${itemAlias}.ItemType)), ''),
@@ -980,23 +985,31 @@ function monthlyStockAccountMovementCtes({
       SELECT
         RTRIM(l.ItemCode),
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        CASE WHEN LEN(RTRIM(l.BlkCode)) = 0 AND LEN(RTRIM(l.VehCode)) = 0 THEN l.Qty ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.BlkCode)) = 0 AND LEN(RTRIM(l.VehCode)) = 0 THEN l.Amount ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) = 0 AND LEN(RTRIM(l.BlkCode)) > 0 THEN l.Qty ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) = 0 AND LEN(RTRIM(l.BlkCode)) > 0 THEN l.Amount ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) > 0 THEN l.Qty ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) > 0 THEN l.Amount ELSE 0 END,
+        -- GUARDRAIL(issue-bucket-null): LEN(RTRIM(NULL)) is NULL → all CASE false → Issued=0.
+        -- Treat NULL/blank BlkCode+VehCode as Ledger (official RPTIN split).
+        -- Amount: COALESCE(Amount, Qty*Cost) when Amount blank/0.
+        CASE WHEN LEN(RTRIM(ISNULL(l.BlkCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 THEN ISNULL(l.Qty, 0) ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.BlkCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 THEN ${issueLineAmountExpression('l')} ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.BlkCode, ''))) > 0 THEN ISNULL(l.Qty, 0) ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.BlkCode, ''))) > 0 THEN ${issueLineAmountExpression('l')} ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) > 0 THEN ISNULL(l.Qty, 0) ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) > 0 THEN ${issueLineAmountExpression('l')} ELSE 0 END,
         0, 0, 0, 0, 0, 0, 0, 0
       FROM [${database}].[dbo].[IN_STOCKISSUE] h
       JOIN [${database}].[dbo].[IN_STOCKISSUELN] l
         ON h.StockIssueID = l.StockIssueID
-      JOIN [${database}].[dbo].[IN_ITEM] issueItem
+      -- GUARDRAIL(issue-no-item-join): official RPTIN rebuild sums issue lines by Loc+period only.
+      -- INNER JOIN IN_ITEM dropped lines (LocCode mismatch / missing master) → Issued ~half official.
+      LEFT JOIN [${database}].[dbo].[IN_ITEM] issueItem
         ON issueItem.ItemCode = l.ItemCode
         AND issueItem.LocCode = h.LocCode
       WHERE RTRIM(h.LocCode) = '${location}'
         ${accountingPeriodFilter('h', reportAccYear, reportAccMonth)}
-        AND RTRIM(h.Status) = '2'
-        ${nonWorkshopItemTypeFilter('issueItem')}
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
+        AND (
+          issueItem.ItemCode IS NULL
+          OR ISNULL(RTRIM(CONVERT(varchar(10), issueItem.ItemType)), '') <> '4'
+        )
         ${transactionAsOfFilter('h', transactionAsOf)}
 
       UNION ALL
@@ -1004,23 +1017,26 @@ function monthlyStockAccountMovementCtes({
       SELECT
         RTRIM(l.ItemCode),
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        CASE WHEN LEN(RTRIM(l.BlkCode)) = 0 AND LEN(RTRIM(l.VehCode)) = 0 THEN l.Qty ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.BlkCode)) = 0 AND LEN(RTRIM(l.VehCode)) = 0 THEN l.Amount ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) = 0 AND LEN(RTRIM(l.BlkCode)) > 0 THEN l.Qty ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) = 0 AND LEN(RTRIM(l.BlkCode)) > 0 THEN l.Amount ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) > 0 THEN l.Qty ELSE 0 END,
-        CASE WHEN LEN(RTRIM(l.VehCode)) > 0 THEN l.Amount ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.BlkCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 THEN ISNULL(l.Qty, 0) ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.BlkCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 THEN ${issueLineAmountExpression('l')} ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.BlkCode, ''))) > 0 THEN ISNULL(l.Qty, 0) ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.BlkCode, ''))) > 0 THEN ${issueLineAmountExpression('l')} ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) > 0 THEN ISNULL(l.Qty, 0) ELSE 0 END,
+        CASE WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) > 0 THEN ${issueLineAmountExpression('l')} ELSE 0 END,
         0, 0, 0, 0, 0, 0, 0, 0
       FROM [${database}].[dbo].[IN_FUELISSUE] h
       JOIN [${database}].[dbo].[IN_FUELISSUELN] l
         ON h.FuelIssueID = l.FuelIssueID
-      JOIN [${database}].[dbo].[IN_ITEM] issueItem
+      LEFT JOIN [${database}].[dbo].[IN_ITEM] issueItem
         ON issueItem.ItemCode = l.ItemCode
         AND issueItem.LocCode = h.LocCode
       WHERE RTRIM(h.LocCode) = '${location}'
         ${accountingPeriodFilter('h', reportAccYear, reportAccMonth)}
         ${fuelIssueStatusFilter('h')}
-        ${nonWorkshopItemTypeFilter('issueItem')}
+        AND (
+          issueItem.ItemCode IS NULL
+          OR ISNULL(RTRIM(CONVERT(varchar(10), issueItem.ItemType)), '') <> '4'
+        )
         ${transactionAsOfFilter('h', transactionAsOf)}
 
       UNION ALL
@@ -1028,14 +1044,14 @@ function monthlyStockAccountMovementCtes({
       SELECT
         RTRIM(s.ItemCode),
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        CASE WHEN RTRIM(s.TransType) = '1' AND LEN(RTRIM(j.VehCode)) = 0 AND LEN(RTRIM(j.BlkCode)) = 0 THEN s.Qty ELSE 0 END,
-        CASE WHEN RTRIM(s.TransType) = '1' AND LEN(RTRIM(j.VehCode)) = 0 AND LEN(RTRIM(j.BlkCode)) = 0 THEN s.Amount ELSE 0 END,
-        CASE WHEN RTRIM(s.TransType) = '1' AND LEN(RTRIM(j.VehCode)) = 0 AND LEN(RTRIM(j.BlkCode)) > 0 THEN s.Qty ELSE 0 END,
-        CASE WHEN RTRIM(s.TransType) = '1' AND LEN(RTRIM(j.VehCode)) = 0 AND LEN(RTRIM(j.BlkCode)) > 0 THEN s.Amount ELSE 0 END,
-        CASE WHEN RTRIM(s.TransType) = '1' AND LEN(RTRIM(j.VehCode)) > 0 THEN s.Qty ELSE 0 END,
-        CASE WHEN RTRIM(s.TransType) = '1' AND LEN(RTRIM(j.VehCode)) > 0 THEN s.Amount ELSE 0 END,
-        CASE WHEN RTRIM(s.TransType) = '2' THEN s.Qty ELSE 0 END,
-        CASE WHEN RTRIM(s.TransType) = '2' THEN s.Amount ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '1' AND LEN(RTRIM(ISNULL(j.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(j.BlkCode, ''))) = 0 THEN ISNULL(s.Qty, 0) ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '1' AND LEN(RTRIM(ISNULL(j.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(j.BlkCode, ''))) = 0 THEN ${workshopStockIssueAmountExpression('s')} ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '1' AND LEN(RTRIM(ISNULL(j.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(j.BlkCode, ''))) > 0 THEN ISNULL(s.Qty, 0) ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '1' AND LEN(RTRIM(ISNULL(j.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(j.BlkCode, ''))) > 0 THEN ${workshopStockIssueAmountExpression('s')} ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '1' AND LEN(RTRIM(ISNULL(j.VehCode, ''))) > 0 THEN ISNULL(s.Qty, 0) ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '1' AND LEN(RTRIM(ISNULL(j.VehCode, ''))) > 0 THEN ${workshopStockIssueAmountExpression('s')} ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '2' THEN ISNULL(s.Qty, 0) ELSE 0 END,
+        CASE WHEN RTRIM(ISNULL(s.TransType, '')) = '2' THEN ${workshopStockIssueAmountExpression('s')} ELSE 0 END,
         0, 0, 0, 0, 0, 0
       FROM [${database}].[dbo].[WS_JOBSTOCK] s
       LEFT JOIN [${database}].[dbo].[WS_JOB] j
@@ -1118,6 +1134,18 @@ function monthlyStockAccountMovementCtes({
       FROM movements
       GROUP BY ItemCode
     ),
+    -- Official RPTIN closing = period-end IN_MTHENDITEM (AccYear/AccMonth = report period).
+    -- Reconstruct only when snapshot row missing (open period / not yet closed).
+    period_closing AS (
+      SELECT
+        RTRIM(ItemCode) AS ItemCode,
+        CAST(ISNULL(Qty, 0) AS decimal(18, 6)) AS period_closing_qty,
+        CAST(ISNULL(Amount, ISNULL(Qty, 0) * ISNULL(AverageCost, 0)) AS decimal(18, 6)) AS period_closing_amt
+      FROM [${database}].[dbo].[IN_MTHENDITEM]
+      WHERE RTRIM(LocCode) = '${location}'
+        AND RTRIM(CONVERT(varchar(10), AccYear)) = '${reportAccYear}'
+        AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${reportAccMonth}'
+    ),
     movement_issue_doc_sources AS (
       SELECT
         RTRIM(l.ItemCode) AS ItemCode,
@@ -1175,27 +1203,45 @@ function monthlyStockAccountMovementCtes({
       FROM movement_issue_doc_sources
       GROUP BY ItemCode
     ),
+    -- GUARDRAIL(final-include-orphan-movements): base-only LEFT JOIN dropped issue/receive
+    -- for ItemCodes not in base (inactive master / Loc mismatch). Official RPTIN sums
+    -- movements by line then attaches master — keep FULL OUTER so Issued total matches export.
+    item_keys AS (
+      SELECT ItemCode FROM base
+      UNION
+      SELECT ItemCode FROM agg
+    ),
     final AS (
       SELECT
-        b.Location,
-        b.ItemType,
-        b.ItemTypeName,
-        b.StockAnalysisCode,
-        b.StockAnalysisName,
-        b.ProductTypeCode,
-        b.ProductTypeDescription,
-        b.ProductCategoryCode,
-        b.ProductBrandCode,
-        b.ProductModelCode,
-        b.ProductMaterialCode,
-        ROW_NUMBER() OVER (PARTITION BY ${rowNumberPartitionSql} ORDER BY b.ItemCode) AS RowNo,
-        b.ItemCode,
-        b.Description,
-        b.UOM,
-        b.QtyOnHand,
-        b.QtyOnHold,
-        b.AverageCost,
-        b.OnHandHoldAmount,
+        COALESCE(b.Location, RTRIM(im.LocCode), '${location}') AS Location,
+        COALESCE(b.ItemType, ${warehouseInventoryItemTypeExpression('im')}, '-') AS ItemType,
+        COALESCE(
+          b.ItemTypeName,
+          CASE ${warehouseInventoryItemTypeExpression('im')}
+            WHEN '1' THEN 'Stock / Gudang'
+            WHEN '4' THEN 'Workshop / Mesin'
+            ELSE ISNULL(${warehouseInventoryItemTypeExpression('im')}, '-')
+          END
+        ) AS ItemTypeName,
+        COALESCE(b.StockAnalysisCode, RTRIM(im.StockAnalysisCode), '') AS StockAnalysisCode,
+        COALESCE(b.StockAnalysisName, RTRIM(ISNULL(sa2.Description, im.StockAnalysisCode)), '') AS StockAnalysisName,
+        COALESCE(b.ProductTypeCode, RTRIM(ISNULL(im.ProdTypeCode, '')), '') AS ProductTypeCode,
+        COALESCE(b.ProductTypeDescription, RTRIM(ISNULL(pt2.Description, im.ProdTypeCode)), '') AS ProductTypeDescription,
+        COALESCE(b.ProductCategoryCode, RTRIM(ISNULL(im.ProdCatCode, '')), '') AS ProductCategoryCode,
+        COALESCE(b.ProductBrandCode, RTRIM(ISNULL(im.ProdBrandCode, '')), '') AS ProductBrandCode,
+        COALESCE(b.ProductModelCode, RTRIM(ISNULL(im.ProdModelCode, '')), '') AS ProductModelCode,
+        COALESCE(b.ProductMaterialCode, RTRIM(ISNULL(im.ProdMatCode, '')), '') AS ProductMaterialCode,
+        ROW_NUMBER() OVER (
+          PARTITION BY COALESCE(${rowNumberPartitionSql}, k.ItemCode)
+          ORDER BY k.ItemCode
+        ) AS RowNo,
+        k.ItemCode,
+        COALESCE(b.Description, RTRIM(im.Description), k.ItemCode) AS Description,
+        COALESCE(b.UOM, RTRIM(im.UOMCode), '') AS UOM,
+        CAST(ISNULL(b.QtyOnHand, ISNULL(im.QtyOnHand, 0)) AS decimal(18, 6)) AS QtyOnHand,
+        CAST(ISNULL(b.QtyOnHold, ISNULL(im.QtyOnHold, 0)) AS decimal(18, 6)) AS QtyOnHold,
+        CAST(ISNULL(b.AverageCost, ISNULL(im.AverageCost, 0)) AS decimal(18, 6)) AS AverageCost,
+        CAST(ISNULL(b.OnHandHoldAmount, (ISNULL(im.QtyOnHand, 0) + ISNULL(im.QtyOnHold, 0)) * ISNULL(im.AverageCost, 0)) AS decimal(18, 6)) AS OnHandHoldAmount,
         CAST(ISNULL(a.opening_qty, 0) AS decimal(18, 6)) AS opening_qty,
         CAST(ISNULL(a.opening_amt, 0) AS decimal(18, 6)) AS opening_amt,
         CAST(ISNULL(a.received_qty, 0) AS decimal(18, 6)) AS received_qty,
@@ -1220,6 +1266,9 @@ function monthlyStockAccountMovementCtes({
         CAST(ISNULL(a.goods_return_amt, 0) AS decimal(18, 6)) AS goods_return_amt,
         CAST(ISNULL(a.dispatch_adv_qty, 0) AS decimal(18, 6)) AS dispatch_adv_qty,
         CAST(ISNULL(a.dispatch_adv_amt, 0) AS decimal(18, 6)) AS dispatch_adv_amt,
+        CAST(ISNULL(pc.period_closing_qty, 0) AS decimal(18, 6)) AS period_closing_qty,
+        CAST(ISNULL(pc.period_closing_amt, 0) AS decimal(18, 6)) AS period_closing_amt,
+        CASE WHEN pc.ItemCode IS NULL THEN 0 ELSE 1 END AS has_period_closing,
         CAST(${movementActivityCountExpression} AS int) AS MovementActivityCountActual,
         CAST(${movementActivityQtyExpression} AS decimal(18, 6)) AS MovementActivityQtyActual,
         CAST(${movementActivityAmountExpression} AS decimal(18, 6)) AS MovementActivityAmountActual,
@@ -1230,10 +1279,19 @@ function monthlyStockAccountMovementCtes({
         CAST(${movementActualQtyExpression} AS decimal(18, 6)) AS MovementIssueQtyActual,
         CAST(${movementActualAmountExpression} AS decimal(18, 6)) AS MovementIssueAmountActual,
         mi.MovementLastIssueDate,
-        ${movementCategorySqlCase(movementActualCountExpression, 'b.QtyOnHand + b.QtyOnHold', movementThresholds)} AS MovementCategory
-      FROM base b
-      LEFT JOIN agg a ON a.ItemCode = b.ItemCode
-      LEFT JOIN movement_issue_docs mi ON mi.ItemCode = b.ItemCode
+        ${movementCategorySqlCase(movementActualCountExpression, 'ISNULL(b.QtyOnHand, ISNULL(im.QtyOnHand, 0)) + ISNULL(b.QtyOnHold, ISNULL(im.QtyOnHold, 0))', movementThresholds)} AS MovementCategory
+      FROM item_keys k
+      LEFT JOIN base b ON b.ItemCode = k.ItemCode
+      LEFT JOIN [${database}].[dbo].[IN_ITEM] im
+        ON im.ItemCode = k.ItemCode
+        AND RTRIM(im.LocCode) = '${location}'
+      LEFT JOIN [${database}].[dbo].[IN_STOCKANALYSIS] sa2
+        ON sa2.StockAnalysisCode = im.StockAnalysisCode
+      LEFT JOIN [${database}].[dbo].[IN_PRODTYPE] pt2
+        ON pt2.ProdTypeCode = im.ProdTypeCode
+      LEFT JOIN agg a ON a.ItemCode = k.ItemCode
+      LEFT JOIN period_closing pc ON pc.ItemCode = k.ItemCode
+      LEFT JOIN movement_issue_docs mi ON mi.ItemCode = k.ItemCode
     ),
     report_rows AS (
       SELECT
@@ -1291,9 +1349,12 @@ function monthlyStockAccountMovementCtes({
         goods_receive_qty AS GoodsReceiveQty,
         goods_return_qty AS GoodsReturnQty,
         dispatch_adv_qty AS DispatchAdvQty,
-        opening_qty + received_qty + return_advice_qty + transferred_qty + adjustment_qty
-          - (ledger_qty + issued_station_qty + issued_vehicle_qty)
-          + return_qty + goods_receive_qty - goods_return_qty - dispatch_adv_qty AS ClosingQty,
+        -- Prefer IN_MTHENDITEM report-period snapshot (matches official PDF/JSON closing).
+        CASE WHEN has_period_closing = 1 THEN period_closing_qty
+          ELSE opening_qty + received_qty + return_advice_qty + transferred_qty + adjustment_qty
+            - (ledger_qty + issued_station_qty + issued_vehicle_qty)
+            + return_qty + goods_receive_qty - goods_return_qty - dispatch_adv_qty
+        END AS ClosingQty,
         opening_amt AS OpeningAmount,
         received_amt AS ReceivedAmount,
         return_advice_amt AS ReturnAdviceAmount,
@@ -1307,9 +1368,12 @@ function monthlyStockAccountMovementCtes({
         goods_receive_amt AS GoodsReceiveAmount,
         goods_return_amt AS GoodsReturnAmount,
         dispatch_adv_amt AS DispatchAdvAmount,
-        opening_amt + received_amt + return_advice_amt + transferred_amt + adjustment_amt
-          - (ledger_amt + issued_station_amt + issued_vehicle_amt)
-          + return_amt + goods_receive_amt - goods_return_amt - dispatch_adv_amt AS ClosingAmount
+        CASE WHEN has_period_closing = 1 THEN period_closing_amt
+          ELSE opening_amt + received_amt + return_advice_amt + transferred_amt + adjustment_amt
+            - (ledger_amt + issued_station_amt + issued_vehicle_amt)
+            + return_amt + goods_receive_amt - goods_return_amt - dispatch_adv_amt
+        END AS ClosingAmount,
+        CASE WHEN has_period_closing = 1 THEN 'IN_MTHENDITEM' ELSE 'reconstructed' END AS ClosingSource
       FROM final
     )`
 }
@@ -2848,9 +2912,11 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
     GROUP BY Location, ActualPeriod, AccountingPeriod, OpeningActualPeriod, OpeningAccountingPeriod
   `)
 
+  // Full group charts (no TOP) so Product Type sub-KPI sum == summary ClosingAmount
+  // and matches official export grand total (e.g. 42 ProductType rows).
   const stockAnalysisChart = await rows(ctx, `
     ${ctes}
-    SELECT TOP 10
+    SELECT
       'stock-analysis' AS DimensionId,
       StockAnalysisCode AS Label,
       StockAnalysisCode AS DimensionValue,
@@ -2865,7 +2931,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
 
   const movementCategoryChart = await rows(ctx, `
     ${ctes}
-    SELECT TOP 10
+    SELECT
       'movement-category' AS DimensionId,
       MovementCategory AS Label,
       MovementCategory AS DimensionValue,
@@ -2881,7 +2947,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
     ? []
     : await rows(ctx, `
       ${ctes}
-      SELECT TOP 50
+      SELECT
         '${analysisGroup.dimensionId}' AS DimensionId,
         NULLIF(${analysisGroup.sql}, '') AS Label,
         NULLIF(${analysisGroup.sql}, '') AS DimensionValue,
@@ -2909,11 +2975,15 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
     ORDER BY ItemType
   `)
 
-  const chart = analysisGroupKey === 'StockAnalysisCode'
-    ? [...stockAnalysisChart, ...movementCategoryChart, ...itemTypeChart]
-    : analysisGroupKey === 'MovementCategory'
-      ? [...movementCategoryChart, ...stockAnalysisChart, ...itemTypeChart]
-      : [...analysisGroupChart, ...movementCategoryChart, ...stockAnalysisChart, ...itemTypeChart]
+  // Return ONLY the selected analysis-group chart for sub-KPI / table sync.
+  // Mixed packs (ProductType + MovementCategory + ItemType) leak "Dead Stock" /
+  // "Workshop Mesin" labels into Product Type sub-category cards on the client.
+  const chart =
+    analysisGroupKey === 'StockAnalysisCode'
+      ? stockAnalysisChart
+      : analysisGroupKey === 'MovementCategory'
+        ? movementCategoryChart
+        : analysisGroupChart
 
   return {
     title: 'MONTHLY STOCK ACCOUNT MOVEMENT DETAILS',
@@ -2955,7 +3025,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       valuationBreakdown: {
         scope: itemTypeScope || 'ItemType 1 Stock/Gudang + ItemType 4 Workshop/Mesin',
         activeStockValue: 'OnHandHoldAmount = (QtyOnHand + QtyOnHold) * AverageCost dari IN_ITEM live.',
-        accountingClosingValue: 'ClosingAmount = OpeningAmount - IssuedTotalAmount + GoodsReceiveAmount + return/transfer/adjustment component yang tersedia pada periode accounting.',
+        accountingClosingValue: 'ClosingAmount prefer IN_MTHENDITEM AccYear/AccMonth = report period (official RPTIN). Fallback reconstruct: Opening + received/return-advice/transfer/adj - IssuedTotal + return + GoodsReceive - GoodsReturn - DispatchAdv.',
         stockGudangValue: 'StockGudangOnHandHoldAmount dan StockGudangClosingAmount hanya ItemType=1.',
         workshopMesinValue: 'WorkshopMesinOnHandHoldAmount dan WorkshopMesinClosingAmount hanya ItemType=4.',
         movementCostSources: [
@@ -4383,7 +4453,10 @@ async function handleInventoryGet(request: NextRequest) {
   const isFullListingReport = ['asset-stock-valuasi-listing', 'report-asset-stock-valuasi-listing', 'seluruh-stock-summary', 'RPTIN1000011', 'all-stock-movement-analysis'].includes(handlerKey)
   const exportAll = format === 'csv' || wantsAllRows(request)
   const limitAll = exportAll
-  const limit = limitAll ? 20000 : Math.min(page * pageSize, TABLE_WINDOW_ROW_LIMIT)
+  // Stream / export: higher ceiling so full monthly movement table not hard-capped at 20k.
+  const limit = limitAll
+    ? (isMonthlyStockAccountMovementReport ? 100_000 : 20_000)
+    : Math.min(page * pageSize, TABLE_WINDOW_ROW_LIMIT)
   const includeDebugSql = isAdminDebugRequest(request)
   const debugSqlStatements: DebugSqlStatement[] = []
 

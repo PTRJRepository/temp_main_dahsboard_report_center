@@ -5,18 +5,12 @@
  * TypeScript strict mode.
  */
 
-import type { Role } from './types';
+import { getReportModuleConfig } from '@/lib/reports/module-registry';
+import type { ModuleId, ReportCenterModuleId, Role } from './types';
+
+export type { ModuleId } from './types';
 
 // ─── Module Registry ─────────────────────────────────────────────────────────
-
-export type ModuleId =
-  | 'dashboard'
-  | 'queries'
-  | 'users'
-  | 'reports'
-  | 'payroll'
-  | 'settings'
-  | 'audit_logs';
 
 /** Human-readable module labels */
 export const MODULE_LABELS: Record<ModuleId, string> = {
@@ -89,6 +83,16 @@ const EXPORT_ACCESS: Record<ExportFormat, Role[]> = {
  */
 export function canAccessModule(role: Role, module: ModuleId): boolean {
   return MODULE_ACCESS[module]?.includes(role) ?? false;
+}
+
+/**
+ * Maps Report Center global modules to existing RBAC modules.
+ * This keeps Payroll restricted to the payroll permission while preserving
+ * legacy Report Center access for the other global report modules.
+ */
+export function canAccessReportCenterModule(role: Role, module: ReportCenterModuleId | string): boolean {
+  const config = getReportModuleConfig(module);
+  return config ? canAccessModule(role, config.permissionKey) : false;
 }
 
 /**

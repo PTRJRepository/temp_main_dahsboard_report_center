@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { buildAiEvidenceBundle, formatAiEvidenceForPrompt } from '@/lib/reports/ai-evidence'
+import { callAnthropicMessages, getAnthropicProviderConfig } from '@/lib/reports/ai-provider'
 import type { InsightContent } from '@/lib/reports/intelligence'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const DISPLAY_PROVIDER = 'local-llm'
-const PROVIDER_ENGINE = '9router'
-const ADACODE_URL = process.env.ADACODE_BASE_URL ?? process.env.LOCAL_LLM_BASE_URL ?? 'https://api.local-llm.ai/v1/chat/completions'
-const rawAdaCodeModel = (process.env.ADACODE_MODEL ?? process.env.LOCAL_LLM_MODEL ?? '').trim()
-const ADACODE_MODEL =
-  ['minimax m2.5', 'minimax/minimax-m2.5', 'minimax-m2.5'].includes(rawAdaCodeModel.toLowerCase())
-    ? 'minimax-m2.5'
-    : rawAdaCodeModel || 'minimax-m2.5'
-const ADACODE_API_KEY = process.env.ADACODE_API_KEY ?? process.env.LOCAL_LLM_API_KEY
+const DISPLAY_PROVIDER = 'anthropic'
+const PROVIDER_ENGINE = 'anthropic-messages'
 
 type InsightRequestContext = {
   moduleId?: string
@@ -35,25 +30,6 @@ type InsightRequestBody = {
   fallbackInsight?: Partial<InsightContent>
 }
 
-type AdaCodeResponse = {
-  choices?: Array<{
-    finish_reason?: string
-    text?: string
-    content?: string
-    message?: {
-      content?: unknown
-    }
-  }>
-  error?: {
-    message?: string
-  }
-  content?: unknown
-  message?: unknown
-  output_text?: unknown
-  response?: unknown
-  data?: unknown
-}
-
 const emptyInsight: InsightContent = {
   summary: 'Insight belum tersedia karena payload belum cukup untuk dibaca.',
   trendDetection: 'Belum ada pembanding nilai terbesar dari payload.',
@@ -67,52 +43,6 @@ function compactJson(value: unknown) {
     if (typeof item === 'string' && item.length > 180) return `${item.slice(0, 180)}...`
     return item
   })
-}
-
-function contentToString(value: unknown): string | undefined {
-  if (typeof value === 'string') return value.trim() || undefined
-  if (Array.isArray(value)) {
-    const text = value
-      .map((item) => {
-        if (typeof item === 'string') return item
-        if (item && typeof item === 'object') {
-          const entry = item as Record<string, unknown>
-          return contentToString(entry.text ?? entry.content ?? entry.output_text)
-        }
-        return undefined
-      })
-      .filter(Boolean)
-      .join('')
-      .trim()
-    return text || undefined
-  }
-  if (value && typeof value === 'object') {
-    const entry = value as Record<string, unknown>
-    return contentToString(entry.content ?? entry.text ?? entry.message ?? entry.output_text ?? entry.response)
-  }
-  return undefined
-}
-
-function extractAdaCodeContent(result: AdaCodeResponse) {
-  const choice = result.choices?.[0]
-  return (
-    contentToString(choice?.message?.content) ??
-    contentToString(choice?.text) ??
-    contentToString(choice?.content) ??
-    contentToString(result.output_text) ??
-    contentToString(result.content) ??
-    contentToString(result.response) ??
-    contentToString(result.message) ??
-    contentToString(result.data)
-  )
-}
-
-function adaCodeErrorMessage(result: AdaCodeResponse, status: number) {
-  const finishReason = result.choices?.[0]?.finish_reason
-  if (finishReason === 'length') {
-    return 'AdaCode mengembalikan output kosong karena batas max_tokens habis sebelum insight selesai.'
-  }
-  return result.error?.message ?? `AdaCode API HTTP ${status}${finishReason ? ` (${finishReason})` : ''}`
 }
 
 function toNumber(value: unknown) {
@@ -588,7 +518,24 @@ export async function POST(request: NextRequest) {
   const context = body.context ?? {}
   const payloadHints = buildPayloadHints(context)
   const payloadInsight = buildPayloadInsight(context, payloadHints)
-  const fallbackInsight = body.fallbackInsight ?? payloadInsight
+  const contextFilters = context.metadata?.filters
+  const evidence = buildAiEvidenceBundle({
+    title: context.reportName ?? body.title,
+    description: context.reportDescription,
+    rows: context.sampleRows ?? [],
+    summary: context.summary ?? {},
+    chart: context.chart ?? [],
+    metadata: context.metadata ?? {},
+  }, {
+    filters: contextFilters && typeof contextFilters === 'object' && !Array.isArray(contextFilters)
+      ? (contextFilters as Record<string, unknown>)
+      : {},
+    question: context.analysisQuestion,
+    reportCode: context.moduleId,
+    sampleRows: 12,
+    maxColumns: 24,
+  })
+  const providerConfig = getAnthropicProviderConfig()
 
   if (!hasQueryResult(context)) {
     return NextResponse.json(
@@ -600,14 +547,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (!ADACODE_API_KEY) {
+  if (!providerConfig.configured) {
     return NextResponse.json({
       success: true,
       provider: 'local-rule',
       providerEngine: PROVIDER_ENGINE,
       model: 'payload-insight',
       insight: payloadInsight,
-      warning: 'ADACODE_API_KEY/LOCAL_LLM_API_KEY belum dikonfigurasi. Insight dihitung langsung dari payload.',
+      warning: providerConfig.publicMessage,
     })
   }
 
@@ -639,61 +586,49 @@ export async function POST(request: NextRequest) {
       chart: context.chart?.slice(0, 8),
     })}`,
     `Payload hints terhitung: ${compactJson(payloadHints)}`,
+    `Evidence scope terbatas: ${formatAiEvidenceForPrompt(evidence)}`,
     `Insight hitung lokal yang harus dipertajam, bukan diabaikan: ${compactJson(payloadInsight)}`,
   ].join('\n\n')
 
   try {
-    const response = await fetch(ADACODE_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${ADACODE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: ADACODE_MODEL,
-        temperature: 0.1,
-        max_tokens: 1800,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
-      cache: 'no-store',
+    const providerResult = await callAnthropicMessages({
+      config: providerConfig,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      maxTokens: 1800,
+      temperature: 0.1,
     })
 
-    const result = (await response.json().catch(() => ({}))) as AdaCodeResponse
-    const content = extractAdaCodeContent(result)
-
-    if (!response.ok || !content) {
+    if (!providerResult.ok || !providerResult.content) {
       return NextResponse.json({
         success: true,
         provider: 'local-rule',
         providerEngine: PROVIDER_ENGINE,
         model: 'payload-insight',
         insight: payloadInsight,
-        warning: adaCodeErrorMessage(result, response.status),
+        warning: providerResult.publicMessage,
       })
     }
 
-    const modelInsight = normalizeFinalInsight(parseInsight(content, payloadInsight), payloadInsight)
+    const modelInsight = normalizeFinalInsight(parseInsight(providerResult.content, payloadInsight), payloadInsight)
     const insight = hasPayloadEvidence(modelInsight, payloadHints) ? modelInsight : payloadInsight
 
     return NextResponse.json({
       success: true,
       provider: DISPLAY_PROVIDER,
       providerEngine: PROVIDER_ENGINE,
-      model: ADACODE_MODEL,
+      model: providerResult.model,
       insight,
-      warning: insight === payloadInsight ? 'AdaCode tidak memberikan evidence payload yang cukup, insight lokal dipakai.' : undefined,
+      warning: insight === payloadInsight ? 'AI tidak memberikan evidence payload yang cukup, insight lokal dipakai.' : undefined,
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json({
       success: true,
       provider: 'local-rule',
       providerEngine: PROVIDER_ENGINE,
       model: 'payload-insight',
       insight: payloadInsight,
-      warning: error instanceof Error ? error.message : 'Gagal generate insight dari AdaCode.',
+      warning: 'AI tidak dapat dihubungi. Insight lokal dipakai.',
     })
   }
 }

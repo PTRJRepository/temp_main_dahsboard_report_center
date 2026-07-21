@@ -98,11 +98,13 @@ function filterCount(filters: ReportFilterInput) {
 function formatMetric(value: unknown) {
   const numeric = toNumber(value)
   if (!numeric && typeof value === 'string') return value
-  const abs = Math.abs(numeric)
-  if (abs >= 1_000_000_000) return `${(numeric / 1_000_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}B`
-  if (abs >= 1_000_000) return `${(numeric / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}M`
-  if (abs >= 1_000) return `${(numeric / 1_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })}K`
-  return numeric.toLocaleString('id-ID', { maximumFractionDigits: 2 })
+  // Amount-like KPI chips: always 4 decimals (no compact).
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(numeric)
 }
 
 function cleanBreakdownLabel(entry: ReportBreakdownEntry) {

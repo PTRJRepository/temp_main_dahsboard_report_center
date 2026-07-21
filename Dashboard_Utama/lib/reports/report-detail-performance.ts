@@ -1,3 +1,11 @@
+import {
+  filtersFromReportFilterAction,
+  normalizeReportFilters,
+  type ReportColumnFilter,
+  type ReportFilterInput,
+} from './report-filtering'
+import type { ReportDetailWindowMetadata, ReportDetailWindowStrategy, ReportFilterAction } from './report-experience'
+
 export type DbRow = Record<string, unknown>
 
 export type ReportPayloadLike = {
@@ -92,6 +100,17 @@ function pickRowColumns(row: DbRow, columns: string[]) {
   return compact
 }
 
+export function compactReportRowsForAiEvidence(
+  rows: DbRow[],
+  columns: string[],
+  options: { sampleRows?: number; maxColumns?: number } = {},
+) {
+  const sampleRows = options.sampleRows ?? DEFAULT_AI_SAMPLE_ROWS
+  const maxColumns = options.maxColumns ?? DEFAULT_AI_COLUMN_LIMIT
+  const selectedColumns = columns.slice(0, maxColumns)
+  return rows.slice(0, sampleRows).map((row) => pickRowColumns(row, selectedColumns))
+}
+
 export function compactReportPayloadForAi<T extends ReportPayloadLike>(
   payload: T,
   options: { sampleRows?: number; maxColumns?: number; chartRows?: number } = {},
@@ -107,7 +126,7 @@ export function compactReportPayloadForAi<T extends ReportPayloadLike>(
 
   return {
     ...payload,
-    rows: rows.slice(0, sampleRows).map((row) => pickRowColumns(row, columns)),
+    rows: compactReportRowsForAiEvidence(rows, columns, { sampleRows, maxColumns }),
     columns,
     chart: Array.isArray(payload.chart) && chartRows > 0 ? payload.chart.slice(0, chartRows) : [],
     metadata: {
@@ -207,12 +226,20 @@ export function buildReportSummaryTotals(
   summary: DbRow | undefined,
   rows: DbRow[],
   columns: string[],
-  options: { fallbackToRows?: boolean } = {},
+  options: { fallbackToRows?: boolean; preferRows?: boolean } = {},
 ) {
   const fallbackToRows = options.fallbackToRows ?? true
+  // preferRows=true when active dimension filter scopes the page (e.g. location/productType)
+  // but sticky grand totals must not keep showing unscoped server summary.
+  const preferRows = options.preferRows === true && rows.length > 0
   const totals: Record<string, number> = {}
 
   columns.forEach((column) => {
+    if (preferRows) {
+      totals[column] = rows.reduce((sum, row) => sum + numericValue(row[column]), 0)
+      return
+    }
+
     const summaryValue = firstNumericValue(summary, [
       column,
       ...(subtotalSummaryAliases[column] ?? []),
@@ -229,6 +256,45 @@ export function buildReportSummaryTotals(
   })
 
   return totals
+}
+
+function hasFilterValue(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0
+  return value !== undefined && value !== null && value !== ''
+}
+
+function compactFilterInput(filters: ReportFilterInput) {
+  const compact: Partial<Record<keyof ReportFilterInput, unknown>> = {}
+  Object.entries(filters).forEach(([key, value]) => {
+    if (hasFilterValue(value)) compact[key as keyof ReportFilterInput] = value
+  })
+  return compact
+}
+
+function mergeColumnFilters(current: ReportColumnFilter[] = [], incoming: ReportColumnFilter[] = []) {
+  if (incoming.length === 0) return current
+  const incomingFields = new Set(incoming.map((filter) => filter.field))
+  return [
+    ...current.filter((filter) => !incomingFields.has(filter.field)),
+    ...incoming,
+  ].slice(-5)
+}
+
+export function mergeReportFilterAction(currentFilters: ReportFilterInput, action: ReportFilterAction): ReportFilterInput {
+  const actionFilters = filtersFromReportFilterAction(action)
+  if (action.type === 'clear-filter') return actionFilters
+
+  const next = compactFilterInput(currentFilters)
+  Object.entries(actionFilters).forEach(([key, value]) => {
+    if (key === 'columnFilters') return
+    if (hasFilterValue(value)) next[key as keyof ReportFilterInput] = value
+  })
+
+  if (actionFilters.columnFilters?.length) {
+    next.columnFilters = mergeColumnFilters(currentFilters.columnFilters, actionFilters.columnFilters)
+  }
+
+  return normalizeReportFilters(next)
 }
 
 export function formatInventoryQuantityBreakdown(row: DbRow) {
@@ -302,5 +368,35 @@ export function normalizeReportTableWindow(metadata: DbRow | undefined, loadedRo
     reachableRows,
     pageCount: Math.max(1, Math.ceil(reachableRows / safePageSize)),
     windowed: Boolean(metadata?.windowed) || reachableRows < totalRows,
+  }
+}
+
+export function buildReportDetailWindowMetadata(options: {
+  metadata?: DbRow
+  returnedRows: number
+  pageSize: number
+  page?: number
+  strategy?: ReportDetailWindowStrategy
+  reason?: string
+}): ReportDetailWindowMetadata {
+  const tableWindow = normalizeReportTableWindow(options.metadata, options.returnedRows, options.pageSize)
+  const filteredRows = finiteNumber(options.metadata?.filteredRows ?? options.metadata?.totalRows, tableWindow.totalRows)
+  const totalRows = finiteNumber(options.metadata?.totalRows, filteredRows)
+  const returnedRows = Math.min(finiteNumber(options.returnedRows), filteredRows)
+  const strategy = options.strategy ?? (tableWindow.windowed ? 'window' : 'all')
+
+  return {
+    totalRows: Math.max(totalRows, filteredRows),
+    filteredRows,
+    returnedRows,
+    loadedRows: tableWindow.loadedRows,
+    maxLoadedRows: tableWindow.maxLoadedRows,
+    reachableRows: tableWindow.reachableRows,
+    pageCount: tableWindow.pageCount,
+    strategy,
+    partial: strategy !== 'all' || returnedRows < filteredRows || tableWindow.windowed,
+    page: options.page,
+    pageSize: Math.max(1, finiteNumber(options.pageSize, 1)),
+    reason: options.reason,
   }
 }

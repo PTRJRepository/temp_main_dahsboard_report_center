@@ -15,6 +15,13 @@ export type ModuleId =
   | 'settings'
   | 'audit_logs';
 
+export type ReportCenterModuleId =
+  | 'procurement'
+  | 'payroll'
+  | 'human-resources'
+  | 'financial'
+  | 'budget';
+
 /** Human-readable role labels */
 export const ROLE_LABELS: Record<Role, string> = {
   kerani:  'Kerani',

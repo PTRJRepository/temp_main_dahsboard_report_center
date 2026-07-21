@@ -2,12 +2,13 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, ArrowRight, FileText, Layers3 } from 'lucide-react'
 import { getModulePanel } from '@/lib/reports/module-panel'
+import ProcurementModuleWorkspace from '@/components/report-center/ProcurementModuleWorkspace'
 
 type ReportSource = 'estate' | 'pabrik'
 
 type PageProps = {
   params: Promise<{ module: string }>
-  searchParams?: Promise<{ source?: string }>
+  searchParams?: Promise<{ source?: string; stockGroup?: string; group?: string }>
 }
 
 function normalizeSource(value?: string): ReportSource {
@@ -19,7 +20,12 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
   const query = await searchParams
   const source = normalizeSource(query?.source)
 
-  if (module === 'inventory') redirect(`/report-center/inventory?source=${source}`)
+  if (module === 'inventory') {
+    redirect(`/report-center/procurement?source=${source}&stockGroup=inventory`)
+  }
+  if (module === 'procurement') {
+    return <ProcurementModuleWorkspace source={source} stockGroup={query?.stockGroup ?? query?.group} />
+  }
 
   const panel = getModulePanel(module, source)
   if (!panel) notFound()

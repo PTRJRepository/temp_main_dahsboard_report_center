@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
-import { Activity, AlertTriangle, ArrowRight, BarChart3, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, Truck, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, Truck, Wrench } from 'lucide-react'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
 type DbRow = Record<string, unknown>
@@ -118,12 +118,13 @@ function formatQuantity(value: number) {
 }
 
 function formatCurrency(value: number) {
-  if (!value) return 'Rp0'
+  // Amount / valuasi: always 4 decimals (id-ID), no compact.
+  if (!Number.isFinite(value)) return 'Rp0,0000'
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
-    notation: 'compact',
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
   }).format(value)
 }
 
@@ -414,18 +415,18 @@ export default function ProcurementKpiStrip({
     firstNumber(receive, ['MissingPOLineCostRows']) +
     firstNumber(pr, ['OutstandingAmountNol'])
 
-  const cards: ProcurementKpiCard[] = [
+  const valuationCards: ProcurementKpiCard[] = [
     {
       id: 'stock',
       label: 'Total Valuasi Inventory',
       value: formatCurrency(inventoryValue),
-      description: 'Nilai inventory default Procurement. Ini bukan Gudang saja.',
-      formula: 'SUM(total_amount); total_amount = (QtyOnHand + QtyOnHold) x AverageCost; scope ItemType 1 + 4.',
-      source: 'asset-stock-valuasi-listing / IN_ITEM',
+      description: 'Nilai stock full-scope Procurement. Bukan Gudang saja.',
+      formula: 'SUM((QtyOnHand + QtyOnHold) x AverageCost); ItemType 1 + 4.',
+      source: 'asset-stock-valuasi-listing',
       breakdown: [
-        { label: 'Gudang / ItemType 1', value: `${formatCurrency(gudangValue)} · ${formatPercent(percentOf(gudangValue, inventoryValue))}` },
-        { label: 'Workshop/Mesin / ItemType 4', value: `${formatCurrency(workshopValue)} · ${formatPercent(percentOf(workshopValue, inventoryValue))}` },
-        { label: 'Total item valuasi', value: formatNumber(totalInventoryItem) },
+        { label: 'Gudang', value: `${formatCurrency(gudangValue)} · ${formatPercent(percentOf(gudangValue, inventoryValue))}` },
+        { label: 'Workshop', value: `${formatCurrency(workshopValue)} · ${formatPercent(percentOf(workshopValue, inventoryValue))}` },
+        { label: 'Item valuasi', value: formatNumber(totalInventoryItem) },
       ],
       href: filteredLinks.stock,
       icon: Package,
@@ -435,13 +436,13 @@ export default function ProcurementKpiStrip({
       id: 'gudang-value',
       label: 'Valuasi Gudang',
       value: formatCurrency(gudangValue),
-      description: 'Porsi inventory regular dari item stock gudang.',
-      formula: 'SUM(total_amount) WHERE ItemType = 1 dan total_quantity > 0.',
-      source: 'asset-stock-valuasi-listing / ItemType 1',
+      description: 'Porsi valuasi ItemType 1.',
+      formula: 'SUM(total_amount) WHERE ItemType = 1.',
+      source: 'asset-stock-valuasi-listing · Gudang',
       breakdown: [
-        { label: 'Item master Gudang', value: formatNumber(gudangItem) },
-        { label: 'Item Gudang ada stock', value: formatNumber(firstNumber(stock, ['GudangItemWithStock'])) },
-        { label: 'Lokasi Gudang ada stock', value: formatNumber(firstNumber(stock, ['GudangLocationWithStock'])) },
+        { label: 'Item Gudang', value: formatNumber(gudangItem) },
+        { label: 'Qty on hand', value: formatQuantity(totalOnHand) },
+        { label: 'Qty on hold', value: formatQuantity(totalOnHold) },
       ],
       href: filteredLinks.stock,
       icon: Layers3,
@@ -449,95 +450,50 @@ export default function ProcurementKpiStrip({
     },
     {
       id: 'workshop',
-      label: 'Valuasi Workshop/Mesin',
+      label: 'Valuasi Workshop',
       value: formatCurrency(workshopValue),
-      description: 'Porsi inventory sparepart/workshop dari ItemType 4.',
-      formula: 'SUM(total_amount) WHERE ItemType = 4; issue movement workshop dibaca dari WS_JOBSTOCK TransType = 1.',
-      source: 'asset-stock-valuasi-listing / ItemType 4',
+      description: 'Porsi valuasi ItemType 4.',
+      formula: 'SUM(total_amount) WHERE ItemType = 4.',
+      source: 'asset-stock-valuasi-listing · Workshop',
       breakdown: [
-        { label: 'Item master Workshop', value: formatNumber(workshopItem || firstNumber(workshop, ['total_item', 'WorkshopItemCount', 'TotalItem'])) },
-        { label: 'Item Workshop ada stock', value: formatNumber(firstNumber(stock, ['WorkshopItemWithStock']) || firstNumber(workshop, ['WorkshopItemWithStock'])) },
-        { label: 'Lokasi Workshop ada stock', value: formatNumber(firstNumber(stock, ['WorkshopLocationWithStock']) || firstNumber(workshop, ['total_location', 'WorkshopLocationWithStock', 'TotalGudang'])) },
+        { label: 'Item Workshop', value: formatNumber(workshopItem || firstNumber(workshop, ['total_item', 'WorkshopItemCount', 'TotalItem'])) },
+        { label: 'Total quantity', value: formatQuantity(totalQuantity) },
+        { label: 'Lokasi', value: formatNumber(firstNumber(stock, ['total_location', 'TotalGudang'])) },
       ],
       href: filteredLinks.workshop,
       icon: Wrench,
       className: 'border-orange-300/25 bg-orange-400/10 text-orange-100',
     },
+  ]
+
+  const processCards: ProcurementKpiCard[] = [
     {
-      id: 'inventory-items',
-      label: 'Jumlah Item Inventory',
-      value: formatNumber(totalInventoryItem),
-      description: 'Jumlah item valuation listing, bukan jumlah card UI.',
-      formula: 'COUNT(*) dari asset valuation full-scope; default ItemType 1 + 4.',
-      source: 'asset-stock-valuasi-listing / summary',
+      id: 'receive-value',
+      label: 'Nilai Goods Receive',
+      value: formatCurrency(receiveAmount),
+      description: 'Barang masuk supplier ke inventory.',
+      formula: 'SUM(ReceiveQty x PO Cost).',
+      source: 'goods-receiving-receipt-activity',
       breakdown: [
-        { label: 'Item Gudang', value: formatNumber(gudangItem) },
-        { label: 'Item Workshop/Mesin', value: formatNumber(workshopItem) },
-        { label: 'Product type', value: formatNumber(firstNumber(stock, ['total_product_type'])) },
-      ],
-      href: filteredLinks.stock,
-      icon: BarChart3,
-      className: 'border-blue-300/25 bg-blue-400/10 text-blue-100',
-    },
-    {
-      id: 'inventory-quantity',
-      label: 'Total Quantity Inventory',
-      value: formatQuantity(totalQuantity),
-      description: 'Total unit inventory yang menjadi dasar valuasi.',
-      formula: 'SUM(total_quantity); total_quantity = QtyOnHand + QtyOnHold.',
-      source: 'asset-stock-valuasi-listing / quantity summary',
-      breakdown: [
-        { label: 'Qty on hand', value: formatQuantity(totalOnHand) },
-        { label: 'Qty on hold', value: formatQuantity(totalOnHold) },
-        { label: 'Lokasi tercatat', value: formatNumber(firstNumber(stock, ['total_location', 'TotalGudang'])) },
-      ],
-      href: filteredLinks.stock,
-      icon: Gauge,
-      className: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
-    },
-    {
-      id: 'receive',
-      label: 'Receive Activity',
-      value: formatNumber(receiveDocs),
-      description: 'Jumlah dokumen penerimaan barang dari supplier.',
-      formula: 'COUNT(DISTINCT PU_GOODSRCV.GoodsRcvID).',
-      source: 'goods-receiving-receipt-activity / PU_GOODSRCV',
-      breakdown: [
-        { label: 'Baris receipt', value: formatNumber(receiveLines) },
-        { label: 'Supplier receive', value: formatNumber(receiveSupplier) },
-        { label: 'Item diterima', value: formatNumber(receiveItem) },
+        { label: 'Dokumen receive', value: formatNumber(receiveDocs) },
+        { label: 'Qty receive', value: formatQuantity(receiveQty) },
+        { label: 'Supplier aktif', value: formatNumber(receiveSupplier) },
       ],
       href: filteredLinks.receive,
       icon: Truck,
       className: 'border-sky-300/25 bg-sky-400/10 text-sky-100',
     },
     {
-      id: 'receive-value',
-      label: 'Nilai Goods Receive',
-      value: formatCurrency(receiveAmount),
-      description: 'Nilai barang yang diterima dan masuk proses inventory.',
-      formula: 'SUM(PU_GOODSRCVLN.ReceiveQty x PU_POLN.Cost).',
-      source: 'goods-receiving-receipt-activity / PU_GOODSRCVLN',
-      breakdown: [
-        { label: 'Total qty receive', value: formatQuantity(receiveQty) },
-        { label: 'Supplier aktif', value: formatNumber(receiveSupplier) },
-        { label: 'Missing PO line cost', value: formatNumber(firstNumber(receive, ['MissingPOLineCostRows'])) },
-      ],
-      href: filteredLinks.receive,
-      icon: Truck,
-      className: 'border-indigo-300/25 bg-indigo-400/10 text-indigo-100',
-    },
-    {
       id: 'pr-outstanding',
       label: 'PR Outstanding',
       value: formatQuantity(prQtyOutstanding),
-      description: 'Kebutuhan PR inventory yang belum terpenuhi.',
+      description: 'Kebutuhan PR belum terpenuhi.',
       formula: 'SUM(IN_PRLN.QtyOutstanding).',
-      source: 'purchase-request-inventory / IN_PRLN',
+      source: 'purchase-request-inventory',
       breakdown: [
         { label: 'Total PR', value: formatNumber(prCount) },
         { label: 'Qty request', value: formatQuantity(prQtyRequest) },
-        { label: 'Qty received', value: formatQuantity(prQtyReceived) },
+        { label: 'Nilai PR', value: formatCurrency(prAmount) },
       ],
       href: filteredLinks.process,
       icon: ClipboardList,
@@ -547,61 +503,32 @@ export default function ProcurementKpiStrip({
       id: 'po-outstanding',
       label: 'PO Outstanding',
       value: formatQuantity(poQtyOutstanding),
-      description: 'Order barang yang belum diterima penuh.',
-      formula: 'SUM(PU_POLN.QtyOrder - PU_POLN.QtyReceive).',
-      source: 'purchase-order-history / PU_POLN',
+      description: 'PO belum diterima penuh.',
+      formula: 'SUM(QtyOrder - QtyReceive).',
+      source: 'purchase-order-history',
       breakdown: [
         { label: 'Total PO', value: formatNumber(poCount) },
         { label: 'Qty order', value: formatQuantity(poQtyOrder) },
-        { label: 'Qty receive', value: formatQuantity(poQtyReceive) },
-      ],
-      href: filteredLinks.process,
-      icon: ClipboardList,
-      className: 'border-yellow-300/25 bg-yellow-400/10 text-yellow-100',
-    },
-    {
-      id: 'process-exposure',
-      label: 'Exposure PR + PO',
-      value: formatCurrency(prAmount + poAmount),
-      description: 'Nilai proses procurement yang sedang/tercatat di PR dan PO.',
-      formula: 'SUM(IN_PRLN.Amount) + SUM(PU_POLN.Amount).',
-      source: 'purchase-request + purchase-order summaries',
-      breakdown: [
-        { label: 'Nilai PR', value: formatCurrency(prAmount) },
         { label: 'Nilai PO', value: formatCurrency(poAmount) },
-        { label: 'Outstanding qty PR+PO', value: formatQuantity(processOutstanding) },
       ],
       href: filteredLinks.process,
       icon: CircleDollarSign,
-      className: 'border-lime-300/25 bg-lime-400/10 text-lime-100',
+      className: 'border-yellow-300/25 bg-yellow-400/10 text-yellow-100',
     },
-    {
-      id: 'movement',
-      label: 'Movement Event',
-      value: formatNumber(movementEvent),
-      description: 'Jumlah event issue/movement valid untuk hitung movement category.',
-      formula: 'SUM(StockIssueMovementCount); ItemType 1 dari IN_STOCKISSUE, ItemType 4 dari WS_JOBSTOCK.',
-      source: 'all-stock-movement-analysis / movement summary',
-      breakdown: [
-        { label: 'Movement Gudang', value: formatNumber(regularMovement) },
-        { label: 'Movement Workshop', value: formatNumber(workshopMovement) },
-        { label: 'Issue amount', value: formatCurrency(movementAmount) },
-      ],
-      href: filteredLinks.movement,
-      icon: Activity,
-      className: 'border-fuchsia-300/25 bg-fuchsia-400/10 text-fuchsia-100',
-    },
+  ]
+
+  const movementCards: ProcurementKpiCard[] = [
     {
       id: 'movement-risk',
-      label: 'Slow/Dead/Stale Item',
+      label: 'Slow / Dead / Stale',
       value: formatNumber(riskMovementItem),
-      description: 'Item yang perlu review karena movement rendah atau tidak bergerak.',
-      formula: 'Slow Moving + Dead Stock + Stale dari actual MovementCategory periodik.',
-      source: 'all-stock-movement-analysis / MovementCategory',
+      description: 'Item perlu review movement.',
+      formula: 'Slow + Dead + Stale dari MovementCategory periodik.',
+      source: `all-stock-movement-analysis · MC ${filters.movementWindow}`,
       breakdown: [
         { label: 'Fast Moving', value: formatNumber(fastMovingItem) },
         { label: 'Moving', value: formatNumber(movingItem) },
-        { label: 'Slow + Dead + Stale', value: `${formatNumber(riskMovementItem)} item` },
+        { label: 'Event movement', value: formatNumber(movementEvent) },
       ],
       href: filteredLinks.movement,
       icon: AlertTriangle,
@@ -611,25 +538,68 @@ export default function ProcurementKpiStrip({
       id: 'data-quality',
       label: 'Quality Alert',
       value: formatNumber(dataQualityAlert),
-      description: 'Sinyal data yang bisa membuat angka KPI salah tafsir.',
-      formula: 'Zero qty item + zero unit cost item + missing PO line cost + PR outstanding amount 0.',
-      source: 'valuation + receive + PR quality fields',
+      description: 'Sinyal data yang bikin KPI salah tafsir.',
+      formula: 'Zero qty + zero cost + missing PO cost + PR amount 0.',
+      source: 'valuation + receive + PR quality',
       breakdown: [
-        { label: 'Zero quantity item', value: formatNumber(firstNumber(stock, ['zero_quantity_item', 'ItemStokNol'])) },
-        { label: 'Zero unit cost item', value: formatNumber(firstNumber(stock, ['zero_unit_cost_item'])) },
-        { label: 'Receive missing cost + PR amount 0', value: formatNumber(firstNumber(receive, ['MissingPOLineCostRows']) + firstNumber(pr, ['OutstandingAmountNol'])) },
+        { label: 'Zero qty item', value: formatNumber(firstNumber(stock, ['zero_quantity_item', 'ItemStokNol'])) },
+        { label: 'Zero unit cost', value: formatNumber(firstNumber(stock, ['zero_unit_cost_item'])) },
+        { label: 'Issue amount', value: formatCurrency(movementAmount) },
       ],
       href: filteredLinks.stock,
-      icon: AlertTriangle,
+      icon: Gauge,
       className: 'border-red-300/25 bg-red-400/10 text-red-100',
     },
   ]
 
   const partial = Object.values(snapshots).some((snapshot) => snapshot && !snapshot.ok)
-  const headlineCard = cards[0]
-  const compactCards = cards.slice(1)
+  const headlineCard = valuationCards[0]
+  const valuationSideCards = valuationCards.slice(1)
   const gudangShare = Math.min(Math.max(percentOf(gudangValue, inventoryValue), 0), 100)
   const workshopShare = Math.min(Math.max(percentOf(workshopValue, inventoryValue), 0), 100)
+
+  const renderCardGrid = (cards: ProcurementKpiCard[]) => (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {cards.map((card) => {
+        const Icon = card.icon
+        return (
+          <Link
+            key={card.id}
+            href={card.href}
+            className="group relative min-h-[150px] overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.025))] p-3 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.085]"
+          >
+            <span className="pointer-events-none absolute -right-10 -top-12 h-24 w-24 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
+            <span className="relative z-10 flex items-start justify-between gap-2">
+              <span className="min-w-0">
+                <span className="block truncate text-[10px] font-black uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{card.label}</span>
+                <strong className="mt-1 block truncate text-[1.45rem] font-black leading-none tracking-[-0.06em] text-[var(--rc-text)]">
+                  {loading ? '...' : card.value}
+                </strong>
+              </span>
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${card.className}`}>
+                <Icon size={17} />
+              </span>
+            </span>
+            <span className="relative z-10 mt-2 block truncate text-[11px] font-semibold text-[var(--rc-text-muted)]">
+              {loading ? 'Menunggu response gateway' : card.description}
+            </span>
+            <span className="relative z-10 mt-2 flex flex-wrap gap-1.5">
+              {card.breakdown.map((item) => (
+                <span key={item.label} className="max-w-full rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-[10px] font-bold text-[var(--rc-text-faint)]">
+                  <span>{item.label}: </span>
+                  <strong className="text-[var(--rc-text)]">{loading ? '...' : item.value}</strong>
+                </span>
+              ))}
+            </span>
+            <span className="relative z-10 mt-2 flex items-center justify-between gap-2 border-t border-white/10 pt-2 text-[10px] font-bold text-[var(--rc-text-faint)]">
+              {loading ? 'Loading' : card.source}
+              <ArrowRight size={13} className="text-[var(--rc-forest-accent)]" />
+            </span>
+          </Link>
+        )
+      })}
+    </div>
+  )
 
   return (
     <section className="relative overflow-hidden rounded-[32px] border border-[var(--rc-forest-border)] bg-[radial-gradient(circle_at_8%_0%,rgba(155,226,61,.18),transparent_28%),radial-gradient(circle_at_90%_8%,rgba(41,199,200,.16),transparent_25%),linear-gradient(135deg,rgba(2,10,7,.94),rgba(7,25,17,.9)_46%,rgba(10,14,7,.92))] shadow-[0_26px_90px_rgba(0,0,0,.34)]">
@@ -637,9 +607,9 @@ export default function ProcurementKpiStrip({
       <div className="relative z-10 flex flex-col gap-2 border-b border-[var(--rc-border)] bg-black/10 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[var(--rc-forest-accent)]">Procurement command deck</p>
-          <h2 className="mt-1 text-xl font-black tracking-[-0.05em] text-[var(--rc-text)] sm:text-2xl">KPI padat, breakdown tetap kelihatan.</h2>
+          <h2 className="mt-1 text-xl font-black tracking-[-0.05em] text-[var(--rc-text)] sm:text-2xl">KPI dikelompokkan per konteks.</h2>
           <p className="mt-1 max-w-4xl text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">
-            Total valuation dibuka menjadi Gudang + Workshop; proses dibuka menjadi receive, PR, PO, movement, dan quality.
+            Valuasi stock · Proses PR/PO/receive · Movement risk/quality. Satu filter pusat, tidak ada KPI inventory terpisah di bawah.
           </p>
         </div>
         <span className="w-fit rounded-full border border-[var(--rc-forest-border-strong)] bg-[rgba(155,226,61,.08)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--rc-forest-accent)]">
@@ -791,52 +761,19 @@ export default function ProcurementKpiStrip({
           </Link>
         ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {compactCards.map((card) => {
-            const Icon = card.icon
-            return (
-              <Link
-                key={card.id}
-                href={card.href}
-                className="group relative min-h-[150px] overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.025))] p-3 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.085]"
-              >
-                <span className="pointer-events-none absolute -right-10 -top-12 h-24 w-24 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
-                <span className="relative z-10 flex items-start justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="block truncate text-[10px] font-black uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{card.label}</span>
-                    <strong className="mt-1 block truncate text-[1.45rem] font-black leading-none tracking-[-0.06em] text-[var(--rc-text)]">
-                      {loading ? '...' : card.value}
-                    </strong>
-                  </span>
-                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${card.className}`}>
-                    <Icon size={17} />
-                  </span>
-                </span>
-
-                <span className="relative z-10 mt-2 block truncate text-[11px] font-semibold text-[var(--rc-text-muted)]">
-                  {loading ? 'Menunggu response gateway' : card.description}
-                </span>
-
-                <span className="relative z-10 mt-2 block line-clamp-2 rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-[10px] font-semibold leading-4 text-[var(--rc-text-faint)]">
-                  {card.formula}
-                </span>
-
-                <span className="relative z-10 mt-2 flex flex-wrap gap-1.5">
-                  {card.breakdown.map((item) => (
-                    <span key={item.label} className="max-w-full rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-[10px] font-bold text-[var(--rc-text-faint)]">
-                      <span>{item.label}: </span>
-                      <strong className="text-[var(--rc-text)]">{loading ? '...' : item.value}</strong>
-                    </span>
-                  ))}
-                </span>
-
-                <span className="relative z-10 mt-2 flex items-center justify-between gap-2 border-t border-white/10 pt-2 text-[10px] font-bold text-[var(--rc-text-faint)]">
-                  {loading ? 'Loading' : card.source}
-                  <ArrowRight size={13} className="text-[var(--rc-forest-accent)]" />
-                </span>
-              </Link>
-            )
-          })}
+        <div className="space-y-3">
+          <div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/70">1. Valuasi stock</p>
+            {renderCardGrid(valuationSideCards)}
+          </div>
+          <div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-sky-100/70">2. Proses procurement</p>
+            {renderCardGrid(processCards)}
+          </div>
+          <div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-rose-100/70">3. Movement + quality</p>
+            {renderCardGrid(movementCards)}
+          </div>
         </div>
       </div>
     </section>

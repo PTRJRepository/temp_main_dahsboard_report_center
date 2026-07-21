@@ -1,5 +1,6 @@
 import { liveInventoryReports } from './inventory/config'
 import { getIntelligenceModule, type IntelligenceModuleId } from './intelligence'
+import { getReportModuleConfig } from './module-registry'
 
 type ReportSource = 'estate' | 'pabrik'
 
@@ -21,57 +22,27 @@ type ModulePanelSubModule = {
 }
 
 function subModulesFor(moduleId: IntelligenceModuleId, source: ReportSource): ModulePanelSubModule[] {
-  if (moduleId === 'procurement') {
-    return [
-      {
-        id: 'inventory',
-        name: 'Inventory',
-        description: 'Stock, gudang, movement, valuasi, fuel, dan audit inventory.',
-        count: liveInventoryReports.length,
-        href: `/report-center/inventory?source=${source}`,
-      },
-      {
-        id: 'gudang',
-        name: 'Gudang & Stock',
-        description: 'Posisi stok gudang, valuasi, transfer, opname, dan adjustment.',
-        count: liveInventoryReports.filter((report) => ['executive', 'transaction', 'control'].includes(report.group)).length,
-        href: `/report-center/inventory?source=${source}&stage=all&report=INV-14`,
-      },
-      {
-        id: 'workshop',
-        name: 'Workshop & Vehicle',
-        description: 'Item workshop, vehicle running, dan transaksi operasional kendaraan.',
-        count: liveInventoryReports.filter((report) => /workshop|vehicle/i.test(`${report.group} ${report.title} ${report.description} ${report.tags.join(' ')}`)).length,
-        href: `/report-center/inventory?source=${source}&stage=all&report=INV-07`,
-      },
-      {
-        id: 'fuel',
-        name: 'Fuel Inventory',
-        description: 'Pemakaian BBM, kendaraan, blok, qty, dan nilai fuel issue.',
-        count: liveInventoryReports.filter((report) => report.group === 'fuel').length,
-        href: `/report-center/inventory?source=${source}&stage=all&report=INV-10`,
-      },
-    ]
-  }
+  const moduleConfig = getReportModuleConfig(moduleId)
+  if (!moduleConfig) return []
 
-  const fallback: Record<Exclude<IntelligenceModuleId, 'procurement'>, ModulePanelSubModule[]> = {
-    financial: [
-      { id: 'produktivitas', name: 'Produktivitas', description: 'Panen harian, cost per KG, dan efisiensi output.', count: 16 },
-      { id: 'cost', name: 'Cost Control', description: 'Cost view dan variance biaya operasional.', count: 4 },
-    ],
-    'human-resources': [
-      { id: 'payroll', name: 'Payroll', description: 'Payroll, daftar upah, wages comparison.', count: 24 },
-      { id: 'absensi', name: 'Absensi', description: 'Kehadiran, premi, lembur, dan dampak report.', count: 18 },
-      { id: 'premi-lembur', name: 'Premi & Lembur', description: 'Premi produksi, lembur, summary upah.', count: 17 },
-    ],
-    budget: [
-      { id: 'planning', name: 'Budget Planning', description: 'Rencana budget dan forecast.', count: 4 },
-      { id: 'realization', name: 'Budget Realization', description: 'Realisasi dan actual spending.', count: 4 },
-      { id: 'variance', name: 'Variance Analysis', description: 'Deviasi budget vs actual.', count: 4 },
-    ],
-  }
+  return moduleConfig.submodules.map((submodule) => {
+    const href = submodule.route?.startsWith('/report-center')
+      ? withReportSource(submodule.route, source)
+      : submodule.route
 
-  return fallback[moduleId]
+    return {
+      id: submodule.id,
+      name: submodule.name,
+      description: submodule.description,
+      count: submodule.reportCount,
+      href,
+    }
+  })
+}
+
+function withReportSource(route: string, source: ReportSource) {
+  const separator = route.includes('?') ? '&' : '?'
+  return route.includes('source=') ? route : `${route}${separator}source=${source}`
 }
 
 export function getModulePanel(moduleId: string | null, source: ReportSource) {
