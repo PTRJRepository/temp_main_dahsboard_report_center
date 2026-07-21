@@ -1,9 +1,14 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { NextRequest, NextResponse } from 'next/server'
 import { getInventoryReport } from '@/lib/reports/inventory/config'
+import { attachInventoryAnalytics, type InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
+import { buildMonthlyStockAccountMovementAnalytics } from '@/lib/reports/inventory/monthly-stock-account-movement'
+import { buildInventoryReportAnalytics } from '@/lib/reports/inventory/report-analytics'
 import { accountingActualPeriodSelectSql, accountingToActualPeriod, actualToAccountingPeriod } from '@/lib/reports/accounting-period'
 import {
   applyReportFilters,
   filtersFromSearchParams,
+  normalizeInventoryAnalysisGroupFilters,
   validateReadOnlySql,
   type ReportFilterInput,
 } from '@/lib/reports/report-filtering'
@@ -13,15 +18,31 @@ import {
   countMovementCategoryRows,
   isMovementCategoryField,
   movementAnalysisSqlCase,
+  movementCategoryThresholdLabel,
   movementCategoryRankSqlCase,
   movementCategorySqlCase,
+  normalizeMovementCategoryThresholds,
+  type MovementCategoryThresholds,
 } from '@/lib/reports/movement-category'
+import {
+  buildMovementPeriodMetadata,
+  resolveMovementWindowScope,
+  type MovementWindowScope,
+} from '@/lib/reports/inventory/movement-period'
+import { verifyToken } from '@/utils/jwt'
+import {
+  gatewayOverrideFromRequest,
+  resolveSqlGatewayApiKey,
+  resolveSqlGatewayBase,
+  sqlGatewayQueryUrl,
+} from '@/lib/reports/sql-gateway-config'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
-const BASE_URL = process.env.SQL_GATEWAY_URL ?? 'http://10.0.0.110:3001/query'
 const TOKEN =
-  process.env.SQL_GATEWAY_API_KEY ??
+  resolveSqlGatewayApiKey() ||
+  process.env.SQL_GATEWAY_API_KEY ||
   '2a993486e7a448474de66bfaea4adba7a99784defbcaba420e7f906176b94df6'
 
 type ReportSource = 'estate' | 'pabrik'
@@ -79,10 +100,21 @@ type ReportPayload = {
   summary: DbRow
   chart: DbRow[]
   metadata: DbRow
+  analytics?: InventoryAnalyticsContract
 }
 
 type ReportHandlerOptions = { limit: number; limitAll?: boolean; search: string; ctx: QueryContext; stale: string; filters?: ReportFilterInput }
 type ReportHandler = (options: ReportHandlerOptions) => Promise<ReportPayload>
+
+type DebugSqlStatement = {
+  label: string
+  server: string
+  database: string
+  sql: string
+  rows: number
+  executionMs?: number
+  readOnly: true
+}
 
 type PaginationState = {
   page: number
@@ -90,6 +122,42 @@ type PaginationState = {
 }
 
 const TABLE_WINDOW_ROW_LIMIT = 20000
+const debugSqlStorage = new AsyncLocalStorage<DebugSqlStatement[]>()
+const gatewayBaseStorage = new AsyncLocalStorage<string | null>()
+
+function wantsDebugSql(request: NextRequest) {
+  const raw = (request.nextUrl.searchParams.get('debugSql') ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+function isAdminDebugRequest(request: NextRequest) {
+  if (!wantsDebugSql(request)) return false
+  const token =
+    request.cookies.get('auth-token')?.value ||
+    request.cookies.get('payroll_auth_token')?.value
+  if (!token) return false
+
+  try {
+    const payload = verifyToken(token)
+    return String(payload?.role ?? '').toUpperCase() === 'ADMIN'
+  } catch {
+    return false
+  }
+}
+
+function classifySqlStatement(sql: string) {
+  const text = compactSql(sql)
+  if (/\bSELECT\s+TOP\s+\d+\s+\*\s+FROM\s+report_rows\b/i.test(text)) return 'detail'
+  if (/\bSELECT\s+TOP\s+\d+[\s\S]*(\bDimensionId\b|\bAS\s+Label\b|\bGROUP\s+BY\b)/i.test(text)) return 'chart-or-breakdown'
+  if (/\bCOUNT\(\*\)\s+AS\s+TotalItem\b/i.test(text) || /\bSELECT\s+COUNT\b/i.test(text)) return 'summary'
+  if (/\bGROUP\s+BY\b/i.test(text) || /\bDimensionId\b/i.test(text) || /\bLabel\b/i.test(text)) return 'chart-or-breakdown'
+  if (/\bSELECT\s+TOP\b/i.test(text)) return 'detail'
+  return 'query'
+}
+
+function compactSql(sql: string) {
+  return sql.replace(/[ \t]+$/gm, '').trim()
+}
 
 function wantsAllRows(request: NextRequest) {
   const raw = (request.nextUrl.searchParams.get('limit') ?? '').trim().toLowerCase()
@@ -116,6 +184,90 @@ function getTableSort(request: NextRequest) {
 
 function sanitizeLike(value: string) {
   return value.trim().replace(/'/g, "''").slice(0, 80)
+}
+
+function cleanInventoryCode(value?: string) {
+  const cleaned = sanitizeLike(value ?? '').toUpperCase()
+  return /^[A-Z0-9_.-]{1,40}$/.test(cleaned) ? cleaned : ''
+}
+
+const monthlyAnalysisGroups = {
+  StockAnalysisCode: { dimensionId: 'stock-analysis', label: 'Stock Analysis Code', sql: 'StockAnalysisCode', nameSql: 'StockAnalysisName' },
+  ProductTypeCode: { dimensionId: 'product-type', label: 'Product Type Code', sql: 'ProductTypeCode', nameSql: 'ProductTypeDescription' },
+  ProductCategoryCode: { dimensionId: 'product-category', label: 'Product Category Code', sql: 'ProductCategoryCode', nameSql: undefined },
+  ProductBrandCode: { dimensionId: 'product-brand', label: 'Product Brand Code', sql: 'ProductBrandCode', nameSql: undefined },
+  ProductModelCode: { dimensionId: 'product-model', label: 'Product Model Code', sql: 'ProductModelCode', nameSql: undefined },
+  ProductMaterialCode: { dimensionId: 'product-material', label: 'Product Material Code', sql: 'ProductMaterialCode', nameSql: undefined },
+  Location: { dimensionId: 'location', label: 'Location', sql: 'Location', nameSql: undefined },
+  MovementCategory: { dimensionId: 'movement-category', label: 'Actual Movement Category', sql: 'MovementCategory', nameSql: undefined },
+} as const
+
+type MonthlyAnalysisGroupKey = keyof typeof monthlyAnalysisGroups
+
+function cleanMonthlyAnalysisGroup(value?: string): MonthlyAnalysisGroupKey {
+  const normalized = String(value ?? '').trim()
+  return Object.prototype.hasOwnProperty.call(monthlyAnalysisGroups, normalized)
+    ? (normalized as MonthlyAnalysisGroupKey)
+    : 'StockAnalysisCode'
+}
+
+function cleanMonthlyMovementCategory(value?: string) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return MOVEMENT_CATEGORY_ORDER.find((category) => category.toLowerCase() === normalized) ?? ''
+}
+
+const monthlyStockMovementChartMetricSelect = `
+      COUNT(*) AS TotalItem,
+      CAST(SUM(QtyOnHand) AS DECIMAL(18,2)) AS QtyOnHand,
+      CAST(SUM(QtyOnHold) AS DECIMAL(18,2)) AS QtyOnHold,
+      CAST(SUM(QtyOnHandHold) AS DECIMAL(18,2)) AS QtyOnHandHold,
+      CAST(SUM(OnHandHoldAmount) AS DECIMAL(18,2)) AS OnHandHoldAmount,
+      CAST(SUM(OpeningQty) AS DECIMAL(18,2)) AS OpeningQty,
+      CAST(SUM(OpeningAmount) AS DECIMAL(18,2)) AS OpeningAmount,
+      CAST(SUM(ReceivedQty) AS DECIMAL(18,2)) AS ReceivedQty,
+      CAST(SUM(ReceivedAmount) AS DECIMAL(18,2)) AS ReceivedAmount,
+      CAST(SUM(ReturnAdviceQty) AS DECIMAL(18,2)) AS ReturnAdviceQty,
+      CAST(SUM(ReturnAdviceAmount) AS DECIMAL(18,2)) AS ReturnAdviceAmount,
+      CAST(SUM(TransferredQty) AS DECIMAL(18,2)) AS TransferredQty,
+      CAST(SUM(TransferredAmount) AS DECIMAL(18,2)) AS TransferredAmount,
+      CAST(SUM(AdjustmentQty) AS DECIMAL(18,2)) AS AdjustmentQty,
+      CAST(SUM(AdjustmentAmount) AS DECIMAL(18,2)) AS AdjustmentAmount,
+      CAST(SUM(LedgerQty) AS DECIMAL(18,2)) AS LedgerQty,
+      CAST(SUM(LedgerAmount) AS DECIMAL(18,2)) AS LedgerAmount,
+      CAST(SUM(IssuedStationQty) AS DECIMAL(18,2)) AS IssuedStationQty,
+      CAST(SUM(IssuedStationAmount) AS DECIMAL(18,2)) AS IssuedStationAmount,
+      CAST(SUM(IssuedVehicleQty) AS DECIMAL(18,2)) AS IssuedVehicleQty,
+      CAST(SUM(IssuedVehicleAmount) AS DECIMAL(18,2)) AS IssuedVehicleAmount,
+      CAST(SUM(IssuedTotalQty) AS DECIMAL(18,2)) AS IssuedTotalQty,
+      CAST(SUM(IssuedTotalAmount) AS DECIMAL(18,2)) AS IssuedTotalAmount,
+      CAST(SUM(ReturnQty) AS DECIMAL(18,2)) AS ReturnQty,
+      CAST(SUM(ReturnAmount) AS DECIMAL(18,2)) AS ReturnAmount,
+      CAST(SUM(GoodsReceiveQty) AS DECIMAL(18,2)) AS GoodsReceiveQty,
+      CAST(SUM(GoodsReceiveAmount) AS DECIMAL(18,2)) AS GoodsReceiveAmount,
+      CAST(SUM(GoodsReturnQty) AS DECIMAL(18,2)) AS GoodsReturnQty,
+      CAST(SUM(GoodsReturnAmount) AS DECIMAL(18,2)) AS GoodsReturnAmount,
+      CAST(SUM(DispatchAdvQty) AS DECIMAL(18,2)) AS DispatchAdvQty,
+      CAST(SUM(DispatchAdvAmount) AS DECIMAL(18,2)) AS DispatchAdvAmount,
+      CAST(SUM(ClosingQty) AS DECIMAL(18,2)) AS ClosingQty,
+      CAST(SUM(ClosingAmount) AS DECIMAL(18,2)) AS ClosingAmount,
+      CAST(SUM(ClosingQty) AS DECIMAL(18,2)) AS Qty,
+      CAST(SUM(ClosingAmount) AS DECIMAL(18,2)) AS Amount,
+      CAST(SUM(IssuedTotalAmount) AS DECIMAL(18,2)) AS IssuedAmount,
+      CAST(SUM(MovementActivityCountActual) AS DECIMAL(18,2)) AS MovementActivityCountActual,
+      CAST(SUM(MovementActivityQtyActual) AS DECIMAL(18,2)) AS MovementActivityQtyActual,
+      CAST(SUM(MovementActivityAmountActual) AS DECIMAL(18,2)) AS MovementActivityAmountActual,
+      CAST(SUM(StockIssueMovementCount) AS DECIMAL(18,2)) AS StockIssueMovementCount,
+      CAST(SUM(StockIssueMovementQty) AS DECIMAL(18,2)) AS StockIssueMovementQty,
+      CAST(SUM(StockIssueMovementAmount) AS DECIMAL(18,2)) AS StockIssueMovementAmount,
+      CAST(SUM(MovementIssueCountActual) AS DECIMAL(18,2)) AS MovementIssueCountActual,
+      CAST(SUM(MovementIssueQtyActual) AS DECIMAL(18,2)) AS MovementIssueQtyActual,
+      CAST(SUM(MovementIssueAmountActual) AS DECIMAL(18,2)) AS MovementIssueAmountActual`
+
+function cleanWarehouseItemTypeScope(value?: string) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === '1' || normalized === 'gudang' || normalized === 'stock') return '1'
+  if (normalized === '4' || normalized === 'workshop' || normalized === 'mesin') return '4'
+  return ''
 }
 
 function cleanSqlDate(value?: string) {
@@ -155,16 +307,20 @@ function previousAccountingPeriod(accYear: number, accMonth: number) {
 }
 
 function resolveAssetValuationPeriod(filters?: ReportFilterInput) {
-  const fromAccountingFields = filters?.accYear && filters?.accMonth
-    ? accountingToActualPeriod(filters.accYear, filters.accMonth)
+  // Prefer explicit actual calendar period (period=YYYY-MM or actualYear+actualMonth)
+  // so leftover AccYear/AccMonth in URL cannot override user month picker.
+  const rawPeriod = filters?.period?.trim()
+  const actualMatch = rawPeriod?.match(/^(\d{4})-(\d{1,2})(?:-\d{2})?$/)
+  const fromActualPeriod = actualMatch
+    ? actualToAccountingPeriod(Number(actualMatch[1]), Number(actualMatch[2]))
     : null
-  if (fromAccountingFields) {
+  if (fromActualPeriod) {
     return {
-      ...fromAccountingFields,
-      actualPeriod: formatPeriod(fromAccountingFields.actualYear, fromAccountingFields.actualMonth),
-      accountingPeriod: formatPeriod(fromAccountingFields.accYear, fromAccountingFields.accMonth),
+      ...fromActualPeriod,
+      actualPeriod: formatPeriod(fromActualPeriod.actualYear, fromActualPeriod.actualMonth),
+      accountingPeriod: formatPeriod(fromActualPeriod.accYear, fromActualPeriod.accMonth),
       requested: true,
-      inputMode: 'accounting',
+      inputMode: 'actual' as const,
     }
   }
 
@@ -177,11 +333,10 @@ function resolveAssetValuationPeriod(filters?: ReportFilterInput) {
       actualPeriod: formatPeriod(fromActualFields.actualYear, fromActualFields.actualMonth),
       accountingPeriod: formatPeriod(fromActualFields.accYear, fromActualFields.accMonth),
       requested: true,
-      inputMode: 'actual',
+      inputMode: 'actual' as const,
     }
   }
 
-  const rawPeriod = filters?.period?.trim()
   const accountingMatch = rawPeriod?.match(/^(?:acc|accounting)[:/-](\d{4})-(\d{1,2})$/i)
   const fromAccountingPeriod = accountingMatch
     ? accountingToActualPeriod(Number(accountingMatch[1]), Number(accountingMatch[2]))
@@ -192,21 +347,20 @@ function resolveAssetValuationPeriod(filters?: ReportFilterInput) {
       actualPeriod: formatPeriod(fromAccountingPeriod.actualYear, fromAccountingPeriod.actualMonth),
       accountingPeriod: formatPeriod(fromAccountingPeriod.accYear, fromAccountingPeriod.accMonth),
       requested: true,
-      inputMode: 'accounting',
+      inputMode: 'accounting' as const,
     }
   }
 
-  const actualMatch = rawPeriod?.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/)
-  const fromActualPeriod = actualMatch
-    ? actualToAccountingPeriod(Number(actualMatch[1]), Number(actualMatch[2]))
+  const fromAccountingFields = filters?.accYear && filters?.accMonth
+    ? accountingToActualPeriod(filters.accYear, filters.accMonth)
     : null
-  if (fromActualPeriod) {
+  if (fromAccountingFields) {
     return {
-      ...fromActualPeriod,
-      actualPeriod: formatPeriod(fromActualPeriod.actualYear, fromActualPeriod.actualMonth),
-      accountingPeriod: formatPeriod(fromActualPeriod.accYear, fromActualPeriod.accMonth),
+      ...fromAccountingFields,
+      actualPeriod: formatPeriod(fromAccountingFields.actualYear, fromAccountingFields.actualMonth),
+      accountingPeriod: formatPeriod(fromAccountingFields.accYear, fromAccountingFields.accMonth),
       requested: true,
-      inputMode: 'actual',
+      inputMode: 'accounting' as const,
     }
   }
 
@@ -218,7 +372,7 @@ function resolveAssetValuationPeriod(filters?: ReportFilterInput) {
     actualPeriod: formatPeriod(fallback.actualYear, fallback.actualMonth),
     accountingPeriod: formatPeriod(fallback.accYear, fallback.accMonth),
     requested: false,
-    inputMode: 'current',
+    inputMode: 'current' as const,
   }
 }
 
@@ -295,6 +449,14 @@ function workshopStockIssueAmountExpression(alias = 's') {
   return `COALESCE(${alias}.Amount, ${alias}.PriceAmount, ISNULL(${alias}.Qty, 0) * ISNULL(${alias}.Price, 0), 0)`
 }
 
+function fuelIssueDocumentDateExpression(alias = 'h') {
+  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.FuelIssueRefDate, ${alias}.UpdateDate, ${alias}.CreateDate)`
+}
+
+function fuelIssueStatusFilter(alias = 'h') {
+  return `AND RTRIM(ISNULL(${alias}.Status, '')) IN ('2', '6')`
+}
+
 function workshopStockIssueItemTypeExpression(itemAlias = 'i', stockAlias = 's') {
   return `COALESCE(
             NULLIF(RTRIM(CONVERT(varchar(10), ${itemAlias}.ItemType)), ''),
@@ -307,7 +469,86 @@ function quantityClosingExpression(alias = '') {
   return `(ISNULL(${prefix}QtyOnHand, 0) + ISNULL(${prefix}QtyOnHold, 0) + ISNULL(${prefix}QtyOnOrder, 0))`
 }
 
-function stockIssueUsageApply(database: string, itemAlias = 'i') {
+function inventoryTaxonomyScopeFilter(alias: string, filters?: ReportFilterInput) {
+  const productType = cleanInventoryCode(filters?.productType)
+  const productCategory = cleanInventoryCode(filters?.productCategory)
+  const productBrand = cleanInventoryCode(filters?.productBrand)
+  const productModel = cleanInventoryCode(filters?.productModel)
+  const productMaterial = cleanInventoryCode(filters?.productMaterial)
+  const stockAnalysis = cleanInventoryCode(filters?.stockAnalysis)
+  const clauses = [
+    productType ? `RTRIM(ISNULL(${alias}.ProdTypeCode, '')) = '${productType}'` : '',
+    productCategory ? `RTRIM(ISNULL(${alias}.ProdCatCode, '')) = '${productCategory}'` : '',
+    productBrand ? `RTRIM(ISNULL(${alias}.ProdBrandCode, '')) = '${productBrand}'` : '',
+    productModel ? `RTRIM(ISNULL(${alias}.ProdModelCode, '')) = '${productModel}'` : '',
+    productMaterial ? `RTRIM(ISNULL(${alias}.ProdMatCode, '')) = '${productMaterial}'` : '',
+    stockAnalysis ? `RTRIM(ISNULL(${alias}.StockAnalysisCode, '')) = '${stockAnalysis}'` : '',
+  ].filter(Boolean)
+
+  return clauses.map((clause) => `AND ${clause}`).join('\n        ')
+}
+
+function inventoryGenericCategoryScopeFilter(alias: string, filters?: ReportFilterInput) {
+  const category = sanitizeLike(filters?.category ?? '')
+  if (!category) return ''
+  return `AND (
+        RTRIM(ISNULL(${alias}.ProdCatCode, '')) LIKE N'%${category}%'
+        OR RTRIM(ISNULL(${alias}.ProdTypeCode, '')) LIKE N'%${category}%'
+        OR RTRIM(ISNULL(${alias}.StockAnalysisCode, '')) LIKE N'%${category}%'
+      )`
+}
+
+function inventoryItemTypeScopeFilter(alias: string, filters?: ReportFilterInput) {
+  const itemTypeScope = cleanWarehouseItemTypeScope(filters?.itemType)
+  if (itemTypeScope === '1') return `AND ${warehouseInventoryItemTypeExpression(alias)} = '1'`
+  if (itemTypeScope === '4') return `AND ${warehouseInventoryItemTypeExpression(alias)} = '4'`
+  return ''
+}
+
+function inventoryItemScopeExistsFilter(database: string, itemCodeSql: string, locCodeSql: string, filters?: ReportFilterInput) {
+  const taxonomy = inventoryTaxonomyScopeFilter('itemScope', filters)
+  const category = inventoryGenericCategoryScopeFilter('itemScope', filters)
+  const itemType = inventoryItemTypeScopeFilter('itemScope', filters)
+  if (!taxonomy && !category && !itemType) return ''
+
+  return `AND EXISTS (
+      SELECT 1
+      FROM [${database}].[dbo].[IN_ITEM] itemScope
+      WHERE itemScope.ItemCode = ${itemCodeSql}
+        AND itemScope.LocCode = ${locCodeSql}
+        ${itemType}
+        ${taxonomy}
+        ${category}
+    )`
+}
+
+function movementWindowFromFilters(filters?: ReportFilterInput): MovementWindowScope {
+  return resolveMovementWindowScope({
+    movementWindow: filters?.movementWindow,
+    dateFrom: filters?.dateFrom,
+    dateTo: filters?.dateTo,
+    period: filters?.period,
+  })
+}
+
+function movementThresholdsFromFilters(filters?: ReportFilterInput): MovementCategoryThresholds {
+  return normalizeMovementCategoryThresholds({
+    fastMinIssueCount: filters?.movementFastMin,
+    movingMinIssueCount: filters?.movementMovingMin,
+    movingMaxIssueCount: filters?.movementMovingMax,
+    slowIssueCount: filters?.movementSlowCount,
+  })
+}
+
+function stockIssueDateBoundsSql(windowScope: MovementWindowScope, dateExpression: string) {
+  return `${dateExpression} >= '${windowScope.startInclusive}'
+            AND ${dateExpression} < '${windowScope.endExclusive}'`
+}
+function stockIssueUsageApply(
+  database: string,
+  itemAlias = 'i',
+  windowScope: MovementWindowScope = resolveMovementWindowScope(),
+) {
   const itemType = warehouseInventoryItemTypeExpression(itemAlias)
   const workshopDate = workshopStockIssueDateExpression('s')
   const workshopDoc = workshopStockIssueDocumentExpression('s')
@@ -323,8 +564,7 @@ function stockIssueUsageApply(database: string, itemAlias = 'i') {
           WHERE ISNULL(${itemType}, '') <> '4'
             AND l.ItemCode = ${itemAlias}.ItemCode
             AND h.LocCode = ${itemAlias}.LocCode
-            AND h.PostDate >= '2000-01-01'
-            AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, GETDATE()))
+            AND ${stockIssueDateBoundsSql(windowScope, 'h.PostDate')}
           UNION ALL
           SELECT
             ${workshopDoc} AS StockIssueID,
@@ -336,8 +576,7 @@ function stockIssueUsageApply(database: string, itemAlias = 'i') {
             AND RTRIM(ISNULL(s.TransType, '')) = '1'
             AND s.ItemCode = ${itemAlias}.ItemCode
             AND s.LocCode = ${itemAlias}.LocCode
-            AND ${workshopDate} >= '2000-01-01'
-            AND ${workshopDate} < DATEADD(DAY, 1, CONVERT(date, GETDATE()))`
+            AND ${stockIssueDateBoundsSql(windowScope, workshopDate)}`
 
   return `
     OUTER APPLY (
@@ -423,11 +662,14 @@ ${issueDocsSql}
     ) issueEvents`
 }
 
-function stockIssueUsageColumns(quantityExpression?: string) {
+function stockIssueUsageColumns(
+  quantityExpression?: string,
+  thresholds: MovementCategoryThresholds = movementThresholdsFromFilters(),
+) {
   const movementEventCount = 'ISNULL(movement12.MovementEventCountAll, 0)'
   const movementGap = quantityExpression
     ? `CAST(${quantityExpression} - ISNULL(issueUsage.StockIssueQtyAllPeriod, 0) AS DECIMAL(18,2)) AS MovementGapQty,
-      ${movementCategorySqlCase(movementEventCount, quantityExpression)} AS MovementCategory,
+      ${movementCategorySqlCase(movementEventCount, quantityExpression, thresholds)} AS MovementCategory,
       CASE
         WHEN ${quantityExpression} = 0 AND ISNULL(movement12.MovementEventCountAll, 0) = 0 THEN 'Stok nol, tidak ada movement valid'
         WHEN latestMovement.LastMovementDate IS NULL THEN 'Tidak ada movement valid'
@@ -453,7 +695,10 @@ function stockIssueUsageColumns(quantityExpression?: string) {
       issueEvents.StockIssueEvent2`
 }
 
-function stockMovementAnalysisColumns(quantityExpression: string) {
+function stockMovementAnalysisColumns(
+  quantityExpression: string,
+  thresholds: MovementCategoryThresholds = movementThresholdsFromFilters(),
+) {
   const issueCount = 'ISNULL(issueUsage.StockIssueEventCount, 0)'
   return `CAST(ISNULL(issueUsage.StockIssueEventCount, 0) AS INT) AS StockIssueMovementCount,
       CAST(ISNULL(issueUsage.StockIssueQtyAllPeriod, 0) AS DECIMAL(18,2)) AS StockIssueMovementQty,
@@ -461,8 +706,8 @@ function stockMovementAnalysisColumns(quantityExpression: string) {
       issueUsage.LastStockIssueDate AS LastStockIssueMovementDate,
       latestMovement.LastMovementDate AS LastMovementDate,
       CAST(${quantityExpression} - ISNULL(issueUsage.StockIssueQtyAllPeriod, 0) AS DECIMAL(18,2)) AS StockIssueMovementGapQty,
-      ${movementCategorySqlCase(issueCount, quantityExpression)} AS MovementCategory,
-      ${movementAnalysisSqlCase(issueCount, quantityExpression)} AS MovementAnalysis,
+      ${movementCategorySqlCase(issueCount, quantityExpression, thresholds)} AS MovementCategory,
+      ${movementAnalysisSqlCase(issueCount, quantityExpression, thresholds)} AS MovementAnalysis,
       latestMovement.MovementEvent1 AS StockIssueMovementEvent1,
       latestMovement.MovementEvent2 AS StockIssueMovementEvent2,
       CAST(ISNULL(issueUsage.StockIssueEventCount, 0) AS INT) AS StockIssueEventCount,
@@ -495,7 +740,7 @@ function stockMovementAnalysisColumns(quantityExpression: string) {
 function shouldUseMovementCategoryWindow(filters?: ReportFilterInput) {
   if (filters?.groupBy) return isMovementCategoryField(filters.groupBy)
   if (filters?.chartDimension) return isMovementCategoryField(filters.chartDimension)
-  return true
+  return false
 }
 
 function movementCategoryLoadedGroups(rowsData: DbRow[]) {
@@ -533,6 +778,18 @@ function accountingPeriodFilter(alias: string, accYear: number, accMonth: number
       AND RTRIM(CONVERT(varchar(10), ${alias}.AccMonth)) = '${accMonth}'`
 }
 
+function cleanTransactionAsOf(value?: string) {
+  const raw = sanitizeLike(value ?? '').trim().replace(' ', 'T')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T23:59:59`
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return `${raw}:00`
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) return raw
+  return ''
+}
+
+function transactionAsOfFilter(alias: string, transactionAsOf: string) {
+  return transactionAsOf ? `AND COALESCE(${alias}.UpdateDate, ${alias}.CreateDate) <= CONVERT(datetime, '${transactionAsOf}', 126)` : ''
+}
+
 function monthlyStockAccountMovementCtes({
   database,
   location,
@@ -544,6 +801,17 @@ function monthlyStockAccountMovementCtes({
   openingActualPeriod,
   search,
   stockAnalysisCode,
+  productTypeCode,
+  productCategoryCode,
+  productBrandCode,
+  productModelCode,
+  productMaterialCode,
+  itemTypeScope,
+  stockAnalysisDefaultScope,
+  rowNumberPartitionSql,
+  transactionAsOf,
+  movementWindow,
+  movementThresholds,
 }: {
   database: string
   location: string
@@ -555,11 +823,82 @@ function monthlyStockAccountMovementCtes({
   openingActualPeriod: string
   search: string
   stockAnalysisCode: string
+  productTypeCode: string
+  productCategoryCode: string
+  productBrandCode: string
+  productModelCode: string
+  productMaterialCode: string
+  itemTypeScope: string
+  stockAnalysisDefaultScope: boolean
+  rowNumberPartitionSql: string
+  transactionAsOf: string
+  movementWindow: MovementWindowScope
+  movementThresholds: MovementCategoryThresholds
 }) {
   const reportAccountingPeriod = formatPeriod(reportAccYear, reportAccMonth)
   const openingAccountingPeriod = formatPeriod(openingAccYear, openingAccMonth)
-  const analysisFilter = stockAnalysisCode ? `AND RTRIM(i.StockAnalysisCode) = '${stockAnalysisCode}'` : ''
-  const whereSearch = textSearch(search, ['i.ItemCode', 'i.Description', 'i.StockAnalysisCode', "ISNULL(sa.Description, '')"])
+  const analysisFilter = stockAnalysisCode
+    ? `AND RTRIM(i.StockAnalysisCode) = '${stockAnalysisCode}'`
+    : stockAnalysisDefaultScope
+      ? "AND RTRIM(i.StockAnalysisCode) IN ('DEADS', 'MEMOV', 'SLMOV')"
+      : ''
+  const productTypeFilter = productTypeCode ? `AND RTRIM(ISNULL(i.ProdTypeCode, '')) = '${productTypeCode}'` : ''
+  const productCategoryFilter = productCategoryCode ? `AND RTRIM(ISNULL(i.ProdCatCode, '')) = '${productCategoryCode}'` : ''
+  const productBrandFilter = productBrandCode ? `AND RTRIM(ISNULL(i.ProdBrandCode, '')) = '${productBrandCode}'` : ''
+  const productModelFilter = productModelCode ? `AND RTRIM(ISNULL(i.ProdModelCode, '')) = '${productModelCode}'` : ''
+  const productMaterialFilter = productMaterialCode ? `AND RTRIM(ISNULL(i.ProdMatCode, '')) = '${productMaterialCode}'` : ''
+  // GUARDRAIL(monthly-valuation-itemtype):
+  // Default Report Center valuation must include both warehouse stock and workshop/mesin.
+  // Do not change the default back to ItemType = '1'. Use itemType=gudang/workshop
+  // only when the user explicitly asks to isolate one side.
+  const itemTypeFilter = itemTypeScope === '1'
+    ? `AND ${warehouseInventoryItemTypeExpression('i')} = '1'`
+    : itemTypeScope === '4'
+      ? `AND ${warehouseInventoryItemTypeExpression('i')} = '4'`
+      : `AND ${warehouseInventoryItemTypeExpression('i')} IN ('1', '4')`
+  const whereSearch = textSearch(search, ['i.ItemCode', 'i.Description', 'i.StockAnalysisCode', "ISNULL(sa.Description, '')", 'i.ProdTypeCode', "ISNULL(pt.Description, '')"])
+  const movementActivityCountExpression = `(
+          CASE WHEN ABS(ISNULL(a.received_qty, 0)) > 0 OR ABS(ISNULL(a.received_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.return_advice_qty, 0)) > 0 OR ABS(ISNULL(a.return_advice_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.transferred_qty, 0)) > 0 OR ABS(ISNULL(a.transferred_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.adjustment_qty, 0)) > 0 OR ABS(ISNULL(a.adjustment_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.ledger_qty, 0)) > 0 OR ABS(ISNULL(a.ledger_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.issued_station_qty, 0)) > 0 OR ABS(ISNULL(a.issued_station_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.issued_vehicle_qty, 0)) > 0 OR ABS(ISNULL(a.issued_vehicle_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.return_qty, 0)) > 0 OR ABS(ISNULL(a.return_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.goods_receive_qty, 0)) > 0 OR ABS(ISNULL(a.goods_receive_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.goods_return_qty, 0)) > 0 OR ABS(ISNULL(a.goods_return_amt, 0)) > 0 THEN 1 ELSE 0 END +
+          CASE WHEN ABS(ISNULL(a.dispatch_adv_qty, 0)) > 0 OR ABS(ISNULL(a.dispatch_adv_amt, 0)) > 0 THEN 1 ELSE 0 END
+        )`
+  const movementActivityQtyExpression = `(
+          ABS(ISNULL(a.received_qty, 0)) +
+          ABS(ISNULL(a.return_advice_qty, 0)) +
+          ABS(ISNULL(a.transferred_qty, 0)) +
+          ABS(ISNULL(a.adjustment_qty, 0)) +
+          ABS(ISNULL(a.ledger_qty, 0)) +
+          ABS(ISNULL(a.issued_station_qty, 0)) +
+          ABS(ISNULL(a.issued_vehicle_qty, 0)) +
+          ABS(ISNULL(a.return_qty, 0)) +
+          ABS(ISNULL(a.goods_receive_qty, 0)) +
+          ABS(ISNULL(a.goods_return_qty, 0)) +
+          ABS(ISNULL(a.dispatch_adv_qty, 0))
+        )`
+  const movementActivityAmountExpression = `(
+          ABS(ISNULL(a.received_amt, 0)) +
+          ABS(ISNULL(a.return_advice_amt, 0)) +
+          ABS(ISNULL(a.transferred_amt, 0)) +
+          ABS(ISNULL(a.adjustment_amt, 0)) +
+          ABS(ISNULL(a.ledger_amt, 0)) +
+          ABS(ISNULL(a.issued_station_amt, 0)) +
+          ABS(ISNULL(a.issued_vehicle_amt, 0)) +
+          ABS(ISNULL(a.return_amt, 0)) +
+          ABS(ISNULL(a.goods_receive_amt, 0)) +
+          ABS(ISNULL(a.goods_return_amt, 0)) +
+          ABS(ISNULL(a.dispatch_adv_amt, 0))
+        )`
+  const movementActualCountExpression = `(CASE WHEN ISNULL(mi.MovementIssueCountActual, 0) > 0 THEN ISNULL(mi.MovementIssueCountActual, 0) ELSE ${movementActivityCountExpression} END)`
+  const movementActualQtyExpression = `(CASE WHEN ISNULL(mi.MovementIssueCountActual, 0) > 0 THEN ISNULL(mi.MovementIssueQtyActual, 0) ELSE ${movementActivityQtyExpression} END)`
+  const movementActualAmountExpression = `(CASE WHEN ISNULL(mi.MovementIssueCountActual, 0) > 0 THEN ISNULL(mi.MovementIssueAmountActual, 0) ELSE ${movementActivityAmountExpression} END)`
 
   return `
     WITH base AS (
@@ -568,8 +907,20 @@ function monthlyStockAccountMovementCtes({
         RTRIM(i.Description) AS Description,
         RTRIM(i.UOMCode) AS UOM,
         RTRIM(i.LocCode) AS Location,
+        ${warehouseInventoryItemTypeExpression('i')} AS ItemType,
+        CASE ${warehouseInventoryItemTypeExpression('i')}
+          WHEN '1' THEN 'Stock / Gudang'
+          WHEN '4' THEN 'Workshop / Mesin'
+          ELSE ISNULL(${warehouseInventoryItemTypeExpression('i')}, '-')
+        END AS ItemTypeName,
         RTRIM(i.StockAnalysisCode) AS StockAnalysisCode,
         RTRIM(ISNULL(sa.Description, i.StockAnalysisCode)) AS StockAnalysisName,
+        RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductTypeCode,
+        RTRIM(ISNULL(pt.Description, i.ProdTypeCode)) AS ProductTypeDescription,
+        RTRIM(ISNULL(i.ProdCatCode, '')) AS ProductCategoryCode,
+        RTRIM(ISNULL(i.ProdBrandCode, '')) AS ProductBrandCode,
+        RTRIM(ISNULL(i.ProdModelCode, '')) AS ProductModelCode,
+        RTRIM(ISNULL(i.ProdMatCode, '')) AS ProductMaterialCode,
         CAST(ISNULL(i.QtyOnHand, 0) AS decimal(18, 6)) AS QtyOnHand,
         CAST(ISNULL(i.QtyOnHold, 0) AS decimal(18, 6)) AS QtyOnHold,
         CAST(ISNULL(i.AverageCost, 0) AS decimal(18, 6)) AS AverageCost,
@@ -577,19 +928,26 @@ function monthlyStockAccountMovementCtes({
       FROM [${database}].[dbo].[IN_ITEM] i
       LEFT JOIN [${database}].[dbo].[IN_STOCKANALYSIS] sa
         ON sa.StockAnalysisCode = i.StockAnalysisCode
+      LEFT JOIN [${database}].[dbo].[IN_PRODTYPE] pt
+        ON pt.ProdTypeCode = i.ProdTypeCode
       WHERE RTRIM(i.LocCode) = '${location}'
-        AND RTRIM(i.Status) = '1'
-        AND RTRIM(i.StockAnalysisCode) IN ('DEADS', 'MEMOV', 'SLMOV')
-        AND RTRIM(i.ProdTypeCode) <> 'DC'
-        AND RTRIM(i.ItemCode) COLLATE Latin1_General_BIN LIKE 'M%'
+        -- RPTIN1000015 with Suppress Zero Balance = No includes inactive zero rows
+        -- such as MG28017; status 2 must stay visible for official PDF parity.
+        AND RTRIM(i.Status) IN ('1', '2')
+        ${itemTypeFilter}
         ${analysisFilter}
+        ${productTypeFilter}
+        ${productCategoryFilter}
+        ${productBrandFilter}
+        ${productModelFilter}
+        ${productMaterialFilter}
         ${whereSearch}
     ),
     movements AS (
       SELECT
         RTRIM(ItemCode) AS ItemCode,
         Qty AS opening_qty,
-        CAST(ISNULL(Qty, 0) * ISNULL(AverageCost, 0) AS decimal(18, 6)) AS opening_amt,
+        CAST(ISNULL(Amount, ISNULL(Qty, 0) * ISNULL(AverageCost, 0)) AS decimal(18, 6)) AS opening_amt,
         0.0 AS received_qty,
         0.0 AS received_amt,
         0.0 AS return_advice_qty,
@@ -639,6 +997,31 @@ function monthlyStockAccountMovementCtes({
         ${accountingPeriodFilter('h', reportAccYear, reportAccMonth)}
         AND RTRIM(h.Status) = '2'
         ${nonWorkshopItemTypeFilter('issueItem')}
+        ${transactionAsOfFilter('h', transactionAsOf)}
+
+      UNION ALL
+
+      SELECT
+        RTRIM(l.ItemCode),
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        CASE WHEN LEN(RTRIM(l.BlkCode)) = 0 AND LEN(RTRIM(l.VehCode)) = 0 THEN l.Qty ELSE 0 END,
+        CASE WHEN LEN(RTRIM(l.BlkCode)) = 0 AND LEN(RTRIM(l.VehCode)) = 0 THEN l.Amount ELSE 0 END,
+        CASE WHEN LEN(RTRIM(l.VehCode)) = 0 AND LEN(RTRIM(l.BlkCode)) > 0 THEN l.Qty ELSE 0 END,
+        CASE WHEN LEN(RTRIM(l.VehCode)) = 0 AND LEN(RTRIM(l.BlkCode)) > 0 THEN l.Amount ELSE 0 END,
+        CASE WHEN LEN(RTRIM(l.VehCode)) > 0 THEN l.Qty ELSE 0 END,
+        CASE WHEN LEN(RTRIM(l.VehCode)) > 0 THEN l.Amount ELSE 0 END,
+        0, 0, 0, 0, 0, 0, 0, 0
+      FROM [${database}].[dbo].[IN_FUELISSUE] h
+      JOIN [${database}].[dbo].[IN_FUELISSUELN] l
+        ON h.FuelIssueID = l.FuelIssueID
+      JOIN [${database}].[dbo].[IN_ITEM] issueItem
+        ON issueItem.ItemCode = l.ItemCode
+        AND issueItem.LocCode = h.LocCode
+      WHERE RTRIM(h.LocCode) = '${location}'
+        ${accountingPeriodFilter('h', reportAccYear, reportAccMonth)}
+        ${fuelIssueStatusFilter('h')}
+        ${nonWorkshopItemTypeFilter('issueItem')}
+        ${transactionAsOfFilter('h', transactionAsOf)}
 
       UNION ALL
 
@@ -663,6 +1046,7 @@ function monthlyStockAccountMovementCtes({
       WHERE RTRIM(s.LocCode) = '${location}'
         ${accountingPeriodFilter('s', reportAccYear, reportAccMonth)}
         AND ${workshopStockIssueItemTypeExpression('issueItem', 's')} = '4'
+        ${transactionAsOfFilter('s', transactionAsOf)}
 
       UNION ALL
 
@@ -680,6 +1064,29 @@ function monthlyStockAccountMovementCtes({
       WHERE RTRIM(g.LocCode) = '${location}'
         ${accountingPeriodFilter('g', reportAccYear, reportAccMonth)}
         AND RTRIM(g.Status) = '2'
+        ${transactionAsOfFilter('g', transactionAsOf)}
+
+      UNION ALL
+
+      SELECT
+        RTRIM(grl.ItemCode),
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        COALESCE(NULLIF(grl.ReturnStockQty, 0), grl.QtyReturn, 0),
+        CAST(COALESCE(
+          NULLIF(grl.Amount, 0),
+          COALESCE(NULLIF(grl.ReturnStockQty, 0), grl.QtyReturn, 0) * COALESCE(NULLIF(grl.Cost, 0), p.Cost, 0),
+          0
+        ) AS decimal(18, 6)),
+        0, 0
+      FROM [${database}].[dbo].[PU_GOODSRET] gr
+      JOIN [${database}].[dbo].[PU_GOODSRETLN] grl
+        ON gr.GoodsRetId = grl.GoodsRetId
+      LEFT JOIN [${database}].[dbo].[PU_POLN] p
+        ON grl.POLnID = p.POLnID
+      WHERE RTRIM(gr.LocCode) = '${location}'
+        ${accountingPeriodFilter('gr', reportAccYear, reportAccMonth)}
+        AND RTRIM(gr.Status) = '2'
+        ${transactionAsOfFilter('gr', transactionAsOf)}
     ),
     agg AS (
       SELECT
@@ -711,12 +1118,77 @@ function monthlyStockAccountMovementCtes({
       FROM movements
       GROUP BY ItemCode
     ),
+    movement_issue_doc_sources AS (
+      SELECT
+        RTRIM(l.ItemCode) AS ItemCode,
+        RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS MovementDocId,
+        ISNULL(l.Qty, 0) AS MovementQty,
+        ISNULL(l.Amount, 0) AS MovementAmount,
+        h.PostDate AS MovementDate
+      FROM [${database}].[dbo].[IN_STOCKISSUE] h
+      JOIN [${database}].[dbo].[IN_STOCKISSUELN] l
+        ON h.StockIssueID = l.StockIssueID
+      JOIN base b
+        ON b.ItemCode = RTRIM(l.ItemCode)
+        AND b.Location = RTRIM(h.LocCode)
+      JOIN [${database}].[dbo].[IN_ITEM] issueItem
+        ON issueItem.ItemCode = l.ItemCode
+        AND issueItem.LocCode = h.LocCode
+      WHERE RTRIM(h.LocCode) = '${location}'
+        AND h.PostDate >= '${movementWindow.startInclusive}'
+        AND h.PostDate < '${movementWindow.endExclusive}'
+        AND RTRIM(ISNULL(h.Status, '')) = '2'
+        ${nonWorkshopItemTypeFilter('issueItem')}
+        ${transactionAsOfFilter('h', transactionAsOf)}
+
+      UNION ALL
+
+      SELECT
+        RTRIM(l.ItemCode) AS ItemCode,
+        RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS MovementDocId,
+        ISNULL(l.Qty, 0) AS MovementQty,
+        ISNULL(l.Amount, 0) AS MovementAmount,
+        ${fuelIssueDocumentDateExpression('h')} AS MovementDate
+      FROM [${database}].[dbo].[IN_FUELISSUE] h
+      JOIN [${database}].[dbo].[IN_FUELISSUELN] l
+        ON h.FuelIssueID = l.FuelIssueID
+      JOIN base b
+        ON b.ItemCode = RTRIM(l.ItemCode)
+        AND b.Location = RTRIM(h.LocCode)
+      JOIN [${database}].[dbo].[IN_ITEM] issueItem
+        ON issueItem.ItemCode = l.ItemCode
+        AND issueItem.LocCode = h.LocCode
+      WHERE RTRIM(h.LocCode) = '${location}'
+        AND ${fuelIssueDocumentDateExpression('h')} >= '${movementWindow.startInclusive}'
+        AND ${fuelIssueDocumentDateExpression('h')} < '${movementWindow.endExclusive}'
+        ${fuelIssueStatusFilter('h')}
+        ${nonWorkshopItemTypeFilter('issueItem')}
+        ${transactionAsOfFilter('h', transactionAsOf)}
+    ),
+    movement_issue_docs AS (
+      SELECT
+        ItemCode,
+        COUNT(DISTINCT MovementDocId) AS MovementIssueCountActual,
+        CAST(SUM(MovementQty) AS decimal(18, 6)) AS MovementIssueQtyActual,
+        CAST(SUM(MovementAmount) AS decimal(18, 6)) AS MovementIssueAmountActual,
+        MAX(MovementDate) AS MovementLastIssueDate
+      FROM movement_issue_doc_sources
+      GROUP BY ItemCode
+    ),
     final AS (
       SELECT
         b.Location,
+        b.ItemType,
+        b.ItemTypeName,
         b.StockAnalysisCode,
         b.StockAnalysisName,
-        ROW_NUMBER() OVER (PARTITION BY b.StockAnalysisCode ORDER BY b.ItemCode) AS RowNo,
+        b.ProductTypeCode,
+        b.ProductTypeDescription,
+        b.ProductCategoryCode,
+        b.ProductBrandCode,
+        b.ProductModelCode,
+        b.ProductMaterialCode,
+        ROW_NUMBER() OVER (PARTITION BY ${rowNumberPartitionSql} ORDER BY b.ItemCode) AS RowNo,
         b.ItemCode,
         b.Description,
         b.UOM,
@@ -747,9 +1219,21 @@ function monthlyStockAccountMovementCtes({
         CAST(ISNULL(a.goods_return_qty, 0) AS decimal(18, 6)) AS goods_return_qty,
         CAST(ISNULL(a.goods_return_amt, 0) AS decimal(18, 6)) AS goods_return_amt,
         CAST(ISNULL(a.dispatch_adv_qty, 0) AS decimal(18, 6)) AS dispatch_adv_qty,
-        CAST(ISNULL(a.dispatch_adv_amt, 0) AS decimal(18, 6)) AS dispatch_adv_amt
+        CAST(ISNULL(a.dispatch_adv_amt, 0) AS decimal(18, 6)) AS dispatch_adv_amt,
+        CAST(${movementActivityCountExpression} AS int) AS MovementActivityCountActual,
+        CAST(${movementActivityQtyExpression} AS decimal(18, 6)) AS MovementActivityQtyActual,
+        CAST(${movementActivityAmountExpression} AS decimal(18, 6)) AS MovementActivityAmountActual,
+        CAST(ISNULL(mi.MovementIssueCountActual, 0) AS int) AS StockIssueDocumentCountActual,
+        CAST(ISNULL(mi.MovementIssueQtyActual, 0) AS decimal(18, 6)) AS StockIssueDocumentQtyActual,
+        CAST(ISNULL(mi.MovementIssueAmountActual, 0) AS decimal(18, 6)) AS StockIssueDocumentAmountActual,
+        CAST(${movementActualCountExpression} AS int) AS MovementIssueCountActual,
+        CAST(${movementActualQtyExpression} AS decimal(18, 6)) AS MovementIssueQtyActual,
+        CAST(${movementActualAmountExpression} AS decimal(18, 6)) AS MovementIssueAmountActual,
+        mi.MovementLastIssueDate,
+        ${movementCategorySqlCase(movementActualCountExpression, 'b.QtyOnHand + b.QtyOnHold', movementThresholds)} AS MovementCategory
       FROM base b
       LEFT JOIN agg a ON a.ItemCode = b.ItemCode
+      LEFT JOIN movement_issue_docs mi ON mi.ItemCode = b.ItemCode
     ),
     report_rows AS (
       SELECT
@@ -761,12 +1245,34 @@ function monthlyStockAccountMovementCtes({
         '${openingActualPeriod}' AS OpeningActualPeriod,
         '${openingAccountingPeriod}' AS OpeningAccountingPeriod,
         Location,
+        ItemType,
+        ItemTypeName,
         StockAnalysisCode,
         StockAnalysisName,
+        ProductTypeCode,
+        ProductTypeDescription,
+        ProductCategoryCode,
+        ProductBrandCode,
+        ProductModelCode,
+        ProductMaterialCode,
         RowNo AS [No],
         ItemCode,
         Description AS ItemDescription,
         UOM,
+        MovementCategory,
+        MovementActivityCountActual,
+        MovementActivityQtyActual,
+        MovementActivityAmountActual,
+        StockIssueDocumentCountActual,
+        StockIssueDocumentQtyActual,
+        StockIssueDocumentAmountActual,
+        MovementIssueCountActual,
+        MovementIssueQtyActual,
+        MovementIssueAmountActual,
+        MovementLastIssueDate,
+        MovementIssueCountActual AS StockIssueMovementCount,
+        MovementIssueQtyActual AS StockIssueMovementQty,
+        MovementIssueAmountActual AS StockIssueMovementAmount,
         QtyOnHand,
         QtyOnHold,
         QtyOnHand + QtyOnHold AS QtyOnHandHold,
@@ -876,8 +1382,9 @@ async function querySQL(ctx: QueryContext, sql: string): Promise<GatewayResult> 
     }
   }
 
+  const base = resolveSqlGatewayBase({ override: gatewayBaseStorage.getStore() })
   try {
-    const response = await fetch(`${BASE_URL}/v1/query`, {
+    const response = await fetch(sqlGatewayQueryUrl(base), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -896,6 +1403,15 @@ async function querySQL(ctx: QueryContext, sql: string): Promise<GatewayResult> 
         execution_ms: result.execution_ms,
       }
     }
+    debugSqlStorage.getStore()?.push({
+      label: classifySqlStatement(sql),
+      server: ctx.server,
+      database: ctx.database,
+      sql: compactSql(sql),
+      rows: result.data?.recordset?.length ?? 0,
+      executionMs: result.execution_ms,
+      readOnly: true,
+    })
     return result
   } catch (error) {
     return {
@@ -920,6 +1436,172 @@ async function first(ctx: QueryContext, sql: string) {
 
 function columnsFrom(rowsData: DbRow[]) {
   return rowsData[0] ? Object.keys(rowsData[0]) : []
+}
+
+function payloadHasMovementCategory(payload: Pick<ReportPayload, 'rows' | 'columns' | 'chart'>) {
+  return payload.columns.includes('MovementCategory') ||
+    payload.rows.some((row) => row.MovementCategory !== undefined) ||
+    payload.chart.some((row) => row.MovementCategory !== undefined)
+}
+
+const MOVEMENT_ENRICHMENT_ITEM_FIELDS = ['ItemCode', 'KodeBarang', 'item_code', 'KodeItem']
+const MOVEMENT_ENRICHMENT_LOCATION_FIELDS = ['LocCode', 'Location', 'Gudang', 'Lokasi', 'location', 'Warehouse']
+const MOVEMENT_ENRICHMENT_LIMIT = 2000
+
+function firstTextField(row: DbRow, fields: string[]) {
+  for (const field of fields) {
+    const value = String(row[field] ?? '').trim()
+    if (value) return value
+  }
+  return ''
+}
+
+function movementEnrichmentPair(row: DbRow) {
+  const itemCode = firstTextField(row, MOVEMENT_ENRICHMENT_ITEM_FIELDS)
+  const locCode = firstTextField(row, MOVEMENT_ENRICHMENT_LOCATION_FIELDS)
+  return itemCode && locCode ? { itemCode, locCode } : null
+}
+
+async function enrichPayloadWithMovementCategory<T extends ReportPayload>(
+  payload: T,
+  ctx: QueryContext,
+  filters?: ReportFilterInput,
+): Promise<T> {
+  if (payloadHasMovementCategory(payload) || payload.rows.length === 0) return payload
+
+  const pairMap = new Map<string, { itemCode: string; locCode: string }>()
+  payload.rows.forEach((row) => {
+    const pair = movementEnrichmentPair(row)
+    if (!pair) return
+    pairMap.set(`${pair.itemCode}@@${pair.locCode}`, pair)
+  })
+
+  const pairs = [...pairMap.values()].slice(0, MOVEMENT_ENRICHMENT_LIMIT)
+  if (pairs.length === 0) return payload
+
+  const movementWindow = movementWindowFromFilters(filters)
+  const movementThresholds = movementThresholdsFromFilters(filters)
+  const quantityClosing = quantityClosingExpression('i')
+  const valuesSql = pairs
+    .map((pair) => `(N'${sanitizeLike(pair.itemCode)}', N'${sanitizeLike(pair.locCode)}')`)
+    .join(',\n      ')
+
+  let movementRows: DbRow[] = []
+  try {
+    movementRows = await rows(ctx, `
+      WITH requested(ItemCode, LocCode) AS (
+        SELECT *
+        FROM (VALUES
+        ${valuesSql}
+        ) v(ItemCode, LocCode)
+      )
+      SELECT
+        RTRIM(i.ItemCode) AS ItemCode,
+        RTRIM(i.LocCode) AS LocCode,
+        CAST(ISNULL(movement12.MovementEventCountAll, 0) AS INT) AS MovementIssueCountActual,
+        CAST(ISNULL(movement12.MovementQtyAll, 0) AS DECIMAL(18,2)) AS MovementIssueQtyActual,
+        CAST(ISNULL(movement12.MovementAmountAll, 0) AS DECIMAL(18,2)) AS MovementIssueAmountActual,
+        latestMovement.LastMovementDate AS MovementLastIssueDate,
+        ${movementCategorySqlCase('ISNULL(movement12.MovementEventCountAll, 0)', quantityClosing, movementThresholds)} AS MovementCategory
+      FROM [${ctx.database}].[dbo].[IN_ITEM] i
+      INNER JOIN requested r
+        ON RTRIM(i.ItemCode) = r.ItemCode
+        AND RTRIM(i.LocCode) = r.LocCode
+      ${stockIssueUsageApply(ctx.database, 'i', movementWindow)}
+    `)
+  } catch (error) {
+    return {
+      ...payload,
+      metadata: {
+        ...payload.metadata,
+        movementCategoryEnrichment: {
+          enabled: false,
+          pairCount: pairs.length,
+          error: error instanceof Error ? error.message : 'MovementCategory enrichment failed',
+        },
+      },
+    }
+  }
+
+  const movementByKey = new Map(
+    movementRows.map((row) => [
+      `${String(row.ItemCode ?? '').trim()}@@${String(row.LocCode ?? '').trim()}`,
+      row,
+    ]),
+  )
+
+  if (movementByKey.size === 0) return payload
+
+  const enrichedRows = payload.rows.map((row) => {
+    const pair = movementEnrichmentPair(row)
+    if (!pair) return row
+    const movement = movementByKey.get(`${pair.itemCode}@@${pair.locCode}`)
+    if (!movement) return row
+    return {
+      ...row,
+      MovementCategory: movement.MovementCategory,
+      MovementIssueCountActual: movement.MovementIssueCountActual,
+      MovementIssueQtyActual: movement.MovementIssueQtyActual,
+      MovementIssueAmountActual: movement.MovementIssueAmountActual,
+      MovementLastIssueDate: movement.MovementLastIssueDate,
+      StockIssueMovementCount: row.StockIssueMovementCount ?? movement.MovementIssueCountActual,
+      StockIssueMovementQty: row.StockIssueMovementQty ?? movement.MovementIssueQtyActual,
+      StockIssueMovementAmount: row.StockIssueMovementAmount ?? movement.MovementIssueAmountActual,
+    }
+  })
+
+  return {
+    ...payload,
+    rows: enrichedRows,
+    columns: [
+      ...payload.columns,
+      ...[
+        'MovementCategory',
+        'MovementIssueCountActual',
+        'MovementIssueQtyActual',
+        'MovementIssueAmountActual',
+        'MovementLastIssueDate',
+      ].filter((column) => !payload.columns.includes(column)),
+    ],
+    metadata: {
+      ...payload.metadata,
+      movementCategoryEnrichment: {
+        enabled: true,
+        pairCount: pairs.length,
+        enrichedPairCount: movementByKey.size,
+        capped: pairMap.size > MOVEMENT_ENRICHMENT_LIMIT,
+        movementWindow,
+        movementCategoryThresholds: movementThresholds,
+        sourceTables: 'IN_ITEM, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+      },
+    },
+  }
+}
+
+function compactFilterParameters(filters: ReportFilterInput) {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, value]) => Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== ''),
+  )
+}
+
+function buildFilterParameterMetadata(filters: ReportFilterInput, payload: ReportPayload, reportId: string, ctx: QueryContext) {
+  const hasMovement = payloadHasMovementCategory(payload)
+  return {
+    report: reportId,
+    source: ctx.source,
+    active: compactFilterParameters(filters),
+    movementCategory: {
+      available: hasMovement,
+      groupingEnabled: hasMovement && (isMovementCategoryField(filters.groupBy) || isMovementCategoryField(filters.chartDimension)),
+      filter: filters.movementCategory,
+      groupBy: filters.groupBy,
+      chartDimension: filters.chartDimension,
+      window: movementWindowFromFilters(filters),
+      thresholds: movementThresholdsFromFilters(filters),
+      optional: true,
+      rule: 'MovementCategory dihitung dari issue valid dalam movementWindow aktif; grouping hanya aktif jika groupBy/chartDimension = MovementCategory.',
+    },
+  }
 }
 
 function metadata(ctx: QueryContext, extra: DbRow = {}) {
@@ -1009,11 +1691,15 @@ function paginatePayload<T extends ReportPayload>(payload: T, pagination: Pagina
   }
 }
 
-async function stockSummary({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function stockSummary({ limit, search, ctx, stale, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = itemSearch('i', search)
   const quantityClosing = quantityClosingExpression('i')
   const quantityClosingField = quantityClosingExpression()
+  const itemTypeFilter = filters?.itemType?.toLowerCase()
+  const itemTypeSql = itemTypeFilter === '1' || itemTypeFilter === 'gudang' ? "AND i.ItemType = '1'" : itemTypeFilter === '4' || itemTypeFilter === 'workshop' ? "AND i.ItemType = '4'" : warehouseInventoryItemTypeFilter('i')
+  const movementThresholds = movementThresholdsFromFilters(filters)
+
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(i.ItemCode) AS KodeBarang,
@@ -1021,14 +1707,15 @@ async function stockSummary({ limit, search, ctx, stale }: { limit: number; sear
       RTRIM(i.LocCode) AS Gudang,
       RTRIM(i.UOMCode) AS Satuan,
       CAST(${quantityClosing} AS DECIMAL(18,2)) AS QuantityClosing,
-      ${stockIssueUsageColumns(quantityClosing)},
+      ${stockIssueUsageColumns(quantityClosing, movementThresholds)},
       CAST(ISNULL(i.AverageCost, 0) AS DECIMAL(18,2)) AS AverageCost,
       CAST(${quantityClosing} * ISNULL(i.AverageCost, 0) AS DECIMAL(18,2)) AS NilaiStok,
       RTRIM(ISNULL(i.ProdCatCode, '-')) AS Kategori,
       i.UpdateDate AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
+      ${itemTypeSql}
       ${whereSearch}
     ORDER BY ${quantityClosing} DESC, i.UpdateDate DESC
   `)
@@ -1045,10 +1732,19 @@ async function stockSummary({ limit, search, ctx, stale }: { limit: number; sear
       COUNT(DISTINCT RTRIM(i.LocCode)) AS TotalGudang,
       CAST(SUM(${quantityClosing} * ISNULL(i.AverageCost, 0)) AS DECIMAL(18,2)) AS NilaiPersediaan,
       SUM(CASE WHEN ${quantityClosing} < ISNULL(i.ReOrderLevel, 0) AND ISNULL(i.ReOrderLevel, 0) > 0 THEN 1 ELSE 0 END) AS ItemMinimumStock,
-      MAX(i.UpdateDate) AS TerakhirUpdate
+      MAX(i.UpdateDate) AS TerakhirUpdate,
+      SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '1' THEN 1 ELSE 0 END) AS GudangItemCount,
+      SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '4' THEN 1 ELSE 0 END) AS WorkshopItemCount,
+      SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '1' AND ${quantityClosing} > 0 THEN 1 ELSE 0 END) AS GudangItemWithStock,
+      SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '4' AND ${quantityClosing} > 0 THEN 1 ELSE 0 END) AS WorkshopItemWithStock,
+      CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '1' AND ${quantityClosing} > 0 THEN ${quantityClosing} * ISNULL(i.AverageCost, 0) ELSE 0 END) AS DECIMAL(18,2)) AS GudangTotalAmount,
+      CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '4' AND ${quantityClosing} > 0 THEN ${quantityClosing} * ISNULL(i.AverageCost, 0) ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopTotalAmount,
+      COUNT(DISTINCT CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '1' AND ${quantityClosing} > 0 THEN RTRIM(i.LocCode) END) AS GudangLocationWithStock,
+      COUNT(DISTINCT CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '4' AND ${quantityClosing} > 0 THEN RTRIM(i.LocCode) END) AS WorkshopLocationWithStock
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
+      ${itemTypeSql}
   `)
 
   const chart = await rows(ctx, `
@@ -1057,15 +1753,16 @@ async function stockSummary({ limit, search, ctx, stale }: { limit: number; sear
       COUNT(*) AS TotalItem,
       CAST(SUM(${quantityClosingField}) AS DECIMAL(18,2)) AS TotalStok,
       CAST(SUM(${quantityClosingField} * ISNULL(AverageCost, 0)) AS DECIMAL(18,2)) AS NilaiStok
-    FROM [${DATABASE}].[dbo].[IN_ITEM]
+    FROM [${DATABASE}].[dbo].[IN_ITEM] i
     WHERE RTRIM(ISNULL(Status, '0')) = '1'
+      ${itemTypeSql}
     GROUP BY RTRIM(LocCode)
     ORDER BY NilaiStok DESC
   `)
 
   return {
-    title: 'Posisi Stok & Nilai Gudang',
-    description: 'Executive view nilai persediaan, stok, gudang dominan, top item, dan risiko kualitas master dari IN_ITEM.',
+    title: 'Posisi Stok & Nilai Inventory',
+    description: 'Executive view nilai persediaan inventory, stok Gudang + Workshop/Mesin, lokasi dominan, top item, dan risiko kualitas master dari IN_ITEM.',
     rows: reportRows,
     columns: columnsFrom(reportRows),
     summary,
@@ -1074,9 +1771,9 @@ async function stockSummary({ limit, search, ctx, stale }: { limit: number; sear
       sourceTables: 'IN_ITEM, IN_PRODCAT, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
       quantityRule: 'QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder',
       issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
-      primaryChart: 'Nilai Persediaan per Gudang',
+      primaryChart: 'Nilai Persediaan per Lokasi',
       availableCharts: [
-        'Nilai Persediaan per Gudang',
+        'Nilai Persediaan per Lokasi',
         'Komposisi Nilai per Kategori',
         'Top Item Berdasarkan Nilai Stok',
         'Quality Flags Master Stok',
@@ -1097,6 +1794,7 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
   const location = sanitizeLike(filters?.location ?? '')
   const category = sanitizeLike(filters?.category ?? '')
   const locationFilter = location ? `AND RTRIM(i.LocCode) LIKE N'%${location}%'` : ''
+  const taxonomyFilter = inventoryTaxonomyScopeFilter('i', filters)
   const categoryFilter = category
     ? `AND (
         RTRIM(ISNULL(i.ProdCatCode, '')) LIKE N'%${category}%'
@@ -1139,6 +1837,9 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
       AND TRY_CONVERT(int, NULLIF(RTRIM(CONVERT(varchar(10), m.AccMonth)), '')) = ${period.accMonth}`
     : ''
   const statusFilter = ''
+  const itemTypeFilter = filters?.itemType?.toLowerCase()
+  const itemTypeSql = itemTypeFilter === '1' || itemTypeFilter === 'gudang' ? "AND i.ItemType = '1'" : itemTypeFilter === '4' || itemTypeFilter === 'workshop' ? "AND i.ItemType = '4'" : warehouseInventoryItemTypeFilter('i')
+
   const reportSql = `
     WITH asset_valuation AS (
       SELECT
@@ -1171,15 +1872,18 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
         CAST(${differentialUnitCost} AS DECIMAL(18,6)) AS differential_unit_cost,
         CAST(${totalAmount} AS DECIMAL(38,6)) AS total_amount,
         NULLIF(RTRIM(i.ProdCatCode), '') AS product_category_code,
-        CAST(NULL AS varchar(30)) AS product_brand_code,
+        NULLIF(RTRIM(i.ProdBrandCode), '') AS product_brand_code,
+        NULLIF(RTRIM(i.ProdModelCode), '') AS product_model_code,
+        NULLIF(RTRIM(i.ProdMatCode), '') AS product_material_code,
         NULLIF(RTRIM(i.StockAnalysisCode), '') AS stock_analysis_code,
         i.UpdateDate AS update_date
       ${fromSql}
       WHERE 1=1
-        ${warehouseInventoryItemTypeFilter('i')}
+        ${itemTypeSql}
         ${statusFilter}
         ${periodWhere}
         ${locationFilter}
+        ${taxonomyFilter}
         ${categoryFilter}
         ${whereSearch}
     )`
@@ -1210,7 +1914,15 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
       CAST(SUM(total_amount) AS DECIMAL(38,6)) AS total_amount,
       SUM(CASE WHEN total_quantity = 0 THEN 1 ELSE 0 END) AS zero_quantity_item,
       SUM(CASE WHEN unit_cost = 0 THEN 1 ELSE 0 END) AS zero_unit_cost_item,
-      MAX(update_date) AS last_update_date
+      MAX(update_date) AS last_update_date,
+      SUM(CASE WHEN item_type = '1' THEN 1 ELSE 0 END) AS GudangItemCount,
+      SUM(CASE WHEN item_type = '4' THEN 1 ELSE 0 END) AS WorkshopItemCount,
+      SUM(CASE WHEN item_type = '1' AND total_quantity > 0 THEN 1 ELSE 0 END) AS GudangItemWithStock,
+      SUM(CASE WHEN item_type = '4' AND total_quantity > 0 THEN 1 ELSE 0 END) AS WorkshopItemWithStock,
+      CAST(SUM(CASE WHEN item_type = '1' AND total_quantity > 0 THEN total_amount ELSE 0 END) AS DECIMAL(38,6)) AS GudangTotalAmount,
+      CAST(SUM(CASE WHEN item_type = '4' AND total_quantity > 0 THEN total_amount ELSE 0 END) AS DECIMAL(38,6)) AS WorkshopTotalAmount,
+      COUNT(DISTINCT CASE WHEN item_type = '1' AND total_quantity > 0 THEN location END) AS GudangLocationWithStock,
+      COUNT(DISTINCT CASE WHEN item_type = '4' AND total_quantity > 0 THEN location END) AS WorkshopLocationWithStock
     FROM asset_valuation
   `)
 
@@ -1270,6 +1982,8 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
 }
 
 async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
+  const movementWindow = movementWindowFromFilters(filters)
+  const movementThresholds = movementThresholdsFromFilters(filters)
   const DATABASE = ctx.database
   const rowLimit = limitAll ? 20000 : limit
   const period = resolveAssetValuationPeriod(filters)
@@ -1283,6 +1997,7 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
   const movementCategoryFilter = movementCategory ? `WHERE MovementCategory = N'${movementCategory}'` : ''
   const useMovementCategoryWindow = !movementCategory && !limitAll && shouldUseMovementCategoryWindow(filters)
   const locationFilter = location ? `AND RTRIM(i.LocCode) LIKE N'%${location}%'` : ''
+  const taxonomyFilter = inventoryTaxonomyScopeFilter('i', filters)
   const categoryFilter = category
     ? `AND (
         RTRIM(ISNULL(i.ProdCatCode, '')) LIKE N'%${category}%'
@@ -1306,6 +2021,8 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
   const workshopDate = workshopStockIssueDateExpression('s')
   const workshopDoc = workshopStockIssueDocumentExpression('s')
   const workshopAmount = workshopStockIssueAmountExpression('s')
+  const itemTypeFilter = filters?.itemType?.toLowerCase()
+  const itemTypeSql = itemTypeFilter === '1' || itemTypeFilter === 'gudang' ? "AND i.ItemType = '1'" : itemTypeFilter === '4' || itemTypeFilter === 'workshop' ? "AND i.ItemType = '4'" : warehouseInventoryItemTypeFilter('i')
   const issueMovementCtes = `
     issue_docs AS (
       SELECT
@@ -1329,8 +2046,8 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
         INNER JOIN [${DATABASE}].[dbo].[IN_ITEM] issueItem
           ON issueItem.ItemCode = l.ItemCode
           AND issueItem.LocCode = h.LocCode
-        WHERE h.PostDate >= '2000-01-01'
-          AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, GETDATE()))
+        WHERE h.PostDate >= '${movementWindow.startInclusive}'
+          AND h.PostDate < '${movementWindow.endExclusive}'
           ${nonWorkshopItemTypeFilter('issueItem')}
         UNION ALL
         SELECT
@@ -1346,8 +2063,8 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
           AND issueItem.LocCode = s.LocCode
         WHERE RTRIM(ISNULL(s.TransType, '')) = '1'
           AND ${workshopStockIssueItemTypeExpression('issueItem', 's')} = '4'
-          AND ${workshopDate} >= '2000-01-01'
-          AND ${workshopDate} < DATEADD(DAY, 1, CONVERT(date, GETDATE()))
+          AND ${workshopDate} >= '${movementWindow.startInclusive}'
+          AND ${workshopDate} < '${movementWindow.endExclusive}'
       ) raw
       GROUP BY raw.ItemCode, raw.LocCode, raw.StockIssueID
     ),
@@ -1477,6 +2194,9 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
         RTRIM(i.UOMCode) AS uom,
         RTRIM(i.UOMCode) AS Satuan,
         NULLIF(RTRIM(i.ProdCatCode), '') AS product_category_code,
+        NULLIF(RTRIM(i.ProdBrandCode), '') AS product_brand_code,
+        NULLIF(RTRIM(i.ProdModelCode), '') AS product_model_code,
+        NULLIF(RTRIM(i.ProdMatCode), '') AS product_material_code,
         RTRIM(ISNULL(i.ProdCatCode, '-')) AS KodeKategori,
         RTRIM(ISNULL(i.ProdCatCode, '-')) AS Kategori,
         NULLIF(RTRIM(i.StockAnalysisCode), '') AS stock_analysis_code,
@@ -1498,12 +2218,13 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
         CAST(${totalAmountStored} AS DECIMAL(38,6)) AS AmountCurrent,
         CAST(${totalAmountStored} AS DECIMAL(38,6)) AS TotalAmount,
         CAST(${totalAmountStored} AS DECIMAL(38,6)) AS NilaiStok,
-        ${stockMovementAnalysisColumns(quantityClosing)}
+        ${stockMovementAnalysisColumns(quantityClosing, movementThresholds)}
       ${fromSql}
       WHERE 1=1
-        ${warehouseInventoryItemTypeFilter('i')}
+        ${itemTypeSql}
         ${periodWhere}
         ${locationFilter}
+        ${taxonomyFilter}
         ${categoryFilter}
         ${whereSearch}
     )`
@@ -1634,7 +2355,9 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       statusScope: 'Tidak filter Status; scope mengikuti IN_ITEM WHERE ItemType IN (1, 4).',
       quantityRule: useMonthEnd ? 'Histori: total_quantity = IN_MTHENDITEM.Qty.' : 'Current: total_quantity = QtyOnHand + QtyOnHold; QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder.',
       valuationRule: useMonthEnd ? 'Histori: AmountItem = IN_MTHENDITEM.Qty * AverageCost.' : 'Current: TotalAssetAmount = SUM((QtyOnHand + QtyOnHold) * AverageCost) FROM IN_ITEM WHERE ItemType IN (1, 4).',
-      movementRule: 'MovementCategory dihitung dari StockIssue Movement Count per item: Fast Moving >= 6, Moving 2-5, Slow Moving 1, Dead Stock jika stok real-time ada tapi StockIssue Movement 0, Stale jika stok real-time dan StockIssue Movement 0.',
+      movementRule: `MovementCategory dihitung dari StockIssue Movement Count per item: ${movementCategoryThresholdLabel(movementThresholds)}. Dead Stock jika stok real-time ada tapi StockIssue Movement 0, Stale jika stok real-time dan StockIssue Movement 0.`,
+      movementCategoryThresholds: movementThresholds,
+      movementCategoryThresholdLabel: movementCategoryThresholdLabel(movementThresholds),
       issueUsageRule: 'StockIssue Movement: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1. Asset Amount Real Time tetap berasal dari IN_ITEM (QtyOnHand + QtyOnHold) * AverageCost.',
       movementSourceRule: 'MovementSource dinormalisasi per row: ItemType 4 = WS_JOBSTOCK, ItemType 1 = STOCK_ISSUE_REGULAR.',
       movementSourceQuality: {
@@ -1661,11 +2384,12 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
     }),
   }
 }
-async function stockCard({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function stockCard({ limit, search, ctx, stale, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereAge = staleFilterByRange('i', stale)
   const labelAge = staleRangeLabel(stale)
   const quantityClosing = quantityClosingExpression('i')
+  const movementThresholds = movementThresholdsFromFilters(filters)
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(i.ItemCode) AS KodeBarang,
@@ -1673,7 +2397,7 @@ async function stockCard({ limit, search, ctx, stale }: { limit: number; search:
       RTRIM(i.LocCode) AS Gudang,
       RTRIM(ISNULL(i.ProdCatCode, '-')) AS KodeKategori,
       CAST(${quantityClosing} AS DECIMAL(18,2)) AS QuantityClosing,
-      ${stockIssueUsageColumns(quantityClosing)},
+      ${stockIssueUsageColumns(quantityClosing, movementThresholds)},
       CAST(${quantityClosing} * ISNULL(i.AverageCost, 0) AS DECIMAL(18,2)) AS NilaiStok,
       CASE WHEN ${quantityClosing} = 0 THEN 1 ELSE 0 END AS FlagStokNol,
       CASE WHEN i.ProdCatCode IS NULL OR RTRIM(i.ProdCatCode) = '' OR RTRIM(i.ProdCatCode) = '0' THEN 1 ELSE 0 END AS FlagTanpaKategori,
@@ -1690,7 +2414,7 @@ async function stockCard({ limit, search, ctx, stale }: { limit: number; search:
         ELSE CONCAT(DATEDIFF(MONTH, i.UpdateDate, GETDATE()) / 12, ' tahun ', DATEDIFF(MONTH, i.UpdateDate, GETDATE()) % 12, ' bulan')
       END AS UmurItem
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
       ${whereAge}
       ${itemSearch('i', search)}
@@ -1711,7 +2435,7 @@ async function stockCard({ limit, search, ctx, stale }: { limit: number; search:
       CAST(SUM(${quantityClosing} * ISNULL(i.AverageCost, 0)) AS DECIMAL(18,2)) AS NilaiPersediaan,
       MAX(i.UpdateDate) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
   `)
 
@@ -1723,7 +2447,7 @@ async function stockCard({ limit, search, ctx, stale }: { limit: number; search:
         CASE WHEN ISNULL(issueUsage.StockIssueEventCount, 0) = 0 THEN 1 ELSE 0 END AS TanpaIssueValid,
         CASE WHEN i.UpdateDate IS NULL OR i.UpdateDate < DATEADD(MONTH, -12, GETDATE()) THEN 1 ELSE 0 END AS UpdateStale
       FROM [${DATABASE}].[dbo].[IN_ITEM] i
-      ${stockIssueUsageApply(DATABASE)}
+      ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
       WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
     )
     SELECT 'Stok Nol' AS QualityFlag, SUM(StokNol) AS TotalItem FROM stock_flags
@@ -1983,14 +2707,40 @@ async function stockMovement({ limit, search, ctx }: ReportHandlerOptions): Prom
   }
 }
 
-async function monthlyStockAccountMovementDetails({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
+async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
-  const reportPeriod = resolveActualAccountingPeriod(filters?.period)
-  const actualPeriod = formatPeriod(reportPeriod.actualYear, reportPeriod.actualMonth)
+  // Honor period OR accYear+accMonth from detail-page Apply control.
+  const reportPeriod = resolveAssetValuationPeriod(filters)
+  const actualPeriod = reportPeriod.actualPeriod
   const openingPeriod = previousAccountingPeriod(reportPeriod.accYear, reportPeriod.accMonth)
   const openingActualPeriod = accountingToActualPeriod(openingPeriod.accYear, openingPeriod.accMonth)?.actualPeriod ?? ''
   const location = cleanLocationCode(filters?.location)
-  const stockAnalysisCode = cleanStockAccountMovementAnalysisCode(filters?.category)
+  const stockAnalysisCode = cleanStockAccountMovementAnalysisCode(filters?.category ?? filters?.stockAnalysis)
+  const productTypeCode = cleanInventoryCode(filters?.productType)
+  const productCategoryCode = cleanInventoryCode(filters?.productCategory)
+  const productBrandCode = cleanInventoryCode(filters?.productBrand)
+  const productModelCode = cleanInventoryCode(filters?.productModel)
+  const productMaterialCode = cleanInventoryCode(filters?.productMaterial)
+  const itemTypeScope = cleanWarehouseItemTypeScope(filters?.itemType)
+  const transactionAsOf = cleanTransactionAsOf(filters?.dateTo)
+  const movementWindow = movementWindowFromFilters(filters)
+  const movementThresholds = movementThresholdsFromFilters(filters)
+  const analysisGroupKey = cleanMonthlyAnalysisGroup(filters?.groupBy ?? filters?.chartDimension)
+  const analysisGroup = monthlyAnalysisGroups[analysisGroupKey]
+  const stockAnalysisDefaultScope = analysisGroupKey === 'StockAnalysisCode' && !stockAnalysisCode
+  const rowNumberPartitionSql = analysisGroupKey === 'MovementCategory' ? 'b.StockAnalysisCode' : `b.${analysisGroup.sql}`
+  const reportOrderSql = analysisGroupKey === 'MovementCategory'
+    ? `${movementCategoryRankSqlCase('MovementCategory')}, ItemCode`
+    : `${analysisGroup.sql}, ItemCode`
+  // GUARDRAIL(monthly-detail-balanced-groups):
+  // Interactive detail windows must show every selected analysis group early.
+  // Official/export order remains grouped; non-export rows use RowNo-first order
+  // so groups like ProductTypeCode=VSPARE are visible on page 1 instead of being
+  // hidden behind large earlier buckets such as SUND.
+  const detailOrderSql = limitAll ? reportOrderSql : `[No], ${reportOrderSql}`
+  const analysisGroupNameSelect = analysisGroup.nameSql ? `MAX(NULLIF(${analysisGroup.nameSql}, '')) AS DimensionName,` : ''
+  const movementCategoryScope = cleanMonthlyMovementCategory(filters?.movementCategory)
+  const movementCategoryWhere = movementCategoryScope ? `WHERE MovementCategory = '${movementCategoryScope}'` : ''
   const ctes = monthlyStockAccountMovementCtes({
     database: DATABASE,
     location,
@@ -2002,13 +2752,25 @@ async function monthlyStockAccountMovementDetails({ limit, search, ctx, filters 
     openingActualPeriod,
     search,
     stockAnalysisCode,
+    productTypeCode,
+    productCategoryCode,
+    productBrandCode,
+    productModelCode,
+    productMaterialCode,
+    itemTypeScope,
+    stockAnalysisDefaultScope,
+    rowNumberPartitionSql,
+    transactionAsOf,
+    movementWindow,
+    movementThresholds,
   })
 
   const reportRows = await rows(ctx, `
     ${ctes}
     SELECT TOP ${limit} *
     FROM report_rows
-    ORDER BY StockAnalysisCode, ItemCode
+    ${movementCategoryWhere}
+    ORDER BY ${detailOrderSql}
   `)
 
   const summary = await first(ctx, `
@@ -2020,13 +2782,49 @@ async function monthlyStockAccountMovementDetails({ limit, search, ctx, filters 
       OpeningActualPeriod,
       OpeningAccountingPeriod,
       COUNT(*) AS TotalItem,
+      SUM(CASE WHEN ItemType = '1' THEN 1 ELSE 0 END) AS StockGudangItem,
+      SUM(CASE WHEN ItemType = '4' THEN 1 ELSE 0 END) AS WorkshopMesinItem,
       COUNT(DISTINCT StockAnalysisCode) AS TotalStockAnalysis,
+      COUNT(DISTINCT MovementCategory) AS TotalMovementCategory,
+      COUNT(DISTINCT ProductTypeCode) AS TotalProductType,
+      COUNT(DISTINCT ProductCategoryCode) AS TotalProductCategory,
+      COUNT(DISTINCT ProductBrandCode) AS TotalProductBrand,
+      COUNT(DISTINCT ProductModelCode) AS TotalProductModel,
+      COUNT(DISTINCT ProductMaterialCode) AS TotalProductMaterial,
+      SUM(CASE WHEN MovementCategory = 'Fast Moving' THEN 1 ELSE 0 END) AS FastMovingItem,
+      SUM(CASE WHEN MovementCategory = 'Moving' THEN 1 ELSE 0 END) AS MovingItem,
+      SUM(CASE WHEN MovementCategory = 'Slow Moving' THEN 1 ELSE 0 END) AS SlowMovingItem,
+      SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN 1 ELSE 0 END) AS DeadStockItem,
+      SUM(CASE WHEN MovementCategory = 'Stale' THEN 1 ELSE 0 END) AS StaleItem,
+      CAST(SUM(MovementActivityCountActual) AS DECIMAL(18,2)) AS TotalMovementActivityCountActual,
+      CAST(SUM(MovementActivityQtyActual) AS DECIMAL(18,2)) AS TotalMovementActivityQtyActual,
+      CAST(SUM(MovementActivityAmountActual) AS DECIMAL(18,2)) AS TotalMovementActivityAmountActual,
+      CAST(SUM(StockIssueDocumentCountActual) AS DECIMAL(18,2)) AS TotalStockIssueDocumentCountActual,
+      CAST(SUM(MovementIssueCountActual) AS DECIMAL(18,2)) AS TotalMovementIssueCountActual,
+      CAST(SUM(MovementIssueQtyActual) AS DECIMAL(18,2)) AS TotalMovementIssueQtyActual,
+      CAST(SUM(MovementIssueAmountActual) AS DECIMAL(18,2)) AS TotalMovementIssueAmountActual,
       CAST(SUM(QtyOnHand) AS DECIMAL(18,2)) AS QtyOnHand,
       CAST(SUM(QtyOnHold) AS DECIMAL(18,2)) AS QtyOnHold,
       CAST(SUM(QtyOnHandHold) AS DECIMAL(18,2)) AS QtyOnHandHold,
       CAST(SUM(OnHandHoldAmount) AS DECIMAL(18,2)) AS OnHandHoldAmount,
+      CAST(SUM(CASE WHEN ItemType = '1' THEN QtyOnHandHold ELSE 0 END) AS DECIMAL(18,2)) AS StockGudangQtyOnHandHold,
+      CAST(SUM(CASE WHEN ItemType = '1' THEN OnHandHoldAmount ELSE 0 END) AS DECIMAL(18,2)) AS StockGudangOnHandHoldAmount,
+      CAST(SUM(CASE WHEN ItemType = '4' THEN QtyOnHandHold ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopMesinQtyOnHandHold,
+      CAST(SUM(CASE WHEN ItemType = '4' THEN OnHandHoldAmount ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopMesinOnHandHoldAmount,
       CAST(SUM(OpeningQty) AS DECIMAL(18,2)) AS OpeningQty,
       CAST(SUM(OpeningAmount) AS DECIMAL(18,2)) AS OpeningAmount,
+      CAST(SUM(CASE WHEN ItemType = '1' THEN OpeningAmount ELSE 0 END) AS DECIMAL(18,2)) AS StockGudangOpeningAmount,
+      CAST(SUM(CASE WHEN ItemType = '4' THEN OpeningAmount ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopMesinOpeningAmount,
+      CAST(SUM(ReceivedQty) AS DECIMAL(18,2)) AS ReceivedQty,
+      CAST(SUM(ReceivedAmount) AS DECIMAL(18,2)) AS ReceivedAmount,
+      CAST(SUM(ReturnAdviceQty) AS DECIMAL(18,2)) AS ReturnAdviceQty,
+      CAST(SUM(ReturnAdviceAmount) AS DECIMAL(18,2)) AS ReturnAdviceAmount,
+      CAST(SUM(TransferredQty) AS DECIMAL(18,2)) AS TransferredQty,
+      CAST(SUM(TransferredAmount) AS DECIMAL(18,2)) AS TransferredAmount,
+      CAST(SUM(AdjustmentQty) AS DECIMAL(18,2)) AS AdjustmentQty,
+      CAST(SUM(AdjustmentAmount) AS DECIMAL(18,2)) AS AdjustmentAmount,
+      CAST(SUM(LedgerQty) AS DECIMAL(18,2)) AS LedgerQty,
+      CAST(SUM(LedgerAmount) AS DECIMAL(18,2)) AS LedgerAmount,
       CAST(SUM(IssuedStationQty) AS DECIMAL(18,2)) AS IssuedStationQty,
       CAST(SUM(IssuedStationAmount) AS DECIMAL(18,2)) AS IssuedStationAmount,
       CAST(SUM(IssuedVehicleQty) AS DECIMAL(18,2)) AS IssuedVehicleQty,
@@ -2037,54 +2835,173 @@ async function monthlyStockAccountMovementDetails({ limit, search, ctx, filters 
       CAST(SUM(ReturnAmount) AS DECIMAL(18,2)) AS ReturnAmount,
       CAST(SUM(GoodsReceiveQty) AS DECIMAL(18,2)) AS GoodsReceiveQty,
       CAST(SUM(GoodsReceiveAmount) AS DECIMAL(18,2)) AS GoodsReceiveAmount,
+      CAST(SUM(GoodsReturnQty) AS DECIMAL(18,2)) AS GoodsReturnQty,
+      CAST(SUM(GoodsReturnAmount) AS DECIMAL(18,2)) AS GoodsReturnAmount,
+      CAST(SUM(DispatchAdvQty) AS DECIMAL(18,2)) AS DispatchAdvQty,
+      CAST(SUM(DispatchAdvAmount) AS DECIMAL(18,2)) AS DispatchAdvAmount,
       CAST(SUM(ClosingQty) AS DECIMAL(18,2)) AS ClosingQty,
-      CAST(SUM(ClosingAmount) AS DECIMAL(18,2)) AS ClosingAmount
+      CAST(SUM(ClosingAmount) AS DECIMAL(18,2)) AS ClosingAmount,
+      CAST(SUM(CASE WHEN ItemType = '1' THEN ClosingAmount ELSE 0 END) AS DECIMAL(18,2)) AS StockGudangClosingAmount,
+      CAST(SUM(CASE WHEN ItemType = '4' THEN ClosingAmount ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopMesinClosingAmount
     FROM report_rows
+    ${movementCategoryWhere}
     GROUP BY Location, ActualPeriod, AccountingPeriod, OpeningActualPeriod, OpeningAccountingPeriod
   `)
 
-  const chart = await rows(ctx, `
+  const stockAnalysisChart = await rows(ctx, `
     ${ctes}
     SELECT TOP 10
+      'stock-analysis' AS DimensionId,
       StockAnalysisCode AS Label,
+      StockAnalysisCode AS DimensionValue,
       StockAnalysisCode,
       StockAnalysisName,
-      COUNT(*) AS TotalItem,
-      CAST(SUM(ClosingQty) AS DECIMAL(18,2)) AS Qty,
-      CAST(SUM(ClosingAmount) AS DECIMAL(18,2)) AS Amount,
-      CAST(SUM(OnHandHoldAmount) AS DECIMAL(18,2)) AS OnHandHoldAmount,
-      CAST(SUM(IssuedTotalAmount) AS DECIMAL(18,2)) AS IssuedAmount
+      ${monthlyStockMovementChartMetricSelect}
     FROM report_rows
+    ${movementCategoryWhere}
     GROUP BY StockAnalysisCode, StockAnalysisName
     ORDER BY Amount DESC
   `)
 
+  const movementCategoryChart = await rows(ctx, `
+    ${ctes}
+    SELECT TOP 10
+      'movement-category' AS DimensionId,
+      MovementCategory AS Label,
+      MovementCategory AS DimensionValue,
+      MovementCategory,
+      ${monthlyStockMovementChartMetricSelect}
+    FROM report_rows
+    ${movementCategoryWhere}
+    GROUP BY MovementCategory
+    ORDER BY ${movementCategoryRankSqlCase('MovementCategory')}, Amount DESC
+  `)
+
+  const analysisGroupChart = analysisGroupKey === 'StockAnalysisCode' || analysisGroupKey === 'MovementCategory'
+    ? []
+    : await rows(ctx, `
+      ${ctes}
+      SELECT TOP 50
+        '${analysisGroup.dimensionId}' AS DimensionId,
+        NULLIF(${analysisGroup.sql}, '') AS Label,
+        NULLIF(${analysisGroup.sql}, '') AS DimensionValue,
+        NULLIF(${analysisGroup.sql}, '') AS ${analysisGroup.sql},
+        ${analysisGroupNameSelect}
+        ${monthlyStockMovementChartMetricSelect}
+      FROM report_rows
+      ${movementCategoryWhere}
+      GROUP BY ${analysisGroup.sql}
+      ORDER BY Amount DESC
+    `)
+
+  const itemTypeChart = await rows(ctx, `
+    ${ctes}
+    SELECT
+      'item-type' AS DimensionId,
+      ItemTypeName AS Label,
+      ItemType AS DimensionValue,
+      ItemType,
+      ItemTypeName,
+      ${monthlyStockMovementChartMetricSelect}
+    FROM report_rows
+    ${movementCategoryWhere}
+    GROUP BY ItemType, ItemTypeName
+    ORDER BY ItemType
+  `)
+
+  const chart = analysisGroupKey === 'StockAnalysisCode'
+    ? [...stockAnalysisChart, ...movementCategoryChart, ...itemTypeChart]
+    : analysisGroupKey === 'MovementCategory'
+      ? [...movementCategoryChart, ...stockAnalysisChart, ...itemTypeChart]
+      : [...analysisGroupChart, ...movementCategoryChart, ...stockAnalysisChart, ...itemTypeChart]
+
   return {
     title: 'MONTHLY STOCK ACCOUNT MOVEMENT DETAILS',
-    description: 'Rekonstruksi RPTIN1000015 untuk item movement pabrik PTRJ memakai base IN_ITEM, opening month-end, issue, workshop, return, goods receive, dan closing hasil hitung.',
+    description: 'RPTIN1000015: mutasi actual per bulan (Opening/Issue/Receive/Closing dihitung SQL). StockAnalysisCode (DEADS/MEMOV/SLMOV) = master field IN_ITEM, BUKAN MovementCategory dinamis dari aktivitas movement.',
     rows: reportRows,
     columns: columnsFrom(reportRows),
     summary,
     chart,
     metadata: metadata(ctx, {
       period: actualPeriod,
-      sourceTables: 'IN_ITEM, IN_STOCKANALYSIS, IN_MTHENDITEM, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK, WS_JOB, PU_GOODSRCV, PU_GOODSRCVLN, PU_POLN',
+      sourceTables: 'IN_ITEM, IN_PRODTYPE, IN_STOCKANALYSIS, IN_MTHENDITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK, WS_JOB, PU_GOODSRCV, PU_GOODSRCVLN, PU_GOODSRET, PU_GOODSRETLN, PU_POLN',
       reportReference: 'RPTIN1000015',
       actualPeriod,
       accountingPeriod: reportPeriod.accountingPeriod,
       accYear: reportPeriod.accYear,
       accMonth: reportPeriod.accMonth,
+      periodInputMode: reportPeriod.inputMode,
+      periodRequested: reportPeriod.requested,
+      transactionAsOf: transactionAsOf || 'live',
       openingActualPeriod,
       openingAccountingPeriod: formatPeriod(openingPeriod.accYear, openingPeriod.accMonth),
       location,
-      stockAnalysisScope: stockAnalysisCode || 'DEADS, MEMOV, SLMOV',
-      periodRule: 'Filter period memakai periode aktual YYYY-MM lalu dikonversi dengan actualToAccountingPeriod; contoh 2026-04 menjadi AccYear 2027 AccMonth 1.',
-      openingRule: 'Opening diambil dari IN_MTHENDITEM accounting period sebelumnya; transaksi bulan berjalan memakai AccYear/AccMonth hasil konversi periode aktual.',
+      stockAnalysisScope: stockAnalysisCode || (stockAnalysisDefaultScope ? 'DEADS, MEMOV, SLMOV' : 'all stock analysis codes'),
+      stockAnalysisSource: 'master_field',
+      stockAnalysisRule: stockAnalysisDefaultScope
+        ? 'Mode StockAnalysisCode memakai scope default DEADS/MEMOV/SLMOV dari IN_ITEM + IN_STOCKANALYSIS.'
+        : 'Mode taxonomy seperti ProductTypeCode memakai full active ItemType 1+4 scope; StockAnalysisCode hanya menjadi kolom referensi bila tidak dipilih sebagai group/filter.',
+      itemTypeScope: itemTypeScope || '1,4',
+      includeWorkshopItem: filters?.includeWorkshopItem ?? (itemTypeScope === '1' ? 'No' : 'Yes'),
+      itemTypeScopeRule: itemTypeScope === '1'
+        ? 'Scope item dibatasi ke ItemType 1 Stock/Gudang.'
+        : itemTypeScope === '4'
+          ? 'Scope item dibatasi ke ItemType 4 Workshop/Mesin.'
+          : 'Scope item default report center mencakup ItemType 1 Stock/Gudang dan ItemType 4 Workshop/Mesin.',
+      baseItemScopeRule: analysisGroupKey === 'StockAnalysisCode'
+        ? `Base item: LocCode PTRJ, Status 1/2, ItemType ${itemTypeScope || '1+4'}, dan StockAnalysisCode default DEADS/MEMOV/SLMOV kecuali filter spesifik dikirim.`
+        : `Base item: LocCode PTRJ, Status 1/2, ItemType ${itemTypeScope || '1+4'}, tidak suppress zero balance, tanpa default StockAnalysis/DC/M-only filter.`,
+      officialJsonComparisonRule: 'Untuk match JSON/PDF RPTIN1000015 dengan header Include Workshop Item: No, gunakan includeWorkshopItem=no atau itemType=gudang. Default Report Center tetap ItemType 1+4 karena inventory procurement merangkum Gudang + Workshop/Mesin.',
+      valuationBreakdown: {
+        scope: itemTypeScope || 'ItemType 1 Stock/Gudang + ItemType 4 Workshop/Mesin',
+        activeStockValue: 'OnHandHoldAmount = (QtyOnHand + QtyOnHold) * AverageCost dari IN_ITEM live.',
+        accountingClosingValue: 'ClosingAmount = OpeningAmount - IssuedTotalAmount + GoodsReceiveAmount + return/transfer/adjustment component yang tersedia pada periode accounting.',
+        stockGudangValue: 'StockGudangOnHandHoldAmount dan StockGudangClosingAmount hanya ItemType=1.',
+        workshopMesinValue: 'WorkshopMesinOnHandHoldAmount dan WorkshopMesinClosingAmount hanya ItemType=4.',
+        movementCostSources: [
+          'Opening: IN_MTHENDITEM periode accounting sebelumnya.',
+          'Issue stock/gudang: IN_STOCKISSUE + IN_STOCKISSUELN.',
+          'Issue BBM: IN_FUELISSUE + IN_FUELISSUELN.',
+          'Issue workshop/mesin: WS_JOBSTOCK TransType=1.',
+          'Return workshop: WS_JOBSTOCK TransType=2.',
+          'Goods receive: PU_GOODSRCV + PU_GOODSRCVLN + PU_POLN.Cost.',
+          'Goods return: PU_GOODSRET + PU_GOODSRETLN Amount atau ReturnStockQty * Cost.',
+        ],
+        note: 'Untuk KPI valuasi cepat gunakan OnHandHoldAmount. Untuk rekonstruksi laporan accounting bulanan gunakan ClosingAmount.',
+      },
+      analysisGroup: analysisGroupKey,
+      analysisGroupLabel: analysisGroup.label,
+      movementCategoryScope: movementCategoryScope || undefined,
+      taxonomyScope: {
+        productType: productTypeCode || undefined,
+        productCategory: productCategoryCode || undefined,
+        productBrand: productBrandCode || undefined,
+        productModel: productModelCode || undefined,
+        productMaterial: productMaterialCode || undefined,
+        itemType: itemTypeScope || undefined,
+      },
+      actualMovementCategoryRule: `MovementCategory aktual RPTIN1000015 dihitung dari distinct issue document dalam window ${movementWindow.label} (IN_STOCKISSUE/IN_STOCKISSUELN + IN_FUELISSUE/IN_FUELISSUELN). Jika tidak ada issue document, fallback ke aktivitas movement pada baris report (issue station/vehicle/ledger, return, goods receive, goods return, dispatch, transfer/adjustment bila ada). Opening/closing saldo tidak dihitung sebagai movement. Rule: ${movementCategoryThresholdLabel(movementThresholds)}. Ini bukan StockAnalysisCode master.`,
+      movementWindow: movementWindow.preset,
+      movementWindowLabel: movementWindow.label,
+      movementWindowStartInclusive: movementWindow.startInclusive,
+      movementWindowEndExclusive: movementWindow.endExclusive,
+      movementCategoryThresholds: movementThresholds,
+      movementCategoryThresholdLabel: movementCategoryThresholdLabel(movementThresholds),
+      actualMovementRule: 'Actual movement = kolom Opening/Received/Issued*/Return/GoodsReceive/Closing qty+amount dihitung dari transaksi bulan aktual (Acc fiscal April).',
+      periodRule: 'Filter period: actual YYYY-MM (period=) preferred. AccYear/AccMonth only if actual absent. Fiscal April via accounting-period helper.',
+      openingRule: 'Opening qty dan amount diambil dari IN_MTHENDITEM accounting period sebelumnya; transaksi bulan berjalan memakai AccYear/AccMonth hasil konversi periode aktual.',
+      transactionAsOfRule: 'Jika dateTo dikirim, transaksi bulan berjalan dibatasi ke COALESCE(UpdateDate, CreateDate) <= dateTo agar hanya dokumen yang sudah posted/update sebelum waktu cetak yang ikut dihitung.',
       closingRule: 'Closing dihitung: opening + received + return advice + transferred + adjustment - issued total + return + goods receive - goods return - dispatch advice.',
-      issueUsageRule: 'IN_STOCKISSUE/IN_STOCKISSUELN hanya untuk item non-workshop; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType 1 untuk issue dan TransType 2 untuk return.',
+      issueUsageRule: 'Issue non-workshop dihitung dari IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM dari IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType 1 untuk issue dan TransType 2 untuk return.',
       onHandHoldAmountRule: 'Valuasi saldo aktif dari IN_ITEM dihitung dengan (QtyOnHand + QtyOnHold) * AverageCost.',
       goodsReceiveAmountRule: 'Goods receive amount = PU_GOODSRCVLN.StockQty * PU_POLN.Cost.',
-      primaryChart: 'Closing Amount by Stock Analysis',
+      goodsReturnAmountRule: 'Goods return amount = PU_GOODSRETLN.Amount fallback ReturnStockQty * Cost; mengurangi closing.',
+      primaryChart: `Closing Amount by ${analysisGroup.label}`,
+      defaultGroupBy: analysisGroupKey,
+      detailWindowOrder: limitAll ? 'official-grouped-order' : 'balanced-by-analysis-group-row-number',
+      detailWindowOrderRule: limitAll
+        ? 'Export/all rows memakai urutan resmi: analysis group lalu ItemCode.'
+        : 'Tampilan interaktif memakai ORDER BY No dalam group, lalu analysis group, supaya semua ProductType/analysis group muncul di halaman awal.',
     }),
   }
 }
@@ -2092,6 +3009,7 @@ async function monthlyStockAccountMovementDetails({ limit, search, ctx, filters 
 async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const scope = goodReceiptSqlScope(filters)
+  const itemScopeFilter = inventoryItemScopeExistsFilter(DATABASE, 'l.ItemCode', 'h.LocCode', filters)
   const whereSearch = textSearch(search, [
     'h.GoodsRcvID',
     'CONVERT(varchar(40), h.GoodsRcvRefNo)',
@@ -2171,6 +3089,7 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
     ) po
     ${scope.whereSql}
       ${whereSearch}
+      ${itemScopeFilter}
     ORDER BY h.CreateDate DESC, h.GoodsRcvID DESC, l.GoodsRcvLnID
   `)
 
@@ -2197,6 +3116,7 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
     ) i
     ${scope.whereSql}
       ${whereSearch}
+      ${itemScopeFilter}
   `)
 
   const chart = await rows(ctx, `
@@ -2220,6 +3140,7 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
     ) i
     ${scope.whereSql}
       ${whereSearch}
+      ${itemScopeFilter}
     GROUP BY RTRIM(h.SupplierCode), RTRIM(ISNULL(s.Name, h.SupplierCode))
     ORDER BY Amount DESC
   `)
@@ -2248,14 +3169,17 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
   }
 }
 
-async function stockIssue({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = textSearch(search, ['Dokumen', 'KodeBarang', 'NamaBarang', 'AccCode', 'BlkCode', 'VehCode'])
   const workshopDate = workshopStockIssueDateExpression('s')
   const workshopDoc = workshopStockIssueDocumentExpression('s')
   const workshopAmount = workshopStockIssueAmountExpression('s')
-  const issueRowsCte = `
-    WITH issue_rows AS (
+  const itemTypeFilter = filters?.itemType?.toLowerCase()
+  const includeGudang = !itemTypeFilter || itemTypeFilter === '1' || itemTypeFilter === 'gudang'
+  const includeWorkshop = !itemTypeFilter || itemTypeFilter === '4' || itemTypeFilter === 'workshop'
+
+  const gudangQuery = `
       SELECT
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
         h.PostDate AS Tanggal,
@@ -2276,7 +3200,9 @@ async function stockIssue({ limit, search, ctx, stale }: { limit: number; search
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
       WHERE h.PostDate >= '2000-01-01'
         ${nonWorkshopItemTypeFilter('i')}
-      UNION ALL
+  `
+
+  const workshopQuery = `
       SELECT
         RTRIM(${workshopDoc}) AS Dokumen,
         ${workshopDate} AS Tanggal,
@@ -2298,6 +3224,16 @@ async function stockIssue({ limit, search, ctx, stale }: { limit: number; search
       WHERE ${workshopDate} >= '2000-01-01'
         AND RTRIM(ISNULL(s.TransType, '')) = '1'
         AND ${workshopStockIssueItemTypeExpression('i', 's')} = '4'
+  `
+
+  const queries = []
+  if (includeGudang) queries.push(gudangQuery)
+  if (includeWorkshop) queries.push(workshopQuery)
+  if (queries.length === 0) queries.push(gudangQuery) // fallback
+
+  const issueRowsCte = `
+    WITH issue_rows AS (
+      ${queries.join(' UNION ALL ')}
     )`
   const reportRows = await rows(ctx, `
     ${issueRowsCte}
@@ -2428,10 +3364,11 @@ async function stockOpname({ limit, search, ctx, stale }: { limit: number; searc
   }
 }
 
-async function reorderLevel({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function reorderLevel({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const quantityClosing = quantityClosingExpression('i')
   const quantityClosingField = quantityClosingExpression()
+  const movementThresholds = movementThresholdsFromFilters(filters)
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(i.ItemCode) AS KodeBarang,
@@ -2439,14 +3376,14 @@ async function reorderLevel({ limit, search, ctx, stale }: { limit: number; sear
       RTRIM(ISNULL(i.ProdCatCode, '-')) AS Kategori,
       RTRIM(i.UOMCode) AS Satuan,
       CAST(${quantityClosing} AS DECIMAL(18,2)) AS QuantityClosing,
-      ${stockIssueUsageColumns(quantityClosing)},
+      ${stockIssueUsageColumns(quantityClosing, movementThresholds)},
       CAST(ISNULL(i.ReOrderLevel, 0) AS DECIMAL(18,2)) AS ReOrderLevel,
       CAST(ISNULL(i.ReOrderLevel, 0) - ${quantityClosing} AS DECIMAL(18,2)) AS Shortage,
       CAST(ISNULL(i.LatestCost, 0) AS DECIMAL(18,2)) AS LatestCost,
       i.LastOrderDate,
       i.UpdateDate AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
       AND ISNULL(i.ReOrderLevel, 0) > 0
       AND ${quantityClosing} < ISNULL(i.ReOrderLevel, 0)
@@ -2550,9 +3487,19 @@ async function transactionHistory({ limit, search, ctx }: ReportHandlerOptions):
   }
 }
 
-async function purchaseRequestInventory({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function purchaseRequestInventory({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = textSearch(search, ['h.PRID', 'l.ItemCode', 'i.Description', 'h.LocCode', 'h.Status'])
+  const month = monthBounds(filters?.period)
+  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? '2000-01-01'
+  const dateTo = cleanSqlDate(filters?.dateTo)
+  const location = sanitizeLike(filters?.location ?? '')
+  const clauses = [`h.PRDate >= '${dateFrom}'`]
+  if (dateTo) clauses.push(`h.PRDate < DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))`)
+  else if (month.toExclusive) clauses.push(`h.PRDate < '${month.toExclusive}'`)
+  if (location) clauses.push(`RTRIM(h.LocCode) LIKE N'%${location}%'`)
+  const scopeWhereSql = `WHERE ${clauses.join('\n      AND ')}`
+  const itemScopeFilter = inventoryItemScopeExistsFilter(DATABASE, 'l.ItemCode', 'h.LocCode', filters)
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(h.PRID) AS DokumenPR,
@@ -2573,8 +3520,9 @@ async function purchaseRequestInventory({ limit, search, ctx, stale }: { limit: 
     FROM [${DATABASE}].[dbo].[IN_PRLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_PR] h ON l.PRID = h.PRID
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-    WHERE h.PRDate >= '2000-01-01'
+    ${scopeWhereSql}
       ${whereSearch}
+      ${itemScopeFilter}
     ORDER BY ISNULL(l.QtyOutstanding, 0) DESC, h.PRDate DESC
   `)
 
@@ -2591,7 +3539,8 @@ async function purchaseRequestInventory({ limit, search, ctx, stale }: { limit: 
       MAX(h.PRDate) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_PRLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_PR] h ON l.PRID = h.PRID
-    WHERE h.PRDate >= '2000-01-01'
+    ${scopeWhereSql}
+      ${itemScopeFilter}
   `)
 
   const chart = await rows(ctx, `
@@ -2606,8 +3555,9 @@ async function purchaseRequestInventory({ limit, search, ctx, stale }: { limit: 
     FROM [${DATABASE}].[dbo].[IN_PR] h
     JOIN [${DATABASE}].[dbo].[IN_PRLN] l ON l.PRID=h.PRID
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON i.ItemCode=l.ItemCode AND i.LocCode=h.LocCode
-    WHERE h.PRDate >= '2025-05-01'
+    ${scopeWhereSql}
       AND ISNULL(l.QtyOutstanding,0) > 0
+      ${itemScopeFilter}
     GROUP BY RTRIM(h.LocCode), RTRIM(l.ItemCode), RTRIM(ISNULL(i.Description,l.ItemCode))
     ORDER BY QtyOutstanding DESC
   `)
@@ -2844,6 +3794,7 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale, filters }: R
   const topClause = limitAll || useMovementCategoryWindow ? '' : `TOP ${limit}`
   const quantityClosing = quantityClosingExpression('i')
   const quantityClosingField = quantityClosingExpression()
+  const movementThresholds = movementThresholdsFromFilters(filters)
   const reportRowsRaw = await rows(ctx, `
     SELECT ${topClause}
       CASE
@@ -2881,7 +3832,7 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale, filters }: R
       RTRIM(i.UOMCode) AS Satuan,
       CAST(1 AS INT) AS ItemCurrent,
       CAST(${quantityClosing} AS DECIMAL(18,2)) AS QuantityClosing,
-      ${stockIssueUsageColumns(quantityClosing)},
+      ${stockIssueUsageColumns(quantityClosing, movementThresholds)},
       CAST(ISNULL(i.AverageCost, 0) AS DECIMAL(18,2)) AS HargaSatuan,
       CAST(ISNULL(i.AverageCost, 0) AS DECIMAL(18,2)) AS AverageCost,
       CAST(${quantityClosing} * ISNULL(i.AverageCost, 0) AS DECIMAL(18,2)) AS AmountCurrent,
@@ -2900,7 +3851,7 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale, filters }: R
         CASE WHEN i.UpdateDate IS NULL THEN 'Update Tidak Ada; ' WHEN i.UpdateDate <= DATEADD(YEAR, -2, GETDATE()) THEN 'Update > 24 Bulan; ' WHEN i.UpdateDate <= DATEADD(YEAR, -1, GETDATE()) THEN 'Update > 12 Bulan; ' ELSE '' END
       ) AS IssueSummary
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
       ${warehouseInventoryItemTypeFilter('i')}
       ${ageFilter}
@@ -2943,7 +3894,7 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale, filters }: R
       CAST(SUM(${quantityClosing} * ISNULL(i.AverageCost, 0)) AS DECIMAL(18,2)) AS TotalAmount,
       MAX(i.UpdateDate) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status, '0')) = '1'
       ${warehouseInventoryItemTypeFilter('i')}
   `)
@@ -2988,9 +3939,19 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale, filters }: R
   }
 }
 
-async function purchaseOrderHistory({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function purchaseOrderHistory({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = textSearch(search, ['l.ItemCode', 'i.Description', 'l.LineDescription', 'h.SupplierCode', 's.Name'])
+  const month = monthBounds(filters?.period)
+  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? '2000-01-01'
+  const dateTo = cleanSqlDate(filters?.dateTo)
+  const location = sanitizeLike(filters?.location ?? '')
+  const clauses = [`h.PODate >= '${dateFrom}'`]
+  if (dateTo) clauses.push(`h.PODate < DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))`)
+  else if (month.toExclusive) clauses.push(`h.PODate < '${month.toExclusive}'`)
+  if (location) clauses.push(`RTRIM(h.LocCode) LIKE N'%${location}%'`)
+  const scopeWhereSql = `WHERE ${clauses.join('\n      AND ')}`
+  const itemScopeFilter = inventoryItemScopeExistsFilter(DATABASE, 'l.ItemCode', 'h.LocCode', filters)
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(l.ItemCode) AS KodeBarang,
@@ -3009,8 +3970,9 @@ async function purchaseOrderHistory({ limit, search, ctx, stale }: { limit: numb
     INNER JOIN [${DATABASE}].[dbo].[PU_POLN] l ON l.POID = h.POID
     LEFT JOIN [${DATABASE}].[dbo].[PU_SUPPLIER] s ON s.SupplierCode = h.SupplierCode
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON i.ItemCode = l.ItemCode AND i.LocCode = h.LocCode
-    WHERE h.PODate >= '2000-01-01'
+    ${scopeWhereSql}
       ${whereSearch}
+      ${itemScopeFilter}
     GROUP BY RTRIM(l.ItemCode), RTRIM(ISNULL(i.Description, l.LineDescription)), RTRIM(h.SupplierCode), RTRIM(ISNULL(s.Name, h.SupplierCode))
     ORDER BY POAmount DESC
   `)
@@ -3028,7 +3990,8 @@ async function purchaseOrderHistory({ limit, search, ctx, stale }: { limit: numb
       MAX(h.PODate) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[PU_PO] h
     INNER JOIN [${DATABASE}].[dbo].[PU_POLN] l ON l.POID = h.POID
-    WHERE h.PODate >= '2000-01-01'
+    ${scopeWhereSql}
+      ${itemScopeFilter}
   `)
 
   const chart = await rows(ctx, `
@@ -3042,7 +4005,8 @@ async function purchaseOrderHistory({ limit, search, ctx, stale }: { limit: numb
     FROM [${DATABASE}].[dbo].[PU_PO] h
     INNER JOIN [${DATABASE}].[dbo].[PU_POLN] l ON l.POID = h.POID
     LEFT JOIN [${DATABASE}].[dbo].[PU_SUPPLIER] s ON s.SupplierCode = h.SupplierCode
-    WHERE h.PODate >= '2000-01-01'
+    ${scopeWhereSql}
+      ${itemScopeFilter}
     GROUP BY RTRIM(h.SupplierCode), RTRIM(ISNULL(s.Name, h.SupplierCode))
     ORDER BY POAmount DESC
   `)
@@ -3166,9 +4130,10 @@ async function supplierPerformance({ limit, search, ctx, stale }: { limit: numbe
   }
 }
 
-async function fertilizerInventoryProcurement({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function fertilizerInventoryProcurement({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const quantityClosing = quantityClosingExpression('i')
+  const movementThresholds = movementThresholdsFromFilters(filters)
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(i.ItemCode) AS KodeBarang,
@@ -3176,7 +4141,7 @@ async function fertilizerInventoryProcurement({ limit, search, ctx, stale }: { l
       RTRIM(i.LocCode) AS Gudang,
       RTRIM(i.UOMCode) AS Satuan,
       CAST(${quantityClosing} AS DECIMAL(18,2)) AS QuantityClosing,
-      ${stockIssueUsageColumns(quantityClosing)},
+      ${stockIssueUsageColumns(quantityClosing, movementThresholds)},
       CAST(ISNULL(i.AverageCost,0) AS DECIMAL(18,2)) AS AverageCost,
       CAST(${quantityClosing} * ISNULL(i.AverageCost,0) AS DECIMAL(18,2)) AS NilaiStok,
       i.LastIssueDate,
@@ -3195,7 +4160,7 @@ async function fertilizerInventoryProcurement({ limit, search, ctx, stale }: { l
       WHERE l.ItemCode = i.ItemCode AND h.PODate >= '2000-01-01'
       ORDER BY h.PODate DESC, ISNULL(l.Amount,0) DESC
     ) lastpo
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status,'0'))='1'
       AND RTRIM(ISNULL(i.ProdCatCode,''))='CA2111'
       ${itemSearch('i', search)}
@@ -3212,7 +4177,7 @@ async function fertilizerInventoryProcurement({ limit, search, ctx, stale }: { l
       SUM(CASE WHEN ISNULL(issueUsage.StockIssueEventCount, 0) = 0 THEN 1 ELSE 0 END) AS LastIssueTidakValid,
       MAX(i.UpdateDate) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_ITEM] i
-    ${stockIssueUsageApply(DATABASE)}
+    ${stockIssueUsageApply(DATABASE, 'i', movementWindowFromFilters(filters))}
     WHERE RTRIM(ISNULL(i.Status,'0'))='1'
       AND RTRIM(ISNULL(i.ProdCatCode,''))='CA2111'
   `)
@@ -3390,23 +4355,37 @@ function toCsv(rowsData: DbRow[]) {
 }
 
 export async function GET(request: NextRequest) {
+  const gatewayOverride = gatewayOverrideFromRequest({
+    headers: request.headers,
+    searchParams: request.nextUrl.searchParams,
+  })
+  return gatewayBaseStorage.run(gatewayOverride, () => handleInventoryGet(request))
+}
+
+async function handleInventoryGet(request: NextRequest) {
   const ctx = sourceToContext(getSource(request))
   const reportParam = request.nextUrl.searchParams.get('report') ?? 'stok-gudang'
   const format = request.nextUrl.searchParams.get('format') ?? 'json'
   const search = request.nextUrl.searchParams.get('search') ?? ''
   const stale = request.nextUrl.searchParams.get('stale') ?? 'lebih-1-tahun'
-  const filters = filtersFromSearchParams(request.nextUrl.searchParams)
+  const rawFilters = filtersFromSearchParams(request.nextUrl.searchParams)
   const page = getPage(request)
   const pageSize = getPageSize(request)
   const tableSort = getTableSort(request)
   const report = getInventoryReport(reportParam)
   const handler = reportHandlers[report?.apiReport ?? reportParam]
   const handlerKey = report?.apiReport ?? reportParam
+  const isMonthlyStockAccountMovementReport = handlerKey === 'monthly-stock-account-movement-details' || handlerKey === 'RPTIN1000015'
+  const filters = isMonthlyStockAccountMovementReport
+    ? normalizeInventoryAnalysisGroupFilters(rawFilters)
+    : rawFilters
   const isStockAgingReport = handlerKey === 'item-stale-update' || handlerKey === 'all-stock-movement-analysis'
   const isFullListingReport = ['asset-stock-valuasi-listing', 'report-asset-stock-valuasi-listing', 'seluruh-stock-summary', 'RPTIN1000011', 'all-stock-movement-analysis'].includes(handlerKey)
   const exportAll = format === 'csv' || wantsAllRows(request)
   const limitAll = exportAll
   const limit = limitAll ? 20000 : Math.min(page * pageSize, TABLE_WINDOW_ROW_LIMIT)
+  const includeDebugSql = isAdminDebugRequest(request)
+  const debugSqlStatements: DebugSqlStatement[] = []
 
   if (report?.status === 'hold') {
     return NextResponse.json(
@@ -3431,18 +4410,108 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const rawPayload = await handler({ limit, limitAll, search, ctx, stale, filters })
-    const sqlScopedFilters = handlerKey === 'monthly-stock-account-movement-details'
+    const rawPayload = includeDebugSql
+      ? await debugSqlStorage.run(debugSqlStatements, () => handler({ limit, limitAll, search, ctx, stale, filters }))
+      : await handler({ limit, limitAll, search, ctx, stale, filters })
+    const rawPayloadWithMovement = includeDebugSql
+      ? await debugSqlStorage.run(debugSqlStatements, () => enrichPayloadWithMovementCategory(rawPayload, ctx, filters))
+      : await enrichPayloadWithMovementCategory(rawPayload, ctx, filters)
+    const sqlScopedFilters = handlerKey === 'monthly-stock-account-movement-details' || handlerKey === 'RPTIN1000015'
     const allStockMovementScopedFilters = handlerKey === 'all-stock-movement-analysis'
     const periodScopedFilters = isFullListingReport
-    const postFilterInput = sqlScopedFilters
-      ? { ...filters, search: undefined, period: undefined, location: undefined, category: undefined }
+    const itemScopeSqlScopedFilters = [
+      'asset-stock-valuasi-listing',
+      'report-asset-stock-valuasi-listing',
+      'RPTIN1000011',
+      'goods-receiving-receipt-activity',
+      'purchase-request-inventory',
+      'purchase-order-history',
+    ].includes(handlerKey)
+    const basePostFilterInput = sqlScopedFilters
+      ? {
+          ...filters,
+          search: undefined,
+          period: undefined,
+          accYear: undefined,
+          accMonth: undefined,
+          actualYear: undefined,
+          actualMonth: undefined,
+          dateFrom: undefined,
+          dateTo: undefined,
+          location: undefined,
+          category: undefined,
+          stockAnalysis: undefined,
+          productType: undefined,
+          productCategory: undefined,
+          productBrand: undefined,
+          productModel: undefined,
+          productMaterial: undefined,
+          includeWorkshopItem: undefined,
+          movementCategory: undefined,
+          movementWindow: undefined,
+          groupBy: undefined,
+          chartDimension: undefined,
+          aggregateField: undefined,
+          aggregateFn: undefined,
+          top: undefined,
+        }
       : allStockMovementScopedFilters
-        ? { ...filters, search: undefined, period: undefined, accYear: undefined, accMonth: undefined, actualYear: undefined, actualMonth: undefined, dateFrom: undefined, dateTo: undefined, location: undefined, category: undefined, movementCategory: undefined, stale: undefined }
+        // Keep SQL chart/summary by MovementCategory. Do NOT re-group by location/Gudang.
+        ? {
+            ...filters,
+            search: undefined,
+            period: undefined,
+            accYear: undefined,
+            accMonth: undefined,
+            actualYear: undefined,
+            actualMonth: undefined,
+            dateFrom: undefined,
+            dateTo: undefined,
+            location: undefined,
+            category: undefined,
+            movementCategory: undefined,
+            movementWindow: undefined,
+            movementFastMin: undefined,
+            movementMovingMin: undefined,
+            movementMovingMax: undefined,
+            movementSlowCount: undefined,
+            stale: undefined,
+            groupBy: undefined,
+            chartDimension: undefined,
+          }
+      : itemScopeSqlScopedFilters
+        ? {
+            ...filters,
+            search: undefined,
+            period: undefined,
+            accYear: undefined,
+            accMonth: undefined,
+            actualYear: undefined,
+            actualMonth: undefined,
+            dateFrom: undefined,
+            dateTo: undefined,
+            location: undefined,
+            category: undefined,
+            stockAnalysis: undefined,
+            productType: undefined,
+            productCategory: undefined,
+            productBrand: undefined,
+            productModel: undefined,
+            productMaterial: undefined,
+            itemType: undefined,
+            includeWorkshopItem: undefined,
+            movementWindow: undefined,
+          }
       : periodScopedFilters
-        ? { ...filters, period: undefined, accYear: undefined, accMonth: undefined, actualYear: undefined, actualMonth: undefined, dateFrom: undefined, dateTo: undefined }
-      : filters
-    const payload = applyTableSort(applyReportFilters(rawPayload, postFilterInput), tableSort.column, tableSort.direction)
+        ? { ...filters, period: undefined, accYear: undefined, accMonth: undefined, actualYear: undefined, actualMonth: undefined, dateFrom: undefined, dateTo: undefined, movementWindow: undefined }
+      : { ...filters, movementWindow: undefined }
+    const postFilterInput = { ...basePostFilterInput, itemType: undefined }
+    const rawChart = rawPayloadWithMovement.chart
+    const payload = applyTableSort(applyReportFilters(rawPayloadWithMovement, postFilterInput), tableSort.column, tableSort.direction)
+    if (allStockMovementScopedFilters && Array.isArray(rawChart) && rawChart.length > 0) {
+      // Preserve SQL chart grouped by MovementCategory (Fast/Moving/Slow/Dead/Stale).
+      payload.chart = rawChart
+    }
     payload.metadata = {
       ...payload.metadata,
       reportId: report?.id ?? reportParam,
@@ -3454,12 +4523,31 @@ export async function GET(request: NextRequest) {
       chartDefinitions: report?.chartDefinitions ?? [],
       qualityNotes: report?.qualityNotes ?? [],
       sourceTables: report?.sourceTables?.join(', ') ?? payload.metadata.sourceTables,
+      filterParameters: buildFilterParameterMetadata(filters, payload, report?.id ?? reportParam, ctx),
+      movementAnalysis: payloadHasMovementCategory(payload)
+        ? buildMovementPeriodMetadata(
+            undefined,
+            movementWindowFromFilters(filters),
+            movementThresholdsFromFilters(filters),
+          )
+        : undefined,
       sqlScopedFilters: sqlScopedFilters
         ? {
             search: filters.search,
             period: filters.period,
             location: filters.location,
             category: filters.category,
+            stockAnalysis: filters.stockAnalysis,
+            productType: filters.productType,
+            productCategory: filters.productCategory,
+            productBrand: filters.productBrand,
+            productModel: filters.productModel,
+            productMaterial: filters.productMaterial,
+            itemType: filters.itemType,
+            includeWorkshopItem: filters.includeWorkshopItem,
+            movementCategory: filters.movementCategory,
+            groupBy: filters.groupBy,
+            chartDimension: filters.chartDimension,
           }
         : allStockMovementScopedFilters
           ? {
@@ -3472,8 +4560,35 @@ export async function GET(request: NextRequest) {
               location: filters.location,
               category: filters.category,
               movementCategory: filters.movementCategory,
+              movementWindow: filters.movementWindow,
+              movementFastMin: filters.movementFastMin,
+              movementMovingMin: filters.movementMovingMin,
+              movementMovingMax: filters.movementMovingMax,
+              movementSlowCount: filters.movementSlowCount,
+              movementCategoryThresholds: movementThresholdsFromFilters(filters),
+              movementWindowResolved: movementWindowFromFilters(filters),
             }
         : undefined,
+    }
+    if (includeDebugSql) {
+      payload.metadata.debugSql = {
+        enabled: true,
+        access: 'ADMIN',
+        target: {
+          source: ctx.source,
+          sourceLabel: ctx.sourceLabel,
+          server: ctx.server,
+          database: ctx.database,
+        },
+        sourceTables: payload.metadata.sourceTables,
+        statementCount: debugSqlStatements.length,
+        copyHint: 'Copy statement summary untuk validasi angka KPI/total. Semua SQL sudah memakai database qualifier dan read-only SELECT.',
+        statements: debugSqlStatements.map((statement, index) => ({
+          ...statement,
+          id: `${index + 1}-${statement.label}`,
+          ordinal: index + 1,
+        })),
+      }
     }
 
     console.info('[inventory-report-read]', {
@@ -3496,7 +4611,16 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const responsePayload = paginatePayload(payload, { page, pageSize }, !limitAll, TABLE_WINDOW_ROW_LIMIT)
+    let responsePayload = paginatePayload(payload, { page, pageSize }, !limitAll, TABLE_WINDOW_ROW_LIMIT)
+    responsePayload = attachInventoryAnalytics(
+      responsePayload,
+      sqlScopedFilters
+        ? buildMonthlyStockAccountMovementAnalytics(responsePayload)
+        : buildInventoryReportAnalytics(responsePayload, {
+            reportId: report?.id ?? reportParam,
+            sourcePayload: payload,
+          }),
+    )
 
     return NextResponse.json({
       success: true,

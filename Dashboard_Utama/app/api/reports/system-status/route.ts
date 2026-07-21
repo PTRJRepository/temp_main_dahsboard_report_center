@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  gatewayOverrideFromRequest,
+  resolveSqlGatewayApiKey,
+  resolveSqlGatewayBase,
+  sqlGatewayServersUrl,
+  SQL_GATEWAY_FALLBACK,
+  SQL_GATEWAY_PRIMARY,
+  SQL_GATEWAY_PRESETS,
+} from '@/lib/reports/sql-gateway-config'
 
 export const dynamic = 'force-dynamic'
 
-const rawBaseUrl = process.env.SQL_GATEWAY_URL ?? 'http://10.0.0.110:3001/query'
-const BASE_URL = rawBaseUrl.replace(/\/v1\/query\/?$/, '')
-const TOKEN =
-  process.env.SQL_GATEWAY_API_KEY ??
-  '2a993486e7a448474de66bfaea4adba7a99784defbcaba420e7f906176b94df6'
 type ReportSource = 'estate' | 'pabrik'
 
 type GatewayServer = {
@@ -44,12 +48,51 @@ function getSource(request: NextRequest): ReportSource {
   return raw === 'pabrik' || raw === 'mill' || raw === 'factory' ? 'pabrik' : 'estate'
 }
 
+function publicGatewayError() {
+  return 'Status SQL Gateway belum tersedia. Periksa konfigurasi server-side.'
+}
+
+function publicServerStatus(server: GatewayServer) {
+  return {
+    name: server.name,
+    defaultDatabase: server.defaultDatabase,
+    readOnly: server.readOnly,
+    connected: Boolean(server.connected),
+    healthy: Boolean(server.healthy),
+  }
+}
+
 export async function GET(request: NextRequest) {
   const activeSource = getSource(request)
   const activeServerName = sourceToServer(activeSource)
+  const override = gatewayOverrideFromRequest({
+    headers: request.headers,
+    searchParams: request.nextUrl.searchParams,
+  })
+  const baseUrl = resolveSqlGatewayBase({ override })
+  const token = resolveSqlGatewayApiKey()
+
+  if (!token) {
+    return NextResponse.json(
+      {
+        success: false,
+        gatewayOnline: false,
+        gatewayBase: baseUrl,
+        presets: SQL_GATEWAY_PRESETS,
+        defaults: { primary: SQL_GATEWAY_PRIMARY, fallback: SQL_GATEWAY_FALLBACK },
+        activeSource,
+        activeServer: activeServerName,
+        activeDatabase: databaseForServer(activeServerName),
+        error: publicGatewayError(),
+        checkedAt: new Date().toISOString(),
+      },
+      { status: 503 },
+    )
+  }
+
   try {
-    const response = await fetch(`${BASE_URL}/v1/servers`, {
-      headers: { 'x-api-key': TOKEN },
+    const response = await fetch(sqlGatewayServersUrl(baseUrl), {
+      headers: { 'x-api-key': token },
       cache: 'no-store',
     })
     const result = (await response.json().catch(() => ({}))) as GatewayServersResponse
@@ -72,7 +115,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: result.error ?? `SQL Gateway HTTP ${response.status}`,
+          gatewayOnline: false,
+          gatewayBase: baseUrl,
+          presets: SQL_GATEWAY_PRESETS,
+          defaults: { primary: SQL_GATEWAY_PRIMARY, fallback: SQL_GATEWAY_FALLBACK },
+          error: publicGatewayError(),
           activeSource,
           activeServer: activeServerName,
           activeDatabase: databaseForServer(activeServerName),
@@ -85,24 +132,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       gatewayOnline: true,
+      gatewayBase: baseUrl,
+      presets: SQL_GATEWAY_PRESETS,
+      defaults: { primary: SQL_GATEWAY_PRIMARY, fallback: SQL_GATEWAY_FALLBACK },
       activeSource,
       activeServer: activeServerName,
       activeDatabase: databaseForServer(activeServerName),
       activeConnected: Boolean(activeServer?.connected),
       activeHealthy: Boolean(activeServer?.healthy),
       sources,
-      servers,
+      servers: servers.map(publicServerStatus),
       checkedAt: new Date().toISOString(),
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         success: false,
         gatewayOnline: false,
+        gatewayBase: baseUrl,
+        presets: SQL_GATEWAY_PRESETS,
+        defaults: { primary: SQL_GATEWAY_PRIMARY, fallback: SQL_GATEWAY_FALLBACK },
         activeSource,
         activeServer: activeServerName,
         activeDatabase: databaseForServer(activeServerName),
-        error: error instanceof Error ? error.message : 'Gagal membaca status SQL Gateway',
+        error: publicGatewayError(),
         checkedAt: new Date().toISOString(),
       },
       { status: 502 },

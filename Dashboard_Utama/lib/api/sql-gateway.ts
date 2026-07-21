@@ -56,7 +56,7 @@ export interface SqlGatewayConfig {
   debug?: boolean;
 }
 
-const DEFAULT_BASE_URL = 'http://10.0.0.110:3001/query';
+const DEFAULT_BASE_URL = 'http://10.0.0.110:8001';
 const DEFAULT_DATABASE = 'db_ptrj_mill';
 const DEFAULT_SERVER = 'SERVER_PROFILE_1';
 

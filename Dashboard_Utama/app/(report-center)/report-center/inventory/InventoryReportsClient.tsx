@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -37,7 +37,14 @@ import { getInventoryReport, liveInventoryReports, type InventoryReport } from '
 import type { InsightContent } from '@/lib/reports/intelligence'
 import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
 import type { AiDashboardDefinition } from '@/lib/reports/ai-dashboard'
+import InventoryOverview from '@/components/report-center/InventoryOverview'
+import ProcurementKpiStrip, {
+  createDefaultProcurementKpiFilters,
+  type ProcurementKpiFilters,
+} from '@/components/report-center/ProcurementKpiStrip'
+import { createProcurementReportHref } from '@/lib/reports/procurement-workspace'
 import { useReportStore } from '@/store/reportStore'
+import type { ReportFilterInput } from '@/lib/reports/report-filtering'
 
 type DbRow = Record<string, unknown>
 
@@ -121,6 +128,28 @@ const STALE_FILTER_OPTIONS = [
   { value: 'dari-3-tahun-sampai-sekarang', label: '> 3 tahun' },
   { value: 'dari-5-tahun-sampai-sekarang', label: '> 5 tahun' },
 ]
+
+const MOVEMENT_WINDOW_OPTIONS = [
+  { value: 'all', label: 'MC: All period' },
+  { value: '1m', label: 'MC: 1 bulan' },
+  { value: '3m', label: 'MC: 3 bulan' },
+  { value: '6m', label: 'MC: 6 bulan' },
+  { value: '12m', label: 'MC: 12 bulan' },
+]
+
+const INVENTORY_ANALYSIS_GROUP_OPTIONS = [
+  { value: 'StockAnalysisCode', label: 'Stock Analysis Code', description: 'Default RPTIN1000015: DEADS / MEMOV / SLMOV' },
+  { value: 'ProductTypeCode', label: 'Product Type Code', description: 'IN_ITEM.ProdTypeCode' },
+  { value: 'ProductCategoryCode', label: 'Product Category Code', description: 'IN_ITEM.ProdCatCode' },
+  { value: 'ProductBrandCode', label: 'Product Brand Code', description: 'IN_ITEM.ProdBrandCode' },
+  { value: 'ProductModelCode', label: 'Product Model Code', description: 'IN_ITEM.ProdModelCode' },
+  { value: 'ProductMaterialCode', label: 'Product Material Code', description: 'IN_ITEM.ProdMatCode' },
+  { value: 'MovementCategory', label: 'Actual Movement Category', description: 'Fast/Moving/Slow/Dead/Stale aktual' },
+] as const
+
+type InventoryAnalysisGroup = (typeof INVENTORY_ANALYSIS_GROUP_OPTIONS)[number]['value']
+
+const STOCK_ANALYSIS_SCOPE_OPTIONS = ['DEADS', 'MEMOV', 'SLMOV'] as const
 
 const FLOW_STAGES: FlowStage[] = [
   {
@@ -764,6 +793,31 @@ function normalizeStage(value: string | null): FlowStageCode {
   return value && LIVE_FLOW_STAGE_CODES.has(value as FlowStageCode) ? (value as FlowStageCode) : 'all'
 }
 
+function normalizeMovementWindow(value: string | null) {
+  return MOVEMENT_WINDOW_OPTIONS.some((option) => option.value === value) ? String(value) : 'all'
+}
+
+function normalizeAnalysisGroup(value: string | null): InventoryAnalysisGroup {
+  return INVENTORY_ANALYSIS_GROUP_OPTIONS.some((option) => option.value === value)
+    ? (value as InventoryAnalysisGroup)
+    : 'StockAnalysisCode'
+}
+
+function cleanScopeCode(value: string | null) {
+  return String(value ?? '').trim().toUpperCase().replace(/[^A-Z0-9_.-]/g, '').slice(0, 40)
+}
+
+function scopeCodeFromParams(analysisGroup: InventoryAnalysisGroup, params: { get(name: string): string | null }) {
+  if (analysisGroup === 'MovementCategory') return params.get('movementCategory') ?? ''
+  if (analysisGroup === 'StockAnalysisCode') return cleanScopeCode(params.get('stockAnalysis') ?? params.get('category'))
+  if (analysisGroup === 'ProductTypeCode') return cleanScopeCode(params.get('productType'))
+  if (analysisGroup === 'ProductCategoryCode') return cleanScopeCode(params.get('productCategory'))
+  if (analysisGroup === 'ProductBrandCode') return cleanScopeCode(params.get('productBrand'))
+  if (analysisGroup === 'ProductModelCode') return cleanScopeCode(params.get('productModel'))
+  if (analysisGroup === 'ProductMaterialCode') return cleanScopeCode(params.get('productMaterial'))
+  return ''
+}
+
 function findCatalogReport(value: string | null) {
   if (!value) return LIVE_INVENTORY_REPORT_CATALOG.find((report) => report.existingReportId === 'stok-gudang') ?? LIVE_INVENTORY_REPORT_CATALOG[0]
   const normalized = value.toLowerCase()
@@ -812,11 +866,11 @@ function statusLabel(status: ReportStatusKey) {
 
 function statusClasses(status: ReportStatusKey) {
   const classes: Record<ReportStatusKey, string> = {
-    live: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    preview: 'border-blue-200 bg-blue-50 text-blue-700',
-    mapping_db: 'border-orange-200 bg-orange-50 text-orange-700',
-    need_validation: 'border-amber-200 bg-amber-50 text-amber-700',
-    planned: 'border-slate-200 bg-slate-50 text-slate-500',
+    live: 'border-[rgba(52,211,153,.35)] bg-[rgba(52,211,153,.12)] text-emerald-200',
+    preview: 'border-[rgba(41,199,200,.35)] bg-[rgba(41,199,200,.12)] text-cyan-200',
+    mapping_db: 'border-[rgba(245,158,11,.35)] bg-[rgba(245,158,11,.12)] text-amber-200',
+    need_validation: 'border-[rgba(214,184,92,.38)] bg-[rgba(214,184,92,.12)] text-yellow-100',
+    planned: 'border-[var(--rc-forest-border)] bg-white/5 text-[var(--rc-text-faint)]',
   }
   return classes[status]
 }
@@ -825,10 +879,31 @@ function canOpenReport(report: InventoryCatalogReport) {
   return report.status === 'live' && Boolean(report.existingReportId)
 }
 
-async function fetchReport(report: InventoryReport, source: ReportSource, stale: string, limit = 50) {
+function appendFilterParam(params: URLSearchParams, key: string, value: unknown) {
+  if (value === undefined || value === null || value === '') return
+  params.set(key, String(value))
+}
+
+function buildModuleReportParams(report: InventoryReport, source: ReportSource, limit = 50, filters: ReportFilterInput = {}) {
   const params = new URLSearchParams({ report: report.apiReport, limit: String(limit), source })
-  if (report.id === 'item-stale-update' || report.id === 'item-movement-update-tracking') params.set('stale', stale)
-  const response = await fetch(`/api/reports/inventory?${params.toString()}`, { cache: 'no-store' })
+  appendFilterParam(params, 'stale', filters.stale)
+  appendFilterParam(params, 'movementWindow', filters.movementWindow ?? 'all')
+  appendFilterParam(params, 'period', filters.period)
+  appendFilterParam(params, 'stockAnalysis', filters.stockAnalysis)
+  appendFilterParam(params, 'productType', filters.productType)
+  appendFilterParam(params, 'productCategory', filters.productCategory)
+  appendFilterParam(params, 'productBrand', filters.productBrand)
+  appendFilterParam(params, 'productModel', filters.productModel)
+  appendFilterParam(params, 'productMaterial', filters.productMaterial)
+  appendFilterParam(params, 'movementCategory', filters.movementCategory)
+  appendFilterParam(params, 'groupBy', filters.groupBy)
+  appendFilterParam(params, 'chartDimension', filters.chartDimension)
+  return params
+}
+
+async function fetchReport(report: InventoryReport, source: ReportSource, limit = 50, filters: ReportFilterInput = {}) {
+  const params = buildModuleReportParams(report, source, limit, filters)
+  const response = await fetch(`/api/reports/inventory?${params.toString()}`, { cache: 'no-store', headers: typeof window !== 'undefined' ? { 'x-sql-gateway-base': window.localStorage.getItem('report-center:sql-gateway-base') || 'http://10.0.0.110:8001' } : undefined })
   const data = (await response.json()) as ApiResponse
   if (!response.ok || !data.success || !data.data) {
     throw new Error(data.error ?? 'Gagal memuat laporan')
@@ -836,8 +911,8 @@ async function fetchReport(report: InventoryReport, source: ReportSource, stale:
   return data.data
 }
 
-async function exportExcel(report: InventoryReport, source: ReportSource, stale: string) {
-  const payload = await fetchReport(report, source, stale, 500)
+async function exportExcel(report: InventoryReport, source: ReportSource, filters: ReportFilterInput = {}) {
+  const payload = await fetchReport(report, source, 500, filters)
   const XLSX = await import('xlsx')
   const sheet = XLSX.utils.json_to_sheet(payload.rows)
   const workbook = XLSX.utils.book_new()
@@ -845,8 +920,8 @@ async function exportExcel(report: InventoryReport, source: ReportSource, stale:
   XLSX.writeFile(workbook, `${report.id}.xlsx`)
 }
 
-async function exportPdf(report: InventoryReport, source: ReportSource, stale: string) {
-  const payload = await fetchReport(report, source, stale, 80)
+async function exportPdf(report: InventoryReport, source: ReportSource, filters: ReportFilterInput = {}) {
+  const payload = await fetchReport(report, source, 80, filters)
   const { default: JsPDF } = await import('jspdf')
   const doc = new JsPDF({ orientation: 'landscape', unit: 'pt' })
   const columns = payload.columns.slice(0, 6)
@@ -914,8 +989,8 @@ function MiniTile({
     <TileShell className="min-h-[96px] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-          <p className="mt-2 truncate text-lg font-extrabold text-slate-950">{value}</p>
+          <p className="truncate text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{label}</p>
+          <p className="mt-2 truncate text-lg font-extrabold text-[var(--rc-text)]">{value}</p>
         </div>
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-white" style={{ backgroundColor: color }}>
           <Icon size={18} />
@@ -933,15 +1008,15 @@ function WorkspaceTile({ tile }: { tile: (typeof WORKSPACE_TILES)[number] }) {
         <span className="grid h-12 w-12 place-items-center rounded-2xl text-white" style={{ backgroundColor: tile.color }}>
           <Icon size={23} />
         </span>
-        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500">
+        <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1 text-[11px] font-bold text-[var(--rc-text-faint)]">
           Workspace
         </span>
       </div>
-      <h3 className="mt-4 text-lg font-extrabold text-slate-950">{tile.title}</h3>
-      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{tile.description}</p>
+      <h3 className="mt-4 text-lg font-extrabold text-[var(--rc-text)]">{tile.title}</h3>
+      <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--rc-text-muted)]">{tile.description}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         {tile.stages.map((stage) => (
-          <span key={stage} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+          <span key={stage} className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-bold text-[var(--rc-text-muted)]">
             {stage}
           </span>
         ))}
@@ -971,9 +1046,9 @@ function FlowStageTile({
           </span>
           <StatusBadge status={stage.status} />
         </div>
-        <h3 className="mt-3 truncate text-base font-extrabold text-slate-950">{stage.shortName}</h3>
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{stage.description}</p>
-        <p className="mt-3 text-xs font-extrabold text-slate-500">{count} report</p>
+        <h3 className="mt-3 truncate text-base font-extrabold text-[var(--rc-text)]">{stage.shortName}</h3>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--rc-text-muted)]">{stage.description}</p>
+        <p className="mt-3 text-xs font-extrabold text-[var(--rc-text-faint)]">{count} report</p>
       </TileShell>
     </button>
   )
@@ -996,9 +1071,9 @@ function KpiTile({
     <TileShell className="min-h-[130px]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-          <p className="mt-2 text-2xl font-extrabold text-slate-950">{value}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{note}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{label}</p>
+          <p className="mt-2 text-2xl font-extrabold text-[var(--rc-text)]">{value}</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--rc-text-faint)]">{note}</p>
         </div>
         <span className="grid h-11 w-11 place-items-center rounded-2xl text-white" style={{ backgroundColor: color }}>
           <Icon size={20} />
@@ -1118,7 +1193,7 @@ function AIInsightTile({
               className={[
                 'rounded-xl border px-3 py-2 text-left text-xs font-semibold leading-5 transition',
                 selectedQuestion === question
-                  ? 'border-emerald-200 bg-emerald-300/20 text-white'
+                  ? 'border-[rgba(52,211,153,.28)] bg-emerald-300/20 text-white'
                   : 'border-white/10 bg-white/5 text-emerald-50/85 hover:bg-white/10',
               ].join(' ')}
             >
@@ -1141,7 +1216,7 @@ function AIInsightTile({
         ].map(([title, text]) => (
           <div key={title} className="rounded-2xl border border-white/10 bg-white/10 p-4">
             <p className="text-[11px] font-bold tracking-[0.18em] text-emerald-200">{title}</p>
-            <p className="mt-2 text-sm leading-6 text-slate-100">{text}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--rc-text)]">{text}</p>
           </div>
         ))}
         {generateError && (
@@ -1194,14 +1269,14 @@ function ReportTile({
     >
       <div className="-mx-[18px] -mt-[18px] h-2" style={{ backgroundColor: stage.color }} />
 
-      <div className="mt-4 rounded-2xl border border-[#DDE6F0] bg-[#F8FAFC] p-3">
+      <div className="mt-4 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-2 rounded-xl border px-2.5 py-1 text-[11px] font-extrabold" style={{ borderColor: `${stage.color}30`, backgroundColor: `${stage.color}14`, color: stage.color }}>
               <StageIcon size={13} />
               {stage.stageName}
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-extrabold text-slate-600">
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1 text-[11px] font-extrabold text-[var(--rc-text-muted)]">
               <Database size={12} />
               {sourceLabel(source)}
             </span>
@@ -1213,48 +1288,48 @@ function ReportTile({
       <button
         type="button"
         onClick={onPreview}
-        className="mt-3 min-w-0 flex-1 rounded-2xl border border-[#DDE6F0] bg-white p-4 text-left transition hover:border-emerald-300 hover:bg-emerald-50/40"
+        className="mt-3 min-w-0 flex-1 rounded-2xl border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.82)] p-4 text-left transition hover:border-emerald-300 hover:bg-[rgba(24,185,107,.12)]"
       >
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{report.categoryLabel}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{report.categoryLabel}</p>
         <div className="mt-2 flex items-start gap-2">
-          <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-extrabold text-slate-600">{report.reportCode}</span>
-          <h3 className="line-clamp-2 text-lg font-extrabold leading-6 text-slate-950">{report.name}</h3>
+          <span className="shrink-0 rounded-lg border border-[var(--rc-forest-border)] bg-white/[0.06] px-2 py-1 text-[11px] font-extrabold text-[var(--rc-text-muted)]">{report.reportCode}</span>
+          <h3 className="line-clamp-2 text-lg font-extrabold leading-6 text-[var(--rc-text)]">{report.name}</h3>
         </div>
-        <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{report.description}</p>
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-[var(--rc-text-muted)]">{report.description}</p>
       </button>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F8FAFC] p-3">
-          <p className="text-[11px] font-semibold text-slate-400">Cadence</p>
-          <p className="mt-1 truncate text-sm font-extrabold text-slate-800">{report.cadence}</p>
+        <div className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
+          <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Cadence</p>
+          <p className="mt-1 truncate text-sm font-extrabold text-[var(--rc-text)]">{report.cadence}</p>
         </div>
-        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F8FAFC] p-3">
-          <p className="text-[11px] font-semibold text-slate-400">Owner</p>
-          <p className="mt-1 truncate text-sm font-extrabold text-slate-800">{report.owner}</p>
+        <div className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
+          <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Owner</p>
+          <p className="mt-1 truncate text-sm font-extrabold text-[var(--rc-text)]">{report.owner}</p>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {report.tags.slice(0, 4).map((tag) => (
-          <span key={tag} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
+          <span key={tag} className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-[var(--rc-text-muted)]">
             {tag}
           </span>
         ))}
-        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+        <span className="rounded-full border border-[rgba(52,211,153,.28)] bg-[rgba(24,185,107,.12)] px-2.5 py-1 text-xs font-bold text-[var(--rc-forest-accent)]">
           {analysisQuestions(report).length} pertanyaan AI
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-[auto_1fr_auto_auto] gap-2 rounded-2xl border border-[#DDE6F0] bg-[#F8FAFC] p-3">
+      <div className="mt-4 grid grid-cols-[auto_1fr_auto_auto] gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
         <button
           type="button"
           onClick={onFavorite}
-          className={favorite ? 'grid h-10 w-10 place-items-center rounded-xl border border-amber-200 bg-amber-100 text-amber-600' : 'grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-400 hover:border-amber-200 hover:text-amber-500'}
+          className={favorite ? 'grid h-10 w-10 place-items-center rounded-xl border border-[rgba(245,158,11,.28)] bg-amber-100 text-amber-600' : 'grid h-10 w-10 place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-faint)] hover:border-[rgba(245,158,11,.28)] hover:text-amber-500'}
           aria-label={favorite ? 'Hapus favorit' : 'Tambah favorit'}
         >
           <Star size={16} fill={favorite ? 'currentColor' : 'none'} />
         </button>
-        <button type="button" onClick={onPreview} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:border-emerald-200 hover:bg-white">
+        <button type="button" onClick={onPreview} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2 text-sm font-bold text-[var(--rc-text-muted)] hover:border-[rgba(52,211,153,.28)] hover:bg-white/10">
           <Eye size={15} />
           Preview
         </button>
@@ -1262,7 +1337,7 @@ function ReportTile({
           type="button"
           onClick={onExcel}
           disabled={!openable}
-          className={openable ? 'grid h-10 w-10 place-items-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'grid h-10 w-10 cursor-not-allowed place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-300'}
+          className={openable ? 'grid h-10 w-10 place-items-center rounded-xl border border-[rgba(52,211,153,.28)] bg-[rgba(24,185,107,.12)] text-[var(--rc-forest-accent)] hover:bg-emerald-100' : 'grid h-10 w-10 cursor-not-allowed place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-muted)]'}
           aria-label="Export Excel"
         >
           <FileSpreadsheet size={15} />
@@ -1271,7 +1346,7 @@ function ReportTile({
           type="button"
           onClick={onPdf}
           disabled={!openable}
-          className={openable ? 'grid h-10 w-10 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100' : 'grid h-10 w-10 cursor-not-allowed place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-300'}
+          className={openable ? 'grid h-10 w-10 place-items-center rounded-xl border border-[rgba(251,113,133,.28)] bg-[rgba(251,113,133,.12)] text-red-200 hover:bg-red-100' : 'grid h-10 w-10 cursor-not-allowed place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-muted)]'}
           aria-label="Export PDF"
         >
           <Download size={15} />
@@ -1281,7 +1356,7 @@ function ReportTile({
         type="button"
         onClick={onView}
         disabled={!openable}
-        className={openable ? 'mt-2 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#167A3A] px-3 text-sm font-bold text-white hover:bg-[#0f6a30]' : 'mt-2 inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-400'}
+        className={openable ? 'mt-2 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--rc-forest-primary)] px-3 text-sm font-bold text-[#03130b] hover:brightness-110' : 'mt-2 inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-bold text-[var(--rc-text-faint)]'}
       >
         {openable ? 'Buka Report' : 'Catalog Preview'}
         <ArrowRight size={15} />
@@ -1293,14 +1368,22 @@ function ReportTile({
 export default function InventoryReportsClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const searchParamString = searchParams.toString()
+  const lastSyncedSearchRef = useRef<string | null>(null)
   const initialSource = normalizeSource(searchParams.get('source'))
   const initialReport = findCatalogReport(searchParams.get('report'))
   const initialStage = normalizeStage(searchParams.get('stage'))
+  const initialMovementWindow = normalizeMovementWindow(searchParams.get('movementWindow'))
+  const initialAnalysisGroup = normalizeAnalysisGroup(searchParams.get('groupBy') ?? searchParams.get('chartDimension'))
   const [selectedSource, setSelectedSource] = useState<ReportSource>(initialSource)
   const [selectedReportCode, setSelectedReportCode] = useState(initialReport.reportCode)
   const [activeStage, setActiveStage] = useState<FlowStageCode>(initialStage)
   const [search, setSearch] = useState('')
   const [staleFilter, setStaleFilter] = useState('dari-1-bulan-sampai-sekarang')
+  const [movementWindowFilter, setMovementWindowFilter] = useState(initialMovementWindow)
+  const [periodFilter, setPeriodFilter] = useState(searchParams.get('period') ?? '')
+  const [analysisGroup, setAnalysisGroup] = useState<InventoryAnalysisGroup>(initialAnalysisGroup)
+  const [scopeCode, setScopeCode] = useState(() => scopeCodeFromParams(initialAnalysisGroup, searchParams))
   const [payload, setPayload] = useState<ReportPayload | null>(null)
   const [aiDashboard, setAiDashboard] = useState<AiDashboardDefinition | null>(null)
   const [aiDashboardLoading, setAiDashboardLoading] = useState(false)
@@ -1315,6 +1398,27 @@ export default function InventoryReportsClient() {
   const selectedReportStage = stageInfo(selectedCatalogReport.flowStage)
   const linkedLiveReport = selectedCatalogReport.existingReportId ? getInventoryReport(selectedCatalogReport.existingReportId) : undefined
   const openableSelectedReport = canOpenReport(selectedCatalogReport) && Boolean(linkedLiveReport)
+  const moduleScopeFilters = useMemo<ReportFilterInput>(() => {
+    const code = cleanScopeCode(scopeCode)
+    const filters: ReportFilterInput = {
+      stale: selectedCatalogReport.existingReportId === 'item-movement-update-tracking' ? staleFilter : undefined,
+      movementWindow: movementWindowFilter || 'all',
+      period: periodFilter || undefined,
+      groupBy: analysisGroup,
+      chartDimension: analysisGroup,
+    }
+
+    if (analysisGroup === 'StockAnalysisCode') filters.stockAnalysis = code || undefined
+    if (analysisGroup === 'ProductTypeCode') filters.productType = code || undefined
+    if (analysisGroup === 'ProductCategoryCode') filters.productCategory = code || undefined
+    if (analysisGroup === 'ProductBrandCode') filters.productBrand = code || undefined
+    if (analysisGroup === 'ProductModelCode') filters.productModel = code || undefined
+    if (analysisGroup === 'ProductMaterialCode') filters.productMaterial = code || undefined
+    if (analysisGroup === 'MovementCategory') filters.movementCategory = scopeCode.trim() || undefined
+
+    return filters
+  }, [analysisGroup, movementWindowFilter, periodFilter, scopeCode, selectedCatalogReport.existingReportId, staleFilter])
+  const activeAnalysisGroup = INVENTORY_ANALYSIS_GROUP_OPTIONS.find((option) => option.value === analysisGroup) ?? INVENTORY_ANALYSIS_GROUP_OPTIONS[0]
   const stageCounts = useMemo(
     () =>
       new Map<FlowStageCode, number>(
@@ -1350,6 +1454,13 @@ export default function InventoryReportsClient() {
     })
   }, [activeStage, search])
 
+  const groupedReports = useMemo(() => (activeStage === 'all' ? LIVE_FLOW_STAGES : [selectedStage])
+    .map((stage) => ({
+      stage,
+      reports: filteredReports.filter((report) => report.flowStage === stage.stageCode),
+    }))
+    .filter((group) => group.reports.length > 0), [activeStage, filteredReports, selectedStage])
+
   const sourceTileValue = sourceDescription(selectedSource)
   const liveCount = LIVE_INVENTORY_REPORT_CATALOG.length
   const summaryEntries = payload ? Object.entries(payload.summary).slice(0, 4) : []
@@ -1357,12 +1468,28 @@ export default function InventoryReportsClient() {
   const previewRows = payload?.rows.slice(0, 5) ?? []
   const maxChart = payload?.chart.reduce((max, row) => Math.max(max, numericValue(row)), 0) ?? 0
 
-  const updateUrl = (source: ReportSource, stage: FlowStageCode, reportCode: string) => {
+  const moduleUrl = (source: ReportSource, stage: FlowStageCode, reportCode: string, filters: ReportFilterInput = moduleScopeFilters) => {
+    const params = new URLSearchParams({ source, stage, report: reportCode })
+    appendFilterParam(params, 'period', filters.period)
+    appendFilterParam(params, 'movementWindow', filters.movementWindow)
+    appendFilterParam(params, 'groupBy', filters.groupBy)
+    appendFilterParam(params, 'chartDimension', filters.chartDimension)
+    appendFilterParam(params, 'stockAnalysis', filters.stockAnalysis)
+    appendFilterParam(params, 'productType', filters.productType)
+    appendFilterParam(params, 'productCategory', filters.productCategory)
+    appendFilterParam(params, 'productBrand', filters.productBrand)
+    appendFilterParam(params, 'productModel', filters.productModel)
+    appendFilterParam(params, 'productMaterial', filters.productMaterial)
+    appendFilterParam(params, 'movementCategory', filters.movementCategory)
+    return `/report-center/inventory?${params.toString()}`
+  }
+
+  const updateUrl = (source: ReportSource, stage: FlowStageCode, reportCode: string, filters: ReportFilterInput = moduleScopeFilters) => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(REPORT_SOURCE_STORAGE_KEY, source)
       window.dispatchEvent(new CustomEvent('report-center-source-change', { detail: source }))
     }
-    router.replace(`/report-center/inventory?source=${source}&stage=${stage}&report=${reportCode}`, { scroll: false })
+    router.replace(moduleUrl(source, stage, reportCode, filters), { scroll: false })
   }
 
   const selectSource = (source: ReportSource) => {
@@ -1391,6 +1518,13 @@ export default function InventoryReportsClient() {
     updateUrl(selectedSource, activeStage, report.reportCode)
   }
 
+  const detailReportUrl = (report: InventoryReport, filters: ReportFilterInput = moduleScopeFilters) => {
+    const params = buildModuleReportParams(report, selectedSource, 50, filters)
+    params.delete('report')
+    params.delete('limit')
+    return `/report-center/inventory/${report.id}?${params.toString()}`
+  }
+
   const viewReport = (report: InventoryCatalogReport) => {
     const liveReport = report.existingReportId ? getInventoryReport(report.existingReportId) : undefined
     if (!canOpenReport(report) || !liveReport) {
@@ -1398,30 +1532,41 @@ export default function InventoryReportsClient() {
       return
     }
     addRecent(catalogReportId(report))
-    router.push(`/report-center/inventory/${liveReport.id}?source=${selectedSource}`)
+    router.push(detailReportUrl(liveReport))
   }
 
   const exportLiveExcel = (report: InventoryCatalogReport) => {
     const liveReport = report.existingReportId ? getInventoryReport(report.existingReportId) : undefined
-    if (liveReport) void exportExcel(liveReport, selectedSource, staleFilter)
+    if (liveReport) void exportExcel(liveReport, selectedSource, moduleScopeFilters)
   }
 
   const exportLivePdf = (report: InventoryCatalogReport) => {
     const liveReport = report.existingReportId ? getInventoryReport(report.existingReportId) : undefined
-    if (liveReport) void exportPdf(liveReport, selectedSource, staleFilter)
+    if (liveReport) void exportPdf(liveReport, selectedSource, moduleScopeFilters)
   }
 
   useEffect(() => {
-    const sourceParam = searchParams.get('source')
+    if (searchParamString === lastSyncedSearchRef.current) return
+    lastSyncedSearchRef.current = searchParamString
+
+    const params = new URLSearchParams(searchParamString)
+    const sourceParam = params.get('source')
     const storedSource = typeof window !== 'undefined' ? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY) : null
     const nextSource = sourceParam ? normalizeSource(sourceParam) : normalizeSource(storedSource)
-    const nextStage = normalizeStage(searchParams.get('stage'))
-    const nextReport = findCatalogReport(searchParams.get('report'))
+    const nextStage = normalizeStage(params.get('stage'))
+    const nextReport = findCatalogReport(params.get('report'))
+    const nextMovementWindow = normalizeMovementWindow(params.get('movementWindow'))
+    const nextAnalysisGroup = normalizeAnalysisGroup(params.get('groupBy') ?? params.get('chartDimension'))
+    const nextScopeCode = scopeCodeFromParams(nextAnalysisGroup, params)
     if (typeof window !== 'undefined') window.localStorage.setItem(REPORT_SOURCE_STORAGE_KEY, nextSource)
-    if (nextSource !== selectedSource) setSelectedSource(nextSource)
-    if (nextStage !== activeStage) setActiveStage(nextStage)
-    if (nextReport.reportCode !== selectedReportCode) setSelectedReportCode(nextReport.reportCode)
-  }, [activeStage, searchParams, selectedReportCode, selectedSource])
+    setSelectedSource(nextSource)
+    setActiveStage(nextStage)
+    setSelectedReportCode(nextReport.reportCode)
+    setMovementWindowFilter(nextMovementWindow)
+    setAnalysisGroup(nextAnalysisGroup)
+    setPeriodFilter(params.get('period') ?? '')
+    setScopeCode(nextScopeCode)
+  }, [searchParamString])
 
   useEffect(() => {
     if (!openableSelectedReport || !linkedLiveReport) {
@@ -1439,7 +1584,7 @@ export default function InventoryReportsClient() {
       setLoading(true)
       setError(null)
       try {
-        const data = await fetchReport(linkedLiveReport, selectedSource, staleFilter, 25)
+        const data = await fetchReport(linkedLiveReport, selectedSource, 25, moduleScopeFilters)
         if (!active) return
         setPayload(data)
       } catch (err) {
@@ -1455,7 +1600,7 @@ export default function InventoryReportsClient() {
       active = false
       window.clearTimeout(timer)
     }
-  }, [linkedLiveReport, openableSelectedReport, selectedSource, staleFilter])
+  }, [linkedLiveReport, moduleScopeFilters, openableSelectedReport, selectedSource])
 
   useEffect(() => {
     if (!aiInsightVisible || !payload) {
@@ -1476,7 +1621,7 @@ export default function InventoryReportsClient() {
           body: JSON.stringify({
             filters: {
               source: selectedSource,
-              stale: staleFilter,
+              ...moduleScopeFilters,
               reportCode: selectedCatalogReport.reportCode,
               reportName: selectedCatalogReport.name,
             },
@@ -1511,27 +1656,27 @@ export default function InventoryReportsClient() {
       active = false
       window.clearTimeout(timer)
     }
-  }, [aiInsightVisible, payload, selectedCatalogReport.description, selectedCatalogReport.name, selectedCatalogReport.reportCode, selectedSource, staleFilter])
+  }, [aiInsightVisible, moduleScopeFilters, payload, selectedCatalogReport.description, selectedCatalogReport.name, selectedCatalogReport.reportCode, selectedSource])
 
   return (
     <main className="min-h-full bg-transparent">
       <div className="mx-auto max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <nav className="text-sm font-medium text-slate-500">
-              <Link href="/report-center" className="hover:text-emerald-700">Dashboard</Link>
+            <nav className="text-sm font-medium text-[var(--rc-text-faint)]">
+              <Link href="/report-center" className="hover:text-[var(--rc-forest-accent)]">Dashboard</Link>
               <span className="mx-2">/</span>
               <span>Procurement</span>
               <span className="mx-2">/</span>
-              <span className="text-slate-950">Inventory</span>
+              <span className="text-[var(--rc-text)]">Inventory</span>
             </nav>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-950">Inventory Report Center</h1>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-[var(--rc-text)]">Inventory Report Center</h1>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--rc-text-muted)]">
               Windows Tile operational monitor untuk report Inventory yang sudah live dan bisa dibuka dari Procurement.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-[18px] border border-[#DDE6F0] bg-white p-1 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
+            <div className="flex rounded-[18px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.82)] p-1 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
               {SOURCE_OPTIONS.map((source) => (
                 <button
                   key={source.id}
@@ -1539,7 +1684,7 @@ export default function InventoryReportsClient() {
                   onClick={() => selectSource(source.id)}
                   className={[
                     'rounded-xl px-3 py-2 text-xs font-extrabold transition',
-                    selectedSource === source.id ? 'bg-[#167A3A] text-white' : 'text-slate-600 hover:bg-slate-50',
+                    selectedSource === source.id ? 'bg-[var(--rc-forest-primary)] text-[#03130b]' : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
                   ].join(' ')}
                 >
                   {source.label}
@@ -1548,13 +1693,153 @@ export default function InventoryReportsClient() {
             </div>
             <Link
               href={`/report-center?module=procurement&source=${selectedSource}#modules`}
-              className="inline-flex items-center gap-2 rounded-[18px] border border-[#DDE6F0] bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.06)] hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-[18px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.82)] px-4 py-2.5 text-sm font-bold text-[var(--rc-text-muted)] shadow-[0_6px_18px_rgba(15,23,42,0.06)] hover:bg-white/10"
             >
               <ArrowLeft size={16} />
               Procurement
             </Link>
           </div>
         </div>
+
+        <InventoryOverview
+          source={selectedSource}
+          className="mb-5"
+          period={periodFilter || undefined}
+          onPeriodChange={(value) => {
+            setAiInsightVisible(false)
+            setPeriodFilter(value)
+          }}
+          movementWindow={movementWindowFilter}
+          onMovementWindowChange={(value) => {
+            setAiInsightVisible(false)
+            setMovementWindowFilter(value)
+          }}
+          hideScopeControls
+        />
+
+        <section className="mb-5 overflow-hidden rounded-[22px] border-2 border-amber-400/45 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,.28),rgba(7,26,20,.82)_42%,rgba(4,12,9,.94))] p-4 shadow-[0_18px_48px_rgba(245,158,11,0.12)]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-200">Report opening scope</p>
+              <h2 className="mt-2 text-xl font-black text-white">Tentukan period dan analysis group sebelum buka report</h2>
+              <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-amber-50/80">
+                Default monthly movement tetap memakai Stock Analysis Code resmi. Pilih group lain jika ingin melihat item yang sama berdasarkan Product Type, Brand, Model, Material, atau actual Movement Category.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-amber-100/85">
+                <span className="rounded-full border border-amber-300/30 bg-black/20 px-3 py-1">Group: {activeAnalysisGroup.label}</span>
+                <span className="rounded-full border border-amber-300/30 bg-black/20 px-3 py-1">MC Window: {MOVEMENT_WINDOW_OPTIONS.find((item) => item.value === movementWindowFilter)?.label ?? movementWindowFilter}</span>
+                <span className="rounded-full border border-amber-300/30 bg-black/20 px-3 py-1">Period: {periodFilter || 'current'}</span>
+                <span className="rounded-full border border-amber-300/30 bg-black/20 px-3 py-1">Code: {scopeCode || 'all registered'}</span>
+              </div>
+            </div>
+
+            <div className="grid gap-3 rounded-[18px] border border-white/10 bg-black/20 p-3 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-amber-100/80">Actual period</span>
+                <input
+                  type="month"
+                  value={periodFilter}
+                  onChange={(event) => {
+                    setAiInsightVisible(false)
+                    setPeriodFilter(event.target.value)
+                  }}
+                  className="h-11 w-full rounded-2xl border border-amber-300/30 bg-[#1a1005] px-3 text-sm font-extrabold text-amber-100 outline-none focus:ring-2 focus:ring-amber-300"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-amber-100/80">Movement window</span>
+                <select
+                  value={movementWindowFilter}
+                  onChange={(event) => {
+                    setAiInsightVisible(false)
+                    setMovementWindowFilter(event.target.value)
+                  }}
+                  className="h-11 w-full rounded-2xl border border-amber-300/30 bg-[#1a1005] px-3 text-sm font-extrabold text-amber-100 outline-none focus:ring-2 focus:ring-amber-300"
+                >
+                  {MOVEMENT_WINDOW_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block md:col-span-2">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-amber-100/80">Analysis group</span>
+                <select
+                  value={analysisGroup}
+                  onChange={(event) => {
+                    setAiInsightVisible(false)
+                    setAnalysisGroup(event.target.value as InventoryAnalysisGroup)
+                    setScopeCode('')
+                  }}
+                  className="h-11 w-full rounded-2xl border border-amber-300/30 bg-[#1a1005] px-3 text-sm font-extrabold text-amber-100 outline-none focus:ring-2 focus:ring-amber-300"
+                >
+                  {INVENTORY_ANALYSIS_GROUP_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label} - {option.description}</option>
+                  ))}
+                </select>
+              </label>
+
+              {analysisGroup === 'StockAnalysisCode' ? (
+                <label className="block md:col-span-2">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-amber-100/80">Stock analysis scope</span>
+                  <select
+                    value={scopeCode}
+                    onChange={(event) => setScopeCode(event.target.value)}
+                    className="h-11 w-full rounded-2xl border border-amber-300/30 bg-[#1a1005] px-3 text-sm font-extrabold text-amber-100 outline-none focus:ring-2 focus:ring-amber-300"
+                  >
+                    <option value="">All registered: DEADS, MEMOV, SLMOV</option>
+                    {STOCK_ANALYSIS_SCOPE_OPTIONS.map((code) => <option key={code} value={code}>{code}</option>)}
+                  </select>
+                </label>
+              ) : analysisGroup === 'MovementCategory' ? (
+                <label className="block md:col-span-2">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-amber-100/80">Actual movement category</span>
+                  <select
+                    value={scopeCode}
+                    onChange={(event) => setScopeCode(event.target.value)}
+                    className="h-11 w-full rounded-2xl border border-amber-300/30 bg-[#1a1005] px-3 text-sm font-extrabold text-amber-100 outline-none focus:ring-2 focus:ring-amber-300"
+                  >
+                    <option value="">All movement categories</option>
+                    {['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock', 'Stale'].map((code) => <option key={code} value={code}>{code}</option>)}
+                  </select>
+                </label>
+              ) : (
+                <label className="block md:col-span-2">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-amber-100/80">Filter code optional</span>
+                  <input
+                    value={scopeCode}
+                    onChange={(event) => setScopeCode(cleanScopeCode(event.target.value))}
+                    placeholder={`Isi kode ${activeAnalysisGroup.label}, kosong = semua code`}
+                    className="h-11 w-full rounded-2xl border border-amber-300/30 bg-[#1a1005] px-3 text-sm font-extrabold text-amber-100 outline-none placeholder:text-amber-100/35 focus:ring-2 focus:ring-amber-300"
+                  />
+                </label>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('')
+                  setPeriodFilter('')
+                  setScopeCode('')
+                  setMovementWindowFilter('all')
+                  setAnalysisGroup('StockAnalysisCode')
+                }}
+                className="h-11 rounded-2xl border border-white/10 bg-white/5 px-3 text-sm font-bold text-amber-100/75 hover:bg-white/10"
+              >
+                Reset scope
+              </button>
+              <button
+                type="button"
+                onClick={() => viewReport(selectedCatalogReport)}
+                disabled={!openableSelectedReport}
+                className={openableSelectedReport ? 'h-11 rounded-2xl bg-amber-300 px-3 text-sm font-black text-[#1a1005] hover:brightness-110' : 'h-11 cursor-not-allowed rounded-2xl border border-white/10 bg-white/5 px-3 text-sm font-bold text-white/35'}
+              >
+                Buka dengan scope ini
+              </button>
+            </div>
+          </div>
+        </section>
 
         <section className="rc-panel rc-panel-active overflow-hidden rounded-[18px] p-[18px] text-white">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
@@ -1587,7 +1872,7 @@ export default function InventoryReportsClient() {
         </section>
 
         <details className="mt-5 overflow-hidden rounded-[18px] border border-[var(--rc-border)] bg-white/5">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/10">
             Buka workspace tile tambahan
           </summary>
           <div className="grid gap-4 border-t border-[var(--rc-border)] p-4 md:grid-cols-3">
@@ -1596,7 +1881,7 @@ export default function InventoryReportsClient() {
         </details>
 
         <details className="mt-5 overflow-hidden rounded-[18px] border border-[var(--rc-border)] bg-white/5">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/10">
             Flow filter: {selectedStage.stageName}
           </summary>
           <div className="flex gap-3 overflow-x-auto border-t border-[var(--rc-border)] p-4">
@@ -1619,7 +1904,7 @@ export default function InventoryReportsClient() {
         </details>
 
         <details className="mt-5 overflow-hidden rounded-[18px] border border-[var(--rc-border)] bg-white/5">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-extrabold text-[var(--rc-text)] hover:bg-white/10">
             Buka ringkasan KPI inventory
           </summary>
           <div className="grid grid-cols-2 gap-4 border-t border-[var(--rc-border)] p-4 lg:grid-cols-4">
@@ -1630,18 +1915,18 @@ export default function InventoryReportsClient() {
           </div>
         </details>
 
-        <section className="mt-5 rounded-[18px] border border-emerald-200 bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
+        <section className="mt-5 rounded-[18px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.72)] p-4 shadow-[0_18px_54px_rgba(0,0,0,.18)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700">AI Insight</p>
-              <p className="mt-1 text-sm font-semibold text-slate-600">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--rc-forest-accent)]">AI Insight</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--rc-text-muted)]">
                 Analisa payload disembunyikan dulu supaya halaman tetap bersih.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setAiInsightVisible((current) => !current)}
-              className={aiInsightVisible ? 'inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-extrabold text-slate-700 hover:bg-white' : 'inline-flex h-11 items-center gap-2 rounded-2xl bg-[#167A3A] px-4 text-sm font-extrabold text-white hover:bg-[#0f6a30]'}
+              className={aiInsightVisible ? 'inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-4 text-sm font-extrabold text-[var(--rc-text-muted)] hover:bg-white/10' : 'inline-flex h-11 items-center gap-2 rounded-2xl bg-[var(--rc-forest-primary)] px-4 text-sm font-extrabold text-[#03130b] hover:brightness-110'}
             >
               <Sparkles size={16} />
               {aiInsightVisible ? 'Sembunyikan AI Insight' : 'Tampilkan AI Insight'}
@@ -1673,7 +1958,7 @@ export default function InventoryReportsClient() {
             }}
             filters={{
               source: selectedSource,
-              stale: staleFilter,
+              ...moduleScopeFilters,
               reportCode: selectedCatalogReport.reportCode,
             }}
             loading={loading || aiDashboardLoading}
@@ -1682,21 +1967,32 @@ export default function InventoryReportsClient() {
         </section>
         )}
 
-        <section className="mt-5 rounded-[18px] border border-[#DDE6F0] bg-white p-[18px] shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
-          <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.4fr)_180px_190px_auto]">
+        <section className="mt-5 rounded-[18px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.82)] p-[18px] shadow-[0_6px_18px_rgba(15,23,42,0.06)]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1.2fr)_150px_minmax(170px,0.9fr)_minmax(170px,0.9fr)_auto]">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--rc-text-faint)]" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Cari report: barang masuk, nilai aset gudang, solar kendaraan..."
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm font-semibold text-slate-950 outline-none focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                className="h-11 w-full rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] pl-9 pr-3 text-sm font-semibold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:bg-[rgba(5,17,10,.95)] focus:ring-4 focus:ring-emerald-500/10"
               />
             </div>
-            <div className="inline-flex h-11 items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-bold text-emerald-700">
+            <div className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[rgba(52,211,153,.28)] bg-[rgba(24,185,107,.12)] px-3 text-sm font-bold text-[var(--rc-forest-accent)]">
               <CheckCircle2 size={15} />
               Live only
             </div>
+            <select
+              value={movementWindowFilter}
+              onChange={(event) => {
+                setAiInsightVisible(false)
+                setMovementWindowFilter(event.target.value)
+              }}
+              title="Window hitung Movement Category (issue count). Default All period. Bukan valuasi stok."
+              className="h-11 rounded-2xl border border-[rgba(245,158,11,.35)] bg-[rgba(245,158,11,.14)] px-3 text-sm font-semibold text-amber-100"
+            >
+              {MOVEMENT_WINDOW_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
             {selectedCatalogReport.existingReportId === 'item-movement-update-tracking' ? (
               <select
                 value={staleFilter}
@@ -1704,12 +2000,12 @@ export default function InventoryReportsClient() {
                   setAiInsightVisible(false)
                   setStaleFilter(event.target.value)
                 }}
-                className="h-11 rounded-2xl border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-800"
+                className="h-11 rounded-2xl border border-[rgba(245,158,11,.28)] bg-[rgba(245,158,11,.12)] px-3 text-sm font-semibold text-amber-100"
               >
                 {STALE_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             ) : (
-              <div className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500">
+              <div className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-semibold text-[var(--rc-text-faint)]">
                 <Filter size={15} />
                 Flow live
               </div>
@@ -1720,7 +2016,7 @@ export default function InventoryReportsClient() {
                 setSearch('')
                 selectStage('all')
               }}
-              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 hover:bg-slate-50"
+              className="h-11 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-4 text-sm font-bold text-[var(--rc-text-muted)] hover:bg-white/10"
             >
               Reset
             </button>
@@ -1731,35 +2027,56 @@ export default function InventoryReportsClient() {
           <div>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-extrabold text-slate-950">Report Tile Grid</h2>
-                <p className="mt-1 text-sm text-slate-500">{filteredReports.length} report live sesuai flow dan search.</p>
+                <h2 className="text-lg font-extrabold text-[var(--rc-text)]">Report Group Catalog</h2>
+                <p className="mt-1 text-sm text-[var(--rc-text-muted)]">{filteredReports.length} report live, dikelompokkan berdasarkan alur inventory.</p>
               </div>
-              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600">
+              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-[var(--rc-text-muted)]">
                 {selectedStage.stageName}
               </span>
             </div>
 
             {filteredReports.length === 0 ? (
               <TileShell className="p-10 text-center">
-                <p className="text-lg font-extrabold text-slate-950">Tidak ada report ditemukan</p>
-                <p className="mt-2 text-sm text-slate-500">Coba kata kunci lain seperti barang masuk, nilai aset gudang, atau solar kendaraan.</p>
+                <p className="text-lg font-extrabold text-[var(--rc-text)]">Tidak ada report ditemukan</p>
+                <p className="mt-2 text-sm text-[var(--rc-text-faint)]">Coba kata kunci lain seperti barang masuk, nilai aset gudang, atau solar kendaraan.</p>
               </TileShell>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-                {filteredReports.map((report) => (
-                  <ReportTile
-                    key={report.reportCode}
-                    report={report}
-                    source={selectedSource}
-                    selected={report.reportCode === selectedCatalogReport.reportCode}
-                    favorite={favorites.includes(catalogReportId(report))}
-                    onPreview={() => previewReport(report)}
-                    onView={() => viewReport(report)}
-                    onFavorite={() => toggleFavorite(catalogReportId(report))}
-                    onExcel={() => exportLiveExcel(report)}
-                    onPdf={() => exportLivePdf(report)}
-                  />
-                ))}
+              <div className="space-y-4">
+                {groupedReports.map(({ stage, reports }) => {
+                  const StageIcon = stage.icon
+                  return (
+                    <section key={stage.stageCode} className="rounded-[22px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.58)] p-4">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--rc-forest-border)] bg-[rgba(24,185,107,.12)] text-[var(--rc-forest-accent)]">
+                            <StageIcon size={20} />
+                          </span>
+                          <div>
+                            <h3 className="text-base font-extrabold text-[var(--rc-text)]">{stage.stageName}</h3>
+                            <p className="text-xs leading-5 text-[var(--rc-text-muted)]">{stage.description}</p>
+                          </div>
+                        </div>
+                        <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/5 px-3 py-1 text-xs font-bold text-[var(--rc-forest-accent)]">{reports.length} report</span>
+                      </div>
+                      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                        {reports.map((report) => (
+                          <ReportTile
+                            key={report.reportCode}
+                            report={report}
+                            source={selectedSource}
+                            selected={report.reportCode === selectedCatalogReport.reportCode}
+                            favorite={favorites.includes(catalogReportId(report))}
+                            onPreview={() => previewReport(report)}
+                            onView={() => viewReport(report)}
+                            onFavorite={() => toggleFavorite(catalogReportId(report))}
+                            onExcel={() => exportLiveExcel(report)}
+                            onPdf={() => exportLivePdf(report)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -1779,29 +2096,29 @@ export default function InventoryReportsClient() {
                   <h2 className="text-xl font-extrabold">{selectedCatalogReport.shortName}</h2>
                   <StatusBadge status={selectedCatalogReport.status} />
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-300">{selectedCatalogReport.businessPurpose}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--rc-text-muted)]">{selectedCatalogReport.businessPurpose}</p>
               </div>
 
               <div className="max-h-[calc(100vh-190px)] overflow-y-auto p-[18px]">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{selectedCatalogReport.categoryLabel}</p>
-                  <h3 className="mt-2 text-base font-extrabold text-slate-950">{selectedCatalogReport.name}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{selectedCatalogReport.description}</p>
+                <div className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{selectedCatalogReport.categoryLabel}</p>
+                  <h3 className="mt-2 text-base font-extrabold text-[var(--rc-text)]">{selectedCatalogReport.name}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--rc-text-muted)]">{selectedCatalogReport.description}</p>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                    <p className="text-[11px] font-semibold text-slate-400">Report Code</p>
-                    <p className="mt-1 text-sm font-extrabold text-slate-950">{selectedCatalogReport.reportCode}</p>
+                  <div className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
+                    <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Report Code</p>
+                    <p className="mt-1 text-sm font-extrabold text-[var(--rc-text)]">{selectedCatalogReport.reportCode}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                    <p className="text-[11px] font-semibold text-slate-400">Last Updated</p>
-                    <p className="mt-1 text-sm font-extrabold text-slate-950">{selectedCatalogReport.lastUpdated}</p>
+                  <div className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
+                    <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Last Updated</p>
+                    <p className="mt-1 text-sm font-extrabold text-[var(--rc-text)]">{selectedCatalogReport.lastUpdated}</p>
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-extrabold text-slate-950">
+                <div className="mt-4 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-4">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-extrabold text-[var(--rc-text)]">
                     <Database size={16} />
                     Status Live Report
                   </div>
@@ -1813,8 +2130,8 @@ export default function InventoryReportsClient() {
                       ['Safety', 'Read-only, SQL write blocked'],
                     ].map(([label, value]) => (
                       <div key={label} className="flex justify-between gap-4">
-                        <span className="text-slate-500">{label}</span>
-                        <span className="truncate text-right font-bold text-slate-700">{value}</span>
+                        <span className="text-[var(--rc-text-faint)]">{label}</span>
+                        <span className="truncate text-right font-bold text-[var(--rc-text-muted)]">{value}</span>
                       </div>
                     ))}
                   </div>
@@ -1822,70 +2139,70 @@ export default function InventoryReportsClient() {
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   {selectedCatalogReport.tags.map((tag) => (
-                    <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{tag}</span>
+                    <span key={tag} className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-bold text-[var(--rc-text-muted)]">{tag}</span>
                   ))}
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-700">Pertanyaan untuk AI</p>
+                <div className="mt-4 rounded-2xl border border-[rgba(52,211,153,.28)] bg-[rgba(24,185,107,.12)] p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--rc-forest-accent)]">Pertanyaan untuk AI</p>
                   <div className="mt-3 space-y-2">
                     {analysisQuestions(selectedCatalogReport).map((question) => (
-                      <div key={question} className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs font-semibold leading-5 text-emerald-900">
+                      <div key={question} className="rounded-xl border border-[rgba(52,211,153,.2)] bg-white/5 px-3 py-2 text-xs font-semibold leading-5 text-[var(--rc-text)]">
                         {question}
                       </div>
                     ))}
                   </div>
-                  <p className="mt-3 text-[11px] font-semibold text-emerald-700">
+                  <p className="mt-3 text-[11px] font-semibold text-[var(--rc-forest-accent)]">
                     Pertanyaan ini dikirim ke AI bersama payload live saat report sudah punya query.
                   </p>
                 </div>
 
                 {loading ? (
                   <div className="mt-4 space-y-3">
-                    <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
-                    <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+                    <div className="h-20 animate-pulse rounded-2xl bg-white/[0.06]" />
+                    <div className="h-32 animate-pulse rounded-2xl bg-white/[0.06]" />
                   </div>
                 ) : error ? (
-                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
-                    <p className="font-bold text-red-700">Gagal memuat payload live</p>
-                    <p className="mt-1 text-sm leading-6 text-red-600">{error}</p>
+                  <div className="mt-4 rounded-2xl border border-[rgba(251,113,133,.28)] bg-[rgba(251,113,133,.12)] p-4">
+                    <p className="font-bold text-red-200">Gagal memuat payload live</p>
+                    <p className="mt-1 text-sm leading-6 text-red-100">{error}</p>
                   </div>
                 ) : payload ? (
                   <>
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       {summaryEntries.map(([label, value]) => (
-                        <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="truncate text-xs font-semibold text-slate-500">{label}</p>
-                          <p className="mt-1 truncate text-lg font-extrabold text-slate-950">{formatValue(value)}</p>
+                        <div key={label} className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
+                          <p className="truncate text-xs font-semibold text-[var(--rc-text-faint)]">{label}</p>
+                          <p className="mt-1 truncate text-lg font-extrabold text-[var(--rc-text)]">{formatValue(value)}</p>
                         </div>
                       ))}
                     </div>
 
                     <div className="mt-4">
-                      <div className="mb-2 flex items-center gap-2 text-sm font-extrabold text-slate-950">
+                      <div className="mb-2 flex items-center gap-2 text-sm font-extrabold text-[var(--rc-text)]">
                         <Table2 size={16} />
                         Live Preview Table
                       </div>
-                      <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                      <div className="overflow-x-auto rounded-2xl border border-[var(--rc-forest-border)]">
                         <table className="min-w-full text-left text-xs">
-                          <thead className="bg-slate-50 text-slate-500">
+                          <thead className="bg-white/[0.04] text-[var(--rc-text-faint)]">
                             <tr>
                               {previewColumns.map((column) => (
                                 <th key={column} className="whitespace-nowrap px-3 py-2 font-bold">{column}</th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100">
+                          <tbody className="divide-y divide-white/10">
                             {previewRows.length === 0 ? (
                               <tr>
-                                <td colSpan={Math.max(previewColumns.length, 1)} className="px-3 py-6 text-center text-slate-500">
+                                <td colSpan={Math.max(previewColumns.length, 1)} className="px-3 py-6 text-center text-[var(--rc-text-faint)]">
                                   Tidak ada data pada filter ini.
                                 </td>
                               </tr>
                             ) : previewRows.map((row, index) => (
                               <tr key={index}>
                                 {previewColumns.map((column) => (
-                                  <td key={column} className="whitespace-nowrap px-3 py-2 text-slate-700">{formatValue(row[column])}</td>
+                                  <td key={column} className="whitespace-nowrap px-3 py-2 text-[var(--rc-text-muted)]">{formatValue(row[column])}</td>
                                 ))}
                               </tr>
                             ))}
@@ -1895,8 +2212,8 @@ export default function InventoryReportsClient() {
                     </div>
 
                     {payload.chart.length > 0 && (
-                      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                        <div className="mb-3 flex items-center gap-2 text-sm font-extrabold text-slate-950">
+                      <div className="mt-4 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
+                        <div className="mb-3 flex items-center gap-2 text-sm font-extrabold text-[var(--rc-text)]">
                           <BarChart3 size={16} />
                           Sample Chart
                         </div>
@@ -1907,8 +2224,8 @@ export default function InventoryReportsClient() {
                             return (
                               <div key={index}>
                                 <div className="flex justify-between gap-3 text-xs">
-                                  <span className="truncate font-bold text-slate-700">{labelValue(row)}</span>
-                                  <span className="text-slate-500">{formatValue(value)}</span>
+                                  <span className="truncate font-bold text-[var(--rc-text-muted)]">{labelValue(row)}</span>
+                                  <span className="text-[var(--rc-text-faint)]">{formatValue(value)}</span>
                                 </div>
                                 <div className="mt-1 h-2 rounded-full bg-white">
                                   <div className="h-2 rounded-full bg-emerald-600" style={{ width: `${width}%` }} />
@@ -1921,16 +2238,16 @@ export default function InventoryReportsClient() {
                     )}
                   </>
                 ) : (
-                  <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                    <p className="font-bold text-blue-700">Live report belum bisa dibuka</p>
-                    <p className="mt-1 text-sm leading-6 text-blue-600">
+                  <div className="mt-4 rounded-2xl border border-[rgba(41,199,200,.28)] bg-[rgba(41,199,200,.12)] p-4">
+                    <p className="font-bold text-cyan-200">Live report belum bisa dibuka</p>
+                    <p className="mt-1 text-sm leading-6 text-cyan-100">
                       Report ini ada di daftar live, tetapi link viewer belum tersedia untuk source aktif.
                     </p>
                   </div>
                 )}
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => previewReport(selectedCatalogReport)} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                  <button type="button" onClick={() => previewReport(selectedCatalogReport)} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2.5 text-sm font-bold text-[var(--rc-text-muted)] hover:bg-white/10">
                     <Eye size={15} />
                     Preview
                   </button>
@@ -1938,7 +2255,7 @@ export default function InventoryReportsClient() {
                     type="button"
                     onClick={() => viewReport(selectedCatalogReport)}
                     disabled={!openableSelectedReport}
-                    className={openableSelectedReport ? 'inline-flex items-center justify-center gap-2 rounded-2xl bg-[#167A3A] px-3 py-2.5 text-sm font-bold text-white hover:bg-[#0f6a30]' : 'inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-400'}
+                    className={openableSelectedReport ? 'inline-flex items-center justify-center gap-2 rounded-2xl bg-[#167A3A] px-3 py-2.5 text-sm font-bold text-white hover:bg-[#0f6a30]' : 'inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2.5 text-sm font-bold text-[var(--rc-text-faint)]'}
                   >
                     <FileText size={15} />
                     Buka
@@ -1947,7 +2264,7 @@ export default function InventoryReportsClient() {
                     type="button"
                     onClick={() => exportLiveExcel(selectedCatalogReport)}
                     disabled={!openableSelectedReport}
-                    className={openableSelectedReport ? 'inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-100' : 'inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-400'}
+                    className={openableSelectedReport ? 'inline-flex items-center justify-center gap-2 rounded-2xl border border-[rgba(52,211,153,.28)] bg-[rgba(24,185,107,.12)] px-3 py-2.5 text-sm font-bold text-[var(--rc-forest-accent)] hover:bg-emerald-100' : 'inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2.5 text-sm font-bold text-[var(--rc-text-faint)]'}
                   >
                     <FileSpreadsheet size={15} />
                     Excel
@@ -1956,7 +2273,7 @@ export default function InventoryReportsClient() {
                     type="button"
                     onClick={() => exportLivePdf(selectedCatalogReport)}
                     disabled={!openableSelectedReport}
-                    className={openableSelectedReport ? 'inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100' : 'inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-400'}
+                    className={openableSelectedReport ? 'inline-flex items-center justify-center gap-2 rounded-2xl border border-[rgba(251,113,133,.28)] bg-[rgba(251,113,133,.12)] px-3 py-2.5 text-sm font-bold text-red-200 hover:bg-red-100' : 'inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2.5 text-sm font-bold text-[var(--rc-text-faint)]'}
                   >
                     <Download size={15} />
                     PDF

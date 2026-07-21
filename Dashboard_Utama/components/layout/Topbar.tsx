@@ -1,8 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bell, ChevronLeft, Database, Globe2, Menu, Search } from 'lucide-react'
-import { usePathname } from 'next/navigation'
+import { Bell, ChevronLeft, Database, Globe2, Menu, Search, Server } from 'lucide-react'
+import { usePathname, useSearchParams } from 'next/navigation'
+import {
+  SQL_GATEWAY_FALLBACK,
+  SQL_GATEWAY_PRESETS,
+  SQL_GATEWAY_PRIMARY,
+} from '@/lib/reports/sql-gateway-config'
+import {
+  readClientSqlGatewayBase,
+  writeClientSqlGatewayBase,
+} from '@/lib/reports/sql-gateway-client'
 
 const LABELS: Record<string, string> = {
   inventory: 'Inventory',
@@ -29,6 +38,14 @@ const REPORT_SOURCES: Array<{ id: ReportSource; label: string; shortLabel: strin
   { id: 'estate', label: 'Estate / Kebun', shortLabel: 'Estate', description: 'SERVER_PROFILE_2 / db_ptrj' },
   { id: 'pabrik', label: 'Pabrik', shortLabel: 'Pabrik', description: 'SERVER_PROFILE_3 / db_ptrj_mill' },
 ]
+
+function shortGatewayLabel(base: string) {
+  if (base.includes('10.0.0.110') && base.includes(':8001')) return '10.0.0.110'
+  if (base.includes('localhost') && base.includes(':8001')) return 'localhost'
+  if (base.includes('10.0.0.110') && base.includes('3001')) return '110:3001'
+  if (base.includes('localhost') && base.includes('3001')) return 'local:3001'
+  return base.replace(/^https?:\/\//, '').slice(0, 18)
+}
 
 function roleLabel(role?: string) {
   const normalized = String(role ?? '').trim().toLowerCase()
@@ -86,18 +103,25 @@ function pageTitle(pathname: string) {
 
 export default function Topbar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const sourceParam = searchParams.get('source')
   const searchRef = useRef<HTMLInputElement>(null)
+  const gatewayMenuRef = useRef<HTMLDivElement>(null)
   const [currentUser] = useState<UserProfile | null>(() => readStoredUser())
-  const [reportSource, setReportSource] = useState<ReportSource>(() => {
-    if (typeof window === 'undefined') return 'estate'
-    const params = new URLSearchParams(window.location.search)
-    return normalizeSource(params.get('source') ?? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY))
-  })
+  const [reportSource, setReportSource] = useState<ReportSource>(() => normalizeSource(sourceParam))
+  const [gatewayBase, setGatewayBase] = useState(SQL_GATEWAY_PRIMARY)
+  const [gatewayOpen, setGatewayOpen] = useState(false)
+  const [gatewayOnline, setGatewayOnline] = useState<boolean | null>(null)
   const [title, subtitle] = pageTitle(pathname)
   const name = displayName(currentUser)
   const role = roleLabel(currentUser?.role)
 
   useEffect(() => {
+    window.queueMicrotask(() => {
+      const params = new URLSearchParams(window.location.search)
+      setReportSource(normalizeSource(params.get('source') ?? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY)))
+      setGatewayBase(readClientSqlGatewayBase())
+    })
     const handler = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
@@ -109,12 +133,48 @@ export default function Topbar() {
     const handleSourceChange = (event: Event) => {
       setReportSource(normalizeSource((event as CustomEvent<string>).detail))
     }
+    const handleGatewayChange = (event: Event) => {
+      setGatewayBase(String((event as CustomEvent<string>).detail || SQL_GATEWAY_PRIMARY))
+    }
     window.addEventListener('report-center-source-change', handleSourceChange)
+    window.addEventListener('report-center-gateway-change', handleGatewayChange)
     return () => {
       window.removeEventListener('keydown', handler)
       window.removeEventListener('report-center-source-change', handleSourceChange)
+      window.removeEventListener('report-center-gateway-change', handleGatewayChange)
     }
-  }, [])
+  }, [sourceParam])
+
+  useEffect(() => {
+    if (!pathname.startsWith('/report-center')) return
+    let cancelled = false
+    const check = async () => {
+      try {
+        const params = new URLSearchParams({ source: reportSource, gatewayBase })
+        const res = await fetch(`/api/reports/system-status?${params.toString()}`, {
+          cache: 'no-store',
+          headers: { 'x-sql-gateway-base': gatewayBase },
+        })
+        const data = (await res.json().catch(() => ({}))) as { gatewayOnline?: boolean }
+        if (!cancelled) setGatewayOnline(Boolean(data.gatewayOnline))
+      } catch {
+        if (!cancelled) setGatewayOnline(false)
+      }
+    }
+    void check()
+    return () => {
+      cancelled = true
+    }
+  }, [gatewayBase, pathname, reportSource])
+
+  useEffect(() => {
+    if (!gatewayOpen) return
+    const onDoc = (event: MouseEvent) => {
+      if (!gatewayMenuRef.current?.contains(event.target as Node)) setGatewayOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [gatewayOpen])
 
   const openSidebar = () => document.getElementById('mobile-sidebar-opener')?.click()
 
@@ -127,6 +187,12 @@ export default function Topbar() {
       params.set('source', source)
       window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}${window.location.hash}`)
     }
+  }
+
+  const selectGateway = (base: string) => {
+    const next = writeClientSqlGatewayBase(base)
+    setGatewayBase(next)
+    setGatewayOpen(false)
   }
 
   const openGlobalSearch = () => {
@@ -184,6 +250,52 @@ export default function Topbar() {
           <Globe2 size={16} />
           ID
         </button>
+        {pathname.startsWith('/report-center') ? (
+          <div ref={gatewayMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setGatewayOpen((open) => !open)}
+              title={`SQL Gateway: ${gatewayBase} (default ${SQL_GATEWAY_PRIMARY}, fallback ${SQL_GATEWAY_FALLBACK})`}
+              className="inline-flex h-[42px] max-w-[190px] items-center gap-2 rounded-xl border border-[var(--rc-border)] bg-white/5 px-3 text-xs font-bold text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
+            >
+              <Server size={15} />
+              <span className="truncate">{shortGatewayLabel(gatewayBase)}</span>
+              <span
+                className={[
+                  'h-2 w-2 shrink-0 rounded-full',
+                  gatewayOnline === null ? 'bg-slate-500' : gatewayOnline ? 'bg-emerald-400' : 'bg-rose-400',
+                ].join(' ')}
+                aria-hidden
+              />
+            </button>
+            {gatewayOpen ? (
+              <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[280px] rounded-xl border border-[var(--rc-border)] bg-[#0f172a] p-2 shadow-xl">
+                <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Koneksi SQL Gateway
+                </p>
+                <p className="px-2 pb-2 text-[11px] leading-4 text-slate-500">
+                  Default {SQL_GATEWAY_PRIMARY.replace('http://', '')}. Fallback {SQL_GATEWAY_FALLBACK.replace('http://', '')}.
+                </p>
+                {SQL_GATEWAY_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => selectGateway(preset.baseUrl)}
+                    className={[
+                      'mb-1 flex w-full flex-col rounded-lg px-2.5 py-2 text-left transition',
+                      gatewayBase === preset.baseUrl
+                        ? 'bg-[var(--rc-accent)]/20 text-[var(--rc-text)] ring-1 ring-[var(--rc-accent)]/40'
+                        : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
+                    ].join(' ')}
+                  >
+                    <span className="text-xs font-bold">{preset.label}</span>
+                    <span className="text-[11px] opacity-80">{preset.baseUrl}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <button
           type="button"
           className="relative grid h-[42px] w-[42px] place-items-center rounded-xl border border-[var(--rc-border)] bg-white/5 text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
