@@ -28,6 +28,7 @@ import {
 import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
 import ReportAnalysisBand from '@/components/report-center/ReportAnalysisBand'
 import AppliedFilterBar from '@/components/report-center/AppliedFilterBar'
+import ExportPreflightDialog, { type ExportPreflightKind } from '@/components/report-center/ExportPreflightDialog'
 import ReportWorkspaceTabs, { type WorkspaceTabId } from '@/components/report-center/ReportWorkspaceTabs'
 import ReportTableToolbar from '@/components/report-center/ReportTableToolbar'
 import ReportDataTable from '@/components/report-center/ReportDataTable'
@@ -2000,9 +2001,9 @@ function downloadCsv(report: InventoryReport, source: ReportSource, filters: Rep
   }, 50)
 }
 
-async function exportExcel(report: InventoryReport, source: ReportSource, filters: ReportFilterInput) {
+async function exportExcel(report: InventoryReport, source: ReportSource, filters: ReportFilterInput, options?: { skipConfirm?: boolean }) {
   const ceiling = exportRowCeiling(report.id)
-  if (!window.confirm(`Export Excel memuat baris di browser (hingga ~${ceiling.toLocaleString('id-ID')} baris). Lanjut?`)) return
+  if (!options?.skipConfirm && !window.confirm(`Export Excel memuat baris di browser (hingga ~${ceiling.toLocaleString('id-ID')} baris). Lanjut?`)) return
   const payload = await fetchReport(report, source, 'all', filters)
   const rows = payload.rows
   if (rows.length === 0) {
@@ -2039,6 +2040,19 @@ async function exportPdf(report: InventoryReport, rows: DbRow[], columns: string
     y += 12
   })
   doc.save(`${report.id}-pratinjau.pdf`)
+}
+
+async function runConfirmedExport(
+  kind: ExportPreflightKind,
+  report: InventoryReport,
+  source: ReportSource,
+  filters: ReportFilterInput,
+  rows: DbRow[],
+  columns: string[],
+) {
+  if (kind === 'csv') return downloadCsv(report, source, filters)
+  if (kind === 'excel') return exportExcel(report, source, filters, { skipConfirm: true })
+  return exportPdf(report, rows, columns)
 }
 
 export default function ReportViewerClient({ reportId }: { reportId: string }) {
@@ -2102,6 +2116,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   const [aiQuestionRequest, setAiQuestionRequest] = useState<ReportQuestionRequest | null>(null)
   const [insightTab, setInsightTab] = useState<InsightTab>('charts')
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTabId>('ringkasan')
+  const [exportPreflight, setExportPreflight] = useState<null | { kind: ExportPreflightKind }>(null)
   const [debugSqlFocus, setDebugSqlFocus] = useState('summary')
   /** Per-KPI simple SQL (illustrative) — shown instead of full gateway dump when set. */
   const [kpiSimpleSqlView, setKpiSimpleSqlView] = useState<{ label: string; sql: string } | null>(null)
@@ -4708,9 +4723,9 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               setPageSize(size)
               setPage(1)
             }}
-            onExportExcel={() => exportExcel(report, selectedSource, requestFilters)}
-            onExportPdf={() => exportPdf(report, filteredRows, visibleColumns)}
-            onExportCsv={() => downloadCsv(report, selectedSource, requestFilters)}
+            onExportExcel={() => setExportPreflight({ kind: 'excel' })}
+            onExportPdf={() => setExportPreflight({ kind: 'pdf' })}
+            onExportCsv={() => setExportPreflight({ kind: 'csv' })}
             onJumpToAnalysis={jumpToAnalysis}
             showSqlAudit={debugSqlStatements.length > 0}
             onEnterFullTable={enterFullTable}
@@ -5291,6 +5306,22 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           </div>
         </div>
       ) : null}
+
+      <ExportPreflightDialog
+        open={Boolean(exportPreflight)}
+        kind={exportPreflight?.kind ?? 'csv'}
+        reportTitle={report.title}
+        ceiling={exportRowCeiling(report.id)}
+        loadedRows={filteredRows.length}
+        onCancel={() => setExportPreflight(null)}
+        onConfirm={() => {
+          const kind = exportPreflight?.kind
+          setExportPreflight(null)
+          if (!kind) return
+          void runConfirmedExport(kind, report, selectedSource, requestFilters, filteredRows, visibleColumns)
+        }}
+      />
+
     </main>
   )
 }
