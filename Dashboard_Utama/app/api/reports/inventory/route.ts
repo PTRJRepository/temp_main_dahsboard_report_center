@@ -843,11 +843,7 @@ function monthlyStockAccountMovementCtes({
 }) {
   const reportAccountingPeriod = formatPeriod(reportAccYear, reportAccMonth)
   const openingAccountingPeriod = formatPeriod(openingAccYear, openingAccMonth)
-  // Stock Analysis Code removed from monthly path — never default DEADS/MEMOV/SLMOV.
-  // Optional single-code filter only if client still sends stockAnalysis (legacy URLs).
-  const analysisFilter = stockAnalysisCode
-    ? `AND RTRIM(i.StockAnalysisCode) = '${stockAnalysisCode}'`
-    : ''
+  // Stock Analysis Code removed from monthly path. Ignore legacy stockAnalysisCode.
   const productTypeFilter = productTypeCode ? `AND RTRIM(ISNULL(i.ProdTypeCode, '')) = '${productTypeCode}'` : ''
   const productCategoryFilter = productCategoryCode ? `AND RTRIM(ISNULL(i.ProdCatCode, '')) = '${productCategoryCode}'` : ''
   const productBrandFilter = productBrandCode ? `AND RTRIM(ISNULL(i.ProdBrandCode, '')) = '${productBrandCode}'` : ''
@@ -862,7 +858,7 @@ function monthlyStockAccountMovementCtes({
     : itemTypeScope === '4'
       ? `AND ${warehouseInventoryItemTypeExpression('i')} = '4'`
       : `AND ${warehouseInventoryItemTypeExpression('i')} IN ('1', '4')`
-  const whereSearch = textSearch(search, ['i.ItemCode', 'i.Description', 'i.StockAnalysisCode', "ISNULL(sa.Description, '')", 'i.ProdTypeCode', "ISNULL(pt.Description, '')"])
+  const whereSearch = textSearch(search, ['i.ItemCode', 'i.Description', 'i.ProdTypeCode', "ISNULL(pt.Description, '')", 'i.ProdCatCode', 'i.ProdBrandCode'])
   const movementActivityCountExpression = `(
           CASE WHEN ABS(ISNULL(a.received_qty, 0)) > 0 OR ABS(ISNULL(a.received_amt, 0)) > 0 THEN 1 ELSE 0 END +
           CASE WHEN ABS(ISNULL(a.return_advice_qty, 0)) > 0 OR ABS(ISNULL(a.return_advice_amt, 0)) > 0 THEN 1 ELSE 0 END +
@@ -919,8 +915,6 @@ function monthlyStockAccountMovementCtes({
           WHEN '4' THEN 'Workshop / Mesin'
           ELSE ISNULL(${warehouseInventoryItemTypeExpression('i')}, '-')
         END AS ItemTypeName,
-        RTRIM(i.StockAnalysisCode) AS StockAnalysisCode,
-        RTRIM(ISNULL(sa.Description, i.StockAnalysisCode)) AS StockAnalysisName,
         RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductTypeCode,
         RTRIM(ISNULL(pt.Description, i.ProdTypeCode)) AS ProductTypeDescription,
         RTRIM(ISNULL(i.ProdCatCode, '')) AS ProductCategoryCode,
@@ -932,8 +926,6 @@ function monthlyStockAccountMovementCtes({
         CAST(ISNULL(i.AverageCost, 0) AS decimal(18, 6)) AS AverageCost,
         CAST((ISNULL(i.QtyOnHand, 0) + ISNULL(i.QtyOnHold, 0)) * ISNULL(i.AverageCost, 0) AS decimal(18, 6)) AS OnHandHoldAmount
       FROM [${database}].[dbo].[IN_ITEM] i
-      LEFT JOIN [${database}].[dbo].[IN_STOCKANALYSIS] sa
-        ON sa.StockAnalysisCode = i.StockAnalysisCode
       LEFT JOIN [${database}].[dbo].[IN_PRODTYPE] pt
         ON pt.ProdTypeCode = i.ProdTypeCode
       WHERE RTRIM(i.LocCode) = '${location}'
@@ -941,7 +933,6 @@ function monthlyStockAccountMovementCtes({
         -- such as MG28017; status 2 must stay visible for official PDF parity.
         AND RTRIM(i.Status) IN ('1', '2')
         ${itemTypeFilter}
-        ${analysisFilter}
         ${productTypeFilter}
         ${productCategoryFilter}
         ${productBrandFilter}
@@ -1224,8 +1215,6 @@ function monthlyStockAccountMovementCtes({
             ELSE ISNULL(${warehouseInventoryItemTypeExpression('im')}, '-')
           END
         ) AS ItemTypeName,
-        COALESCE(b.StockAnalysisCode, RTRIM(im.StockAnalysisCode), '') AS StockAnalysisCode,
-        COALESCE(b.StockAnalysisName, RTRIM(ISNULL(sa2.Description, im.StockAnalysisCode)), '') AS StockAnalysisName,
         COALESCE(b.ProductTypeCode, RTRIM(ISNULL(im.ProdTypeCode, '')), '') AS ProductTypeCode,
         COALESCE(b.ProductTypeDescription, RTRIM(ISNULL(pt2.Description, im.ProdTypeCode)), '') AS ProductTypeDescription,
         COALESCE(b.ProductCategoryCode, RTRIM(ISNULL(im.ProdCatCode, '')), '') AS ProductCategoryCode,
@@ -1286,8 +1275,6 @@ function monthlyStockAccountMovementCtes({
       LEFT JOIN [${database}].[dbo].[IN_ITEM] im
         ON im.ItemCode = k.ItemCode
         AND RTRIM(im.LocCode) = '${location}'
-      LEFT JOIN [${database}].[dbo].[IN_STOCKANALYSIS] sa2
-        ON sa2.StockAnalysisCode = im.StockAnalysisCode
       LEFT JOIN [${database}].[dbo].[IN_PRODTYPE] pt2
         ON pt2.ProdTypeCode = im.ProdTypeCode
       LEFT JOIN agg a ON a.ItemCode = k.ItemCode
@@ -1306,8 +1293,6 @@ function monthlyStockAccountMovementCtes({
         Location,
         ItemType,
         ItemTypeName,
-        StockAnalysisCode,
-        StockAnalysisName,
         ProductTypeCode,
         ProductTypeDescription,
         ProductCategoryCode,
@@ -2849,7 +2834,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       COUNT(*) AS TotalItem,
       SUM(CASE WHEN ItemType = '1' THEN 1 ELSE 0 END) AS StockGudangItem,
       SUM(CASE WHEN ItemType = '4' THEN 1 ELSE 0 END) AS WorkshopMesinItem,
-      COUNT(DISTINCT StockAnalysisCode) AS TotalStockAnalysis,
+      COUNT(DISTINCT ProductTypeCode) AS TotalProductType,
       COUNT(DISTINCT MovementCategory) AS TotalMovementCategory,
       COUNT(DISTINCT ProductTypeCode) AS TotalProductType,
       COUNT(DISTINCT ProductCategoryCode) AS TotalProductCategory,

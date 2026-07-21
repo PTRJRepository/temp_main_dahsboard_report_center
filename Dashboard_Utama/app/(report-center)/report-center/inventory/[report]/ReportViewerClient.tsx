@@ -4545,17 +4545,18 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                       <span className="rc-scope-chip">Ringkasan server (terfilter) · bukan sampel</span>
                     )}
                   </p>
-                  <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7' : 'xl:grid-cols-5'}`}>
-                    {(isMonthlyStockMovement ? flowKpiCards : flowKpiCards).map((kpi) => {
-                      // Official monthly: each card already carries Amount + Qty metrics.
-                      const showNested = !isMonthlyStockMovement || (kpi.metrics?.length ?? 0) > 1
-                      const nested = showNested
-                        ? (kpi.metrics ?? []).filter((m) => m.key !== 'TotalItem' && (isMonthlyStockMovement ? true : m.key !== 'IssuedTotalAmount'))
+                  <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : 'xl:grid-cols-5'}`}>
+                    {flowKpiCards.map((kpi) => {
+                      // Official monthly: Amount primary, Qty secondary. Other reports keep issued nested.
+                      const amountMetric = (kpi.metrics ?? []).find((m) => /Amount|TotalItem/i.test(m.key)) ?? kpi.metrics?.[0]
+                      const qtyMetric = (kpi.metrics ?? []).find((m) => /Qty/i.test(m.key))
+                      const nested = !isMonthlyStockMovement
+                        ? (kpi.metrics ?? []).filter((m) => m.key !== 'IssuedTotalAmount' && m.key !== 'TotalItem')
                         : []
                       return (
                       <div
-                        key={`flow-${kpi.flowSection ?? kpi.label}`}
-                        className={`group relative min-h-[112px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
+                        key={`flow-${kpi.sourceField ?? kpi.label}`}
+                        className={`group relative min-h-[104px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
                         title={[kpi.sourceTable, kpi.sourceField].filter(Boolean).join(' · ')}
                       >
                         <button
@@ -4570,11 +4571,17 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                           {kpi.label}
                         </span>
                         <span className="rc-kpi-value mt-1 block text-xl font-black tracking-tight text-lime-100 whitespace-normal break-all">
-                          {compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}
+                          {compactMetric(kpi.value, amountMetric?.key ?? kpi.sourceField, kpi.label)}
                         </span>
-                        <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-white/60">
-                          {kpi.description}
-                        </span>
+                        {isMonthlyStockMovement && qtyMetric && kpi.sourceField !== 'TotalItem' ? (
+                          <span className="mt-1 block text-[11px] font-bold tabular-nums text-white/70">
+                            Qty {compactMetric(qtyMetric.value, qtyMetric.key, qtyMetric.label)}
+                          </span>
+                        ) : (
+                          <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-white/60">
+                            {kpi.description}
+                          </span>
+                        )}
                         {nested.length > 0 && (
                           <div className="mt-2 grid grid-cols-2 gap-1">
                             {nested.slice(0, 4).map((metric) => (
