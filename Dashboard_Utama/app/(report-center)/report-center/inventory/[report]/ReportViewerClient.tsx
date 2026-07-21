@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
 import ReportAnalysisBand from '@/components/report-center/ReportAnalysisBand'
+import AppliedFilterBar from '@/components/report-center/AppliedFilterBar'
 import ReportDetailLoadingScreen from '@/components/report-center/ReportDetailLoadingScreen'
 import ReportQuestionPanel, { type ReportQuestionRequest } from '@/components/report-center/ReportQuestionPanel'
 import type { InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
@@ -3081,7 +3082,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     commitReportFilters({}, null)
   }
 
-  const removeFilterChip = (chip: { key: keyof ReportFilterInput | 'safety'; columnFilterIndex?: number; locked?: boolean }) => {
+  const removeFilterChip = (chip: { key: string; columnFilterIndex?: number; locked?: boolean }) => {
     if (chip.locked || chip.key === 'safety') return
     const removeFrom = (current: ReportFilterInput): ReportFilterInput => {
       if (chip.key === 'columnFilters') {
@@ -3803,45 +3804,12 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         <section className="rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-[#12351F] via-[#0F2B1A] to-[#0B1F15] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.22)]">
 
         {removableFilterChips.length > 0 && (
-          <div
-            className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-lime-400/25 bg-lime-400/10 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
-            role="region"
-            aria-label="Active filters"
-          >
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-lime-200/90">
-              <SlidersHorizontal size={12} aria-hidden="true" />
-              Active filters
-              <span className="rounded-md border border-lime-300/30 bg-lime-300/15 px-1.5 py-0.5 text-[10px] font-black text-lime-100">
-                {removableFilterChips.length}
-              </span>
-            </span>
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-              {removableFilterChips.map((chip) => (
-                <button
-                  key={`sticky-${chip.key}-${chip.columnFilterIndex ?? chip.label}`}
-                  type="button"
-                  onClick={() => removeFilterChip(chip)}
-                  title={`Hapus filter: ${chip.label}`}
-                  aria-label={`Hapus filter ${chip.label}`}
-                  className="group inline-flex max-w-full items-center gap-1.5 rounded-full border border-lime-300/35 bg-[#071426]/80 px-2.5 py-1 text-left text-xs font-bold text-lime-50 transition hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-300"
-                >
-                  <span className="truncate">{chip.label}</span>
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/70 group-hover:border-red-300/40 group-hover:bg-red-500/30 group-hover:text-red-50">
-                    <X size={11} strokeWidth={2.5} aria-hidden="true" />
-                  </span>
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-400/30 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wide text-red-200 transition hover:border-red-400/50 hover:bg-red-500/20 hover:text-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
-              aria-label="Clear all active filters"
-            >
-              <XCircle size={13} aria-hidden="true" />
-              Clear all
-            </button>
-          </div>
+          <AppliedFilterBar
+            chips={removableFilterChips}
+            onRemove={removeFilterChip}
+            onClearAll={resetFilters}
+            variant="sticky"
+          />
         )}
 
         {/* Hold KPI/grand total until fetch finishes — avoids half-loaded Closing vs export. */}
@@ -4400,36 +4368,12 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               {filterMessage && <p className="mt-2 text-xs font-medium text-emerald-300">{filterMessage}</p>}
               {filterWarning && <p className="mt-2 text-xs font-bold text-amber-300">{filterWarning}</p>}
               {filterError && <p className="mt-2 text-xs font-bold text-red-300">{filterError}</p>}
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs font-semibold">
-                {removableFilterChips.length === 0 && (
-                  <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-white/40">No active filters</span>
-                )}
-                {removableFilterChips.map((chip) => (
-                  <button
-                    key={`${chip.key}-${chip.columnFilterIndex ?? chip.label}`}
-                    type="button"
-                    onClick={() => removeFilterChip(chip)}
-                    title={`Hapus filter: ${chip.label}`}
-                    aria-label={`Hapus filter ${chip.label}`}
-                    className="group inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-left text-white/70 transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
-                  >
-                    <span className="truncate">{chip.label}</span>
-                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/60 group-hover:border-red-300/40 group-hover:bg-red-500/25 group-hover:text-red-50">
-                      <X size={11} strokeWidth={2.5} aria-hidden="true" />
-                    </span>
-                  </button>
-                ))}
-                {removableFilterChips.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="inline-flex items-center gap-1 rounded-full border border-red-400/25 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-200 hover:bg-red-500/20"
-                  >
-                    <XCircle size={12} aria-hidden="true" />
-                    Clear all
-                  </button>
-                )}
-              </div>
+              <AppliedFilterBar
+                chips={removableFilterChips}
+                onRemove={removeFilterChip}
+                onClearAll={resetFilters}
+                variant="inline"
+              />
               <div className="mt-3 rounded-xl border border-white/10 bg-black/15 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">Parameter request report</p>
