@@ -28,6 +28,7 @@ import {
 import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
 import ReportAnalysisBand from '@/components/report-center/ReportAnalysisBand'
 import AppliedFilterBar from '@/components/report-center/AppliedFilterBar'
+import ReportWorkspaceTabs, { type WorkspaceTabId } from '@/components/report-center/ReportWorkspaceTabs'
 import ReportTableToolbar from '@/components/report-center/ReportTableToolbar'
 import ReportDataTable from '@/components/report-center/ReportDataTable'
 import { bucketTone, isAmountField, movementTone, renderReportCell, riskTone } from '@/components/report-center/reportTableCells'
@@ -2100,6 +2101,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   const [aiInsightVisible, setAiInsightVisible] = useState(false)
   const [aiQuestionRequest, setAiQuestionRequest] = useState<ReportQuestionRequest | null>(null)
   const [insightTab, setInsightTab] = useState<InsightTab>('charts')
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTabId>('ringkasan')
   const [debugSqlFocus, setDebugSqlFocus] = useState('summary')
   /** Per-KPI simple SQL (illustrative) — shown instead of full gateway dump when set. */
   const [kpiSimpleSqlView, setKpiSimpleSqlView] = useState<{ label: string; sql: string } | null>(null)
@@ -3179,25 +3181,22 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   }
 
   const jumpToAnalysis = (tab: InsightTab) => {
+    if (tab === 'sql') {
+      setWorkspaceTab('audit')
+      setInsightTab('sql')
+      setReportInfoVisible(true)
+      setReportInfoManuallyOpened(true)
+      return
+    }
+    setWorkspaceTab('analisis')
     if (tab === 'ai') {
       setAiInsightVisible(true)
       setInsightTab('ai')
-      window.setTimeout(() => {
-        window.requestAnimationFrame(() => {
-          document.getElementById('analysis-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        })
-      }, 0)
       return
     }
-
     setInsightTab(tab)
     setReportInfoVisible(true)
     setReportInfoManuallyOpened(true)
-    window.setTimeout(() => {
-      window.requestAnimationFrame(() => {
-      document.getElementById('analysis-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
-    }, 0)
   }
 
   const showKpiSqlDebug = (kpi?: Pick<ReportKpiCard, 'label' | 'simpleSql' | 'flowSection' | 'groupField' | 'groupKey' | 'sourceTable' | 'sourceField' | 'scope'>) => {
@@ -3327,6 +3326,16 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     sql: 'SQL Debug',
   }
   const analysisPanelVisible = reportInfoVisible || aiInsightVisible
+
+  useEffect(() => {
+    if (workspaceTab === 'audit') {
+      setReportInfoVisible(true)
+      setReportInfoManuallyOpened(true)
+      setInsightTab((tab) => (tab === 'ai' ? 'sql' : tab === 'charts' ? 'sql' : tab))
+    } else if (workspaceTab === 'analisis') {
+      setInsightTab((tab) => (tab === 'sql' ? 'charts' : tab))
+    }
+  }, [workspaceTab])
 
   const effectiveTableDensity = tableExpanded ? 'compact' : tableDensity
   // Compact table: tight padding so more cols fit without horizontal scroll.
@@ -3540,6 +3549,20 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           />
         )}
 
+        {!tableExpanded && (
+          <ReportWorkspaceTabs
+            value={workspaceTab}
+            onChange={(tab) => {
+              setWorkspaceTab(tab)
+              if (tab === 'analisis' || tab === 'audit') {
+                setReportInfoVisible(true)
+                if (tab === 'audit') setReportInfoManuallyOpened(true)
+              }
+            }}
+            showAudit
+          />
+        )}
+
         {/* Hold KPI/grand total until fetch finishes — avoids half-loaded Closing vs export. */}
         {loading && (
           <ReportDetailLoadingScreen
@@ -3561,7 +3584,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           />
         )}
 
-        {!loading && (kpiCards.length > 0 || stickyGrandTotals.length > 0) && (
+        {!loading && (workspaceTab === 'ringkasan' || tableExpanded) && (kpiCards.length > 0 || stickyGrandTotals.length > 0) && (
         <div className="rc-ringkasan sticky top-0 z-30 mt-4 space-y-2 rounded-xl border border-lime-400/15 bg-[#071426]/95 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)] backdrop-blur-md">
           {/* Hide sticky grand strip when official flow cards already carry open→close story (avoids double totals). */}
           {stickyGrandTotals.length > 0 && !(isMonthlyStockMovement && flowKpiCards.length > 0) && (
@@ -3967,7 +3990,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         )}
         </section>
 
-        {!tableExpanded && (
+        {!tableExpanded && workspaceTab === 'analisis' && (
           <ReportAnalysisBand
             analytics={payload?.analytics}
             activeFilters={requestFilters}
@@ -4643,7 +4666,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         </section>
         )}
 
-        <div className={tableExpanded ? '' : 'mt-5'}>
+        <div className={`${tableExpanded || workspaceTab === 'detail' ? '' : 'hidden'}${tableExpanded ? '' : ' mt-5'}`.trim()}>
         <section className={tableExpanded ? 'fixed inset-0 z-50 overflow-hidden bg-[#06080d] p-2' : 'overflow-hidden rounded-2xl border border-amber-400/25 bg-[#0b1018] shadow-[0_24px_80px_rgba(0,0,0,0.32)]'}>
           <ReportTableToolbar
             tableExpanded={tableExpanded}
@@ -4811,7 +4834,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             </>
           )}
         </section>
-        {!tableExpanded && analysisPanelVisible && tableReady && !analysisReady && (
+        {!tableExpanded && (workspaceTab === 'analisis' || workspaceTab === 'audit') && analysisPanelVisible && tableReady && !analysisReady && (
           <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -4827,7 +4850,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             </div>
           </section>
         )}
-        {!tableExpanded && analysisPanelVisible && tableReady && analysisReady && (
+        {!tableExpanded && (workspaceTab === 'analisis' || workspaceTab === 'audit') && analysisPanelVisible && tableReady && analysisReady && (
           <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
