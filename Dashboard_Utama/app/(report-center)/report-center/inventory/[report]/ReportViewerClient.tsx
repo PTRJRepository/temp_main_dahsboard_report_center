@@ -54,6 +54,7 @@ import {
 } from '@/lib/reports/report-filtering'
 import type { ReportFilterAction } from '@/lib/reports/report-experience'
 import { actualToAccountingPeriod } from '@/lib/reports/accounting-period'
+import { formatCurrency, formatKpiValue, formatMetric, inferMetricKind } from '@/utils/format'
 
 type DbRow = Record<string, unknown>
 
@@ -1004,37 +1005,15 @@ function sourceDescription(source: ReportSource) {
 }
 
 function formatAmount4(value: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
-  }).format(value)
+  return formatCurrency(value)
 }
 
 function isAmountField(field?: string) {
-  if (!field) return false
-  return /amount|nilai|valuasi|cost|price|total_amount|assetamount|onhandholdamount/i.test(field)
+  return inferMetricKind(field) === 'currency'
 }
 
 function formatValue(value: unknown, field?: string) {
-  if (value === null || value === undefined || value === '') return '-'
-  if (typeof value === 'number') {
-    if (isAmountField(field)) return formatAmount4(value)
-    return value.toLocaleString('id-ID')
-  }
-  if (typeof value === 'string') {
-    const date = new Date(value)
-    if (!Number.isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-      return date.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
-    }
-    if (isAmountField(field)) {
-      const numeric = Number(value.replace(/[^\d.-]/g, ''))
-      if (Number.isFinite(numeric) && value.trim() !== '') return formatAmount4(numeric)
-    }
-    return value
-  }
-  return String(value)
+  return formatMetric(value, field)
 }
 
 const LEGACY_COLUMN_LABELS: Record<string, string> = {
@@ -1073,11 +1052,9 @@ function displayColumnHelp(field: string) {
   return inventoryColumnTitleAttribute(field, displayColumnLabel(field))
 }
 
-function compactMetric(value: unknown) {
-  const numeric = toNumber(value)
-  // Amount / valuasi KPI: always 4 decimals, never compact B/M/K.
-  if (!Number.isFinite(numeric)) return formatValue(value)
-  return formatAmount4(numeric)
+/** Field/label-aware KPI formatter — periods/qty/count never forced to Rp. */
+function compactMetric(value: unknown, field?: string, label?: string) {
+  return formatKpiValue(value, field, label)
 }
 
 function toNumber(value: unknown) {
@@ -2967,6 +2944,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   const [kpiSimpleSqlView, setKpiSimpleSqlView] = useState<{ label: string; sql: string } | null>(null)
   const [tableDensity, setTableDensity] = useState<TableDensity>('compact')
   const [expandedMovementRows, setExpandedMovementRows] = useState<Record<string, boolean>>({})
+  /** Monthly Ringkasan: secondary rails (global/breakdown/sub/movement) collapsed by default. */
+  const [monthlySecondaryOpen, setMonthlySecondaryOpen] = useState(false)
   const { favorites, toggleFavorite, addRecent } = useReportStore()
   const uniqueValuesCache = useRef<Map<string, string[]>>(new Map())
   const tableContainerRef = useRef<HTMLDivElement>(null)
@@ -4260,18 +4239,18 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   }
 
   const bodyCellClass = (column: string, columnIndex: number, subtotal = false, selected = false, zebraAlt = false) => {
-    const text = subtotal
-      ? 'text-sm font-black text-slate-950'
-      : columnIndex === 0 || isCodeColumn(column)
-        ? 'font-bold text-amber-100'
-        : 'text-slate-300'
     const bg = subtotal
-      ? 'bg-amber-500'
+      ? 'bg-amber-500/15'
       : selected
         ? 'bg-amber-500/10 group-hover:bg-amber-500/20'
         : zebraAlt
           ? 'bg-[#111827] group-hover:bg-[#172033]'
           : 'bg-[#0f172a] group-hover:bg-[#172033]'
+    const text = subtotal
+      ? 'text-sm font-bold text-amber-50'
+      : columnIndex === 0 || isCodeColumn(column)
+        ? 'font-bold text-amber-100'
+        : 'text-slate-300'
     return `${columnWidthClass(column)} ${stickyColumnClass(column)} ${bg} border-b border-r border-white/10 ${cellPadding} align-top leading-snug ${text}`
   }
   const displayTableTotalRows = serverPaged && tableWindow.windowed ? reachableTableRows : safeTotalTableRows
@@ -4340,7 +4319,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     if (rowModel.type === 'group-subtotal') {
       const group = rowModel.group
       return (
-        <tr key={rowModel.key} className="bg-[#167A3A] text-white">
+        <tr key={rowModel.key} className="rc-subtotal-row bg-[#13261c] text-amber-50 border-l-2 border-amber-400/70">
           {visibleColumns.map((column, columnIndex) => (
             <td
               key={column}
@@ -4554,18 +4533,19 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         )}
 
         {!loading && (kpiCards.length > 0 || stickyGrandTotals.length > 0) && (
-        <div className="sticky top-0 z-30 mt-4 space-y-2 rounded-xl border border-lime-400/20 bg-[#071426]/95 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md">
-          {stickyGrandTotals.length > 0 && (
+        <div className="rc-ringkasan sticky top-0 z-30 mt-4 space-y-2 rounded-xl border border-lime-400/15 bg-[#071426]/95 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)] backdrop-blur-md">
+          {/* Hide sticky grand strip when official flow cards already carry open→close story (avoids double totals). */}
+          {stickyGrandTotals.length > 0 && !(isMonthlyStockMovement && flowKpiCards.length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5 border-b border-white/10 px-1 pb-2">
-              <span className="mr-1 text-[10px] font-black uppercase tracking-[0.16em] text-lime-300/90">Grand total</span>
-              {stickyGrandTotals.map((item) => (
+              <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.14em] text-lime-300/80">Ringkasan cepat</span>
+              {stickyGrandTotals.slice(0, 6).map((item) => (
                 <div
                   key={item.key}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-lime-400/25 bg-lime-400/10 px-2 py-1"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-lime-400/20 bg-lime-400/10 px-2 py-1"
                   title={String(item.label)}
                 >
-                  <span className="truncate text-[10px] font-bold uppercase tracking-wide text-lime-100/70">{item.label}</span>
-                  <span className="truncate text-xs font-black text-lime-100">{compactMetric(item.value)}</span>
+                  <span className="rc-kpi-label truncate text-lime-100/70">{item.label}</span>
+                  <span className="rc-kpi-value text-xs font-semibold text-lime-100">{compactMetric(item.value, item.key, item.label)}</span>
                 </div>
               ))}
             </div>
@@ -4634,32 +4614,35 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             <div className="space-y-2">
               {flowKpiCards.length > 0 && (
                 <div>
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-lime-200/80">
-                    <span>Official flow · full scope</span>
-                    <span className="rounded border border-lime-300/30 bg-lime-400/10 px-1.5 py-0.5 text-[10px] font-black text-lime-100">
-                      Opening → Inventory → Issued → Purchasing → Closing
+                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-lime-200/75">
+                    <span>Ringkasan · alur stok</span>
+                    <span className="rc-scope-chip text-[10px] text-lime-100/80">
+                      Opening → In → Issued → Purchasing → Closing
                     </span>
+                    {isMonthlyStockMovement && (
+                      <span className="rc-scope-chip">summary server · bukan sample</span>
+                    )}
                   </p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                    {flowKpiCards.map((kpi) => (
+                    {(isMonthlyStockMovement ? flowKpiCards.slice(0, 6) : flowKpiCards).map((kpi) => (
                       <div
                         key={`flow-${kpi.flowSection ?? kpi.label}`}
-                        className={`relative min-h-[118px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
+                        className={`group relative min-h-[118px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
                         title={[kpi.sourceTable, kpi.sourceField].filter(Boolean).join(' · ')}
                       >
                         <button
                           type="button"
                           onClick={(event) => openKpiSqlDebug(event, kpi)}
                           title="SQL sederhana KPI ini"
-                          className="absolute right-2 top-2 rounded-lg border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-100 hover:border-amber-300/60 hover:bg-amber-400/20"
+                          className="rc-sql-debug absolute right-2 top-2 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                         >
                           SQL
                         </button>
                         <span className="block truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/55">
                           {kpi.label}
                         </span>
-                        <span className="mt-1 block truncate text-xl font-black tracking-tight text-lime-100">
-                          {compactMetric(kpi.value)}
+                        <span className="mt-1 block text-xl font-black tracking-tight text-lime-100 whitespace-normal break-all">
+                          {compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}
                         </span>
                         <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-white/60">
                           {kpi.description}
@@ -4675,8 +4658,8 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                                 <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/50">
                                   {metric.label}
                                 </span>
-                                <span className="block truncate text-[11px] font-black text-white/90">
-                                  {compactMetric(metric.value)}
+                                <span className="block text-[11px] font-black text-white/90 whitespace-normal break-all">
+                                  {compactMetric(metric.value, metric.key, metric.label)}
                                 </span>
                               </div>
                             ))}
@@ -4703,7 +4686,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                           >
                             <span className="inline-flex items-center gap-1.5">
                               <span className="text-rose-100/60">{metric.label}</span>
-                              <span className="font-black text-lime-100">{compactMetric(metric.value)}</span>
+                              <span className="font-black text-lime-100">{compactMetric(metric.value, metric.sourceField ?? metric.key, metric.label)}</span>
                             </span>
                             <span className="truncate font-mono text-[8px] font-semibold text-white/35">
                               {metric.sourceField ?? metric.key}
@@ -4716,11 +4699,34 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 </div>
               )}
 
-              {globalKpiCards.filter((c) => c.label !== 'Global totals').length > 0 && (
+              {/* Secondary rails: open by default for non-monthly; monthly keeps collapsed to cut noise. */}
+              {isMonthlyStockMovement && (globalKpiCards.length > 0 || breakdownKpiCards.length > 0 || subKpiCards.length > 0 || movementCategoryKpiCards.length > 0) && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-1 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setMonthlySecondaryOpen((open) => !open)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-bold text-white/70 hover:bg-white/10 hover:text-white"
+                    aria-expanded={monthlySecondaryOpen}
+                  >
+                    {monthlySecondaryOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    {monthlySecondaryOpen ? 'Sembunyikan analisis lanjutan' : 'Tampilkan analisis lanjutan'}
+                    <span className="rc-scope-chip">
+                      {[
+                        globalKpiCards.filter((c) => c.label !== 'Global totals').length > 0 ? 'context' : null,
+                        breakdownKpiCards.length > 0 ? 'gudang/workshop' : null,
+                        subKpiCards.length > 0 ? 'sub-kategori' : null,
+                        movementCategoryKpiCards.length > 0 ? 'movement' : null,
+                      ].filter(Boolean).join(' · ')}
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {(!isMonthlyStockMovement || monthlySecondaryOpen) && globalKpiCards.filter((c) => c.label !== 'Global totals').length > 0 && (
               <div>
-                <p className="mb-1 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Context · full scope</p>
+                <p className="mb-1 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">Context · full scope</p>
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
-                  {globalKpiCards.filter((c) => c.label !== 'Global totals').slice(0, 10).map((kpi) => {
+                  {globalKpiCards.filter((c) => c.label !== 'Global totals').slice(0, isMonthlyStockMovement ? 6 : 10).map((kpi) => {
                     const canFilter = Boolean(viewerProfile.kpiPresetByLabel?.[kpi.label])
                     return (
                       <div
@@ -4734,24 +4740,24 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                           if (!canFilter) return
                           if (event.key === 'Enter' || event.key === ' ') applyKpiFilter(kpi.label)
                         }}
-                        className={`relative min-h-[82px] rounded-xl border border-emerald-400/20 bg-white/[0.04] p-3 pr-12 text-left text-white transition ${canFilter ? 'cursor-pointer hover:-translate-y-0.5 hover:border-lime-300/40 hover:bg-emerald-400/10' : 'cursor-default'}`}
+                        className={`group relative min-h-[82px] rounded-xl border border-emerald-400/20 bg-white/[0.04] p-3 pr-12 text-left text-white transition ${canFilter ? 'cursor-pointer hover:-translate-y-0.5 hover:border-lime-300/40 hover:bg-emerald-400/10' : 'cursor-default'}`}
                       >
                         <button
                           type="button"
                           onClick={(event) => openKpiSqlDebug(event, kpi)}
                           title="SQL sederhana KPI ini"
-                          className="absolute right-2 top-2 rounded-lg border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-100 hover:border-amber-300/60 hover:bg-amber-400/20"
+                          className="rc-sql-debug absolute right-2 top-2 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                         >
                           SQL
                         </button>
-                        <span className="block truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">{kpi.label}</span>
-                        <span className="mt-1 block truncate text-xl font-black tracking-tight text-lime-200">{compactMetric(kpi.value)}</span>
-                        <span className="mt-0.5 block truncate text-[11px] font-semibold text-white/55">{kpi.description}</span>
+                        <span className="block text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">{kpi.label}</span>
+                        <span className="mt-1 block text-xl font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                        <span className="mt-0.5 block text-[11px] font-semibold text-white/55">{kpi.description}</span>
                         {kpi.metrics && kpi.metrics.length > 1 && (
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {kpi.metrics.slice(0, 8).map((metric) => (
                               <span key={metric.key} className="rounded border border-white/10 bg-black/20 px-1 py-0.5 text-[9px] font-bold text-white/70">
-                                {metric.label}: {compactMetric(metric.value)}
+                                {metric.label}: {compactMetric(metric.value, metric.key, metric.label)}
                               </span>
                             ))}
                           </div>
@@ -4763,11 +4769,11 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               </div>
               )}
 
-              {breakdownKpiCards.length > 0 && (
+              {(!isMonthlyStockMovement || monthlySecondaryOpen) && breakdownKpiCards.length > 0 && (
                 <div>
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-200/85">
-                    <span>Breakdown · grand total</span>
-                    <span className="rounded border border-amber-300/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-black text-amber-100">
+                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200/80">
+                    <span>Breakdown</span>
+                    <span className="rc-scope-chip text-amber-100/90">
                       Gudang vs Workshop
                     </span>
                   </p>
@@ -4788,14 +4794,14 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                             <span className="mt-0.5 block truncate text-sm font-black text-amber-50">{kpi.label}</span>
                             <span className="mt-0.5 block truncate text-[11px] font-semibold text-white/55">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200">{compactMetric(kpi.value)}</span>
+                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
                         {kpi.metrics && kpi.metrics.length > 0 && (
                           <div className="mt-2 grid grid-cols-3 gap-1">
                             {kpi.metrics.map((metric) => (
                               <div key={metric.key} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
                                 <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/45">{metric.label}</span>
-                                <span className="block truncate text-xs font-black text-lime-100">{compactMetric(metric.value)}</span>
+                                <span className="block text-xs font-black text-lime-100 whitespace-normal break-all">{compactMetric(metric.value, metric.key, metric.label)}</span>
                               </div>
                             ))}
                           </div>
@@ -4806,21 +4812,18 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 </div>
               )}
 
-              {subKpiCards.length > 0 && (
+              {(!isMonthlyStockMovement || monthlySecondaryOpen) && subKpiCards.length > 0 && (
                 <div>
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-sky-300/80">
+                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-300/75">
                     <span>
-                      Sub-category · taxonomy · {displayColumnLabel(subKpiCards[0]?.groupField ?? activeTableGroupColumn ?? 'group')}
+                      Sub-category · {displayColumnLabel(subKpiCards[0]?.groupField ?? activeTableGroupColumn ?? 'group')}
                     </span>
-                    <span className="rounded border border-sky-300/30 bg-sky-400/10 px-1.5 py-0.5 text-[10px] font-black text-sky-100">
-                      {subKpiCards.length} stored
-                    </span>
-                    <span className="rounded border border-white/10 bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-bold text-white/45">
-                      Data master/tabel (bukan auto-calc)
+                    <span className="rc-scope-chip text-sky-100/85">
+                      {subKpiCards.length} grup
                     </span>
                   </p>
-                  <div className="grid max-h-[28rem] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
-                    {subKpiCards.map((kpi) => (
+                  <div className="rc-breakdown-scroll grid max-h-[18rem] grid-cols-1 gap-2 pr-1 sm:grid-cols-2 xl:grid-cols-3">
+                    {(isMonthlyStockMovement ? subKpiCards.slice(0, 12) : subKpiCards).map((kpi) => (
                       <button
                         key={`s-${kpi.groupField}-${kpi.groupKey}`}
                         type="button"
@@ -4836,7 +4839,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                             <span className="mt-0.5 block truncate text-sm font-black text-sky-50">{kpi.label}</span>
                             <span className="mt-0.5 block truncate text-[11px] font-semibold text-white/55">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200">{compactMetric(kpi.value)}</span>
+                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
                           <span className="rounded border border-sky-300/25 bg-sky-300/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-sky-100/75">
@@ -4848,7 +4851,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                             {kpi.metrics.map((metric) => (
                               <div key={metric.key} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
                                 <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/45">{metric.label}</span>
-                                <span className="block truncate text-xs font-black text-lime-100">{compactMetric(metric.value)}</span>
+                                <span className="block text-xs font-black text-lime-100 whitespace-normal break-all">{compactMetric(metric.value, metric.key, metric.label)}</span>
                               </div>
                             ))}
                           </div>
@@ -4859,19 +4862,16 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 </div>
               )}
 
-              {movementCategoryKpiCards.length > 0 && (
-                <div className="border-t border-emerald-400/20 pt-3">
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-200/90">
-                    <span>Movement Actual · computed analysis</span>
-                    <span className="rounded border border-emerald-300/30 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-black text-emerald-100">
+              {(!isMonthlyStockMovement || monthlySecondaryOpen) && movementCategoryKpiCards.length > 0 && (
+                <div className="border-t border-emerald-400/15 pt-3">
+                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/85">
+                    <span>Movement category</span>
+                    <span className="rc-scope-chip text-emerald-100/85">
                       {movementCategoryKpiCards.length} · window {activeMonthlyMovementWindow}
                     </span>
-                    <span className="rounded border border-white/10 bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-bold text-white/50">
-                      Auto-calc StockIssue · terpisah dari Stock Analysis / sub-category
-                    </span>
                   </p>
-                  <div className="grid max-h-[22rem] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
-                    {movementCategoryKpiCards.map((kpi) => (
+                  <div className="rc-breakdown-scroll grid max-h-[18rem] grid-cols-1 gap-2 pr-1 sm:grid-cols-2 xl:grid-cols-3">
+                    {(isMonthlyStockMovement ? movementCategoryKpiCards.slice(0, 12) : movementCategoryKpiCards).map((kpi) => (
                       <div
                         key={`mc-${kpi.groupField}-${kpi.groupKey}`}
                         className="group relative rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 pr-12 text-left text-white transition hover:-translate-y-0.5 hover:border-lime-300/45 hover:bg-emerald-400/15"
@@ -4880,7 +4880,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                           type="button"
                           onClick={(event) => openKpiSqlDebug(event, kpi)}
                           title="SQL sederhana KPI ini"
-                          className="absolute right-2 top-2 z-10 rounded-lg border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-100 hover:border-amber-300/60 hover:bg-amber-400/20"
+                          className="rc-sql-debug absolute right-2 top-2 z-10 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                         >
                           SQL
                         </button>
@@ -4898,7 +4898,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                             <span className="mt-0.5 block truncate text-sm font-black text-emerald-50">{kpi.label}</span>
                             <span className="mt-0.5 block truncate text-[11px] font-semibold text-white/55">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200">{compactMetric(kpi.value)}</span>
+                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
                           <span className="rounded border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-emerald-100/80">
@@ -4913,7 +4913,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                             {kpi.metrics.map((metric) => (
                               <div key={metric.key} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
                                 <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/45">{metric.label}</span>
-                                <span className="block truncate text-xs font-black text-lime-100">{compactMetric(metric.value)}</span>
+                                <span className="block text-xs font-black text-lime-100 whitespace-normal break-all">{compactMetric(metric.value, metric.key, metric.label)}</span>
                               </div>
                             ))}
                           </div>

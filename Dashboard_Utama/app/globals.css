@@ -856,11 +856,28 @@ body {
   background-color: rgba(245, 158, 11, 0.07) !important;
 }
 
-.report-center-dark .bg-green-700,
-.report-center-dark .bg-\[\#167A3A\],
-.report-center-dark .bg-\[\#16834A\] {
+/* Primary action greens stay accent; table subtotal greens stay calm raised surface */
+.report-center-dark .bg-green-700 {
   background-color: var(--rc-accent) !important;
   color: #020617 !important;
+}
+
+/* Group subtotal rows (legacy #167A3A / amber fill) — restrained, not solid warning/primary */
+.report-center-dark .bg-\[\#167A3A\],
+.report-center-dark .bg-\[\#16834A\],
+.report-center-dark .bg-\[\#13261c\],
+.report-center-dark tr.rc-subtotal-row,
+.report-center-dark .rc-subtotal-row {
+  background-color: rgba(214, 184, 92, 0.12) !important;
+  color: rgba(248, 250, 252, 0.92) !important;
+  box-shadow: inset 3px 0 0 rgba(214, 184, 92, 0.75);
+}
+
+.report-center-dark tr.rc-subtotal-row td,
+.report-center-dark .rc-subtotal-row td {
+  background-color: transparent !important;
+  color: inherit !important;
+  font-weight: 700 !important;
 }
 
 .report-center-dark .hover\:bg-green-800:hover,
@@ -935,6 +952,88 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .rc-report-banner .animate-pulse {
     animation: none;
+  }
+}
+
+/* ── Report detail readability (hierarchy guardrails) ─────────────────────── */
+
+/* Primary KPI / metric values: never ellipsis-cut important numbers */
+.report-center-dark .rc-kpi-value,
+.report-center-dark .rc-metric-value {
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/* Secondary labels stay quiet */
+.report-center-dark .rc-kpi-label {
+  color: var(--rc-text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* SQL / debug affordance — demoted until hover/focus */
+.report-center-dark .rc-sql-debug {
+  opacity: 0.35;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: rgba(15, 23, 42, 0.35) !important;
+  color: var(--rc-text-muted) !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  transition: opacity var(--rc-motion-fast), border-color var(--rc-motion-fast);
+}
+
+.report-center-dark .group:hover .rc-sql-debug,
+.report-center-dark .rc-sql-debug:hover,
+.report-center-dark .rc-sql-debug:focus-visible {
+  opacity: 1;
+}
+
+/* KPI card surface — one elevation, less border noise */
+.report-center-dark .rc-kpi-card {
+  border: 1px solid var(--rc-border);
+  background: color-mix(in srgb, var(--rc-surface) 88%, transparent);
+  border-radius: var(--rc-radius-sm);
+  padding: var(--rc-space-3);
+  min-width: 0;
+}
+
+.report-center-dark .rc-kpi-card:hover {
+  border-color: var(--rc-border-strong);
+  background: var(--rc-surface-raised);
+}
+
+/* Scope strip under summary — full vs loaded window honesty */
+.report-center-dark .rc-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rc-border);
+  background: var(--rc-surface-muted);
+  color: var(--rc-text-muted);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Dense product-type / breakdown grids: cap visual noise */
+.report-center-dark .rc-breakdown-scroll {
+  max-height: 18rem;
+  overflow: auto;
+  padding-right: var(--rc-space-1);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(52, 211, 153, 0.3) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .report-center-dark .rc-sql-debug,
+  .report-center-dark .rc-kpi-card {
+    transition: none;
   }
 }
 
