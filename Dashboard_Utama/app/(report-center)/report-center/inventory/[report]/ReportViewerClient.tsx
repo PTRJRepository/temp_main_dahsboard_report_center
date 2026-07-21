@@ -3259,6 +3259,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   }
 
   const enterFullTable = () => {
+    setWorkspaceTab('detail')
     setTableDensity('compact')
     setPageSize((current) => Math.max(current, 200))
     setTableExpanded(true)
@@ -3597,6 +3598,13 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             }
             startedAt={loadStartedAt}
           />
+        )}
+
+        
+        {!loading && workspaceTab === 'ringkasan' && kpiCards.length === 0 && stickyGrandTotals.length === 0 && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-6 text-center text-sm font-semibold text-white/55">
+            Ringkasan belum tersedia untuk filter aktif. Ubah periode/source, atau buka tab Detail Data.
+          </div>
         )}
 
         {!loading && (workspaceTab === 'ringkasan' || tableExpanded) && (kpiCards.length > 0 || stickyGrandTotals.length > 0) && (
