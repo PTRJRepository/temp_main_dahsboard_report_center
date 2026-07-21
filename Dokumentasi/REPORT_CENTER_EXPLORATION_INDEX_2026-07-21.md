@@ -44,6 +44,8 @@
 | `REPORT_DETAIL_A11Y_EXPLORATION_2026-07-21.md` | Keyboard/SR/focus contract |
 | `REPORT_CENTER_SCREENSHOT_QA_CHECKLIST_2026-07-21.md` | Visual QA shot list |
 | `REPORT_DETAIL_REDUNDANCY_KILL_LIST_2026-07-21.md` | Delete/merge targets K1–K23 |
+| `PRD-REPORT-CENTER-DETAIL-REDESIGN.md` | **PRD v1.1 agent contract (start here for coding)** |
+| `../Dashboard_Utama/docs/PRD/PRD-REPORT-CENTER-DETAIL-REDESIGN.md` | Same PRD under docs/PRD |
 | `REPORT_CENTER_DEBUG_REPORT_2026-07-21.md` | Root-cause fixes already landed |
 | `MASTER_PROMPT_REPORT_CENTER_REDESIGN_ADVANCED.md` | Full multi-agent charter |
 | `REPORT_DETAIL_IMPLEMENTATION_REFERENCE.md` | Shared output contract |
