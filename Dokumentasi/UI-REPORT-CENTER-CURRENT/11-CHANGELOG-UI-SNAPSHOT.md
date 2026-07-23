@@ -186,3 +186,8 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - **INTEGRASI:** ticker di bawah bar chip konteks aktif; Stock River sebagai blok `h-[280px]` (reveal-order 4) setelah TopMovementScatter, hanya dirender bila data movementMonthly ada (`hasMovementMonthly`).
 - **VERIFIKASI:** tsc 0; eslint 3 file 0 error baru (error `set-state-in-effect` di strip pre-existing); build exit 0.
 - **PLANNED:** klik kanal Sankey = filter deck ke channel itu; smoke-test browser (auth gate); kontrak `movementMonthly.summary` ke data nyata belum diverifikasi live.
+
+## 2026-07-23 (lanjut) - Fix overflow kontrol filter periode
+- **MASALAH:** kontrol segmen [Bulan|Tahun] + input/select di kolom grid 150px -> isi meluber/terpotong.
+- **PERBAIKAN:** kolom periode di grid xl dinaikkan 150px -> 250px (`xl:grid-cols-[250px_...]`); tombol segmen dirampingkan (px-2, text-[9px]) agar bar h-10 muat rapi tanpa overflow.
+- **VERIFIKASI:** tsc 0; build exit 0.

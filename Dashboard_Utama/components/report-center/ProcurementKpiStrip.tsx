@@ -1063,7 +1063,7 @@ export default function ProcurementKpiStrip({
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] bg-[rgba(2,10,7,.42)] px-3 py-3">
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[150px_150px_190px_minmax(180px,1fr)_150px_140px_auto]">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[250px_150px_190px_minmax(180px,1fr)_150px_140px_auto]">
           <div className="grid gap-1">
             <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Periode usage/receive</span>
             <div className="flex h-10 overflow-hidden rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d]">
@@ -1073,7 +1073,7 @@ export default function ProcurementKpiStrip({
                     key={mode}
                     type="button"
                     onClick={() => updateFilter('periodMode', mode)}
-                    className={`h-full px-2.5 text-[10px] font-black uppercase tracking-[0.08em] transition ${
+                    className={`h-full px-2 text-[9px] font-black uppercase tracking-[0.06em] transition ${
                       (filters.periodMode ?? 'month') === mode
                         ? 'bg-[var(--rc-forest-accent)] text-[#04130c]'
                         : 'text-[var(--rc-text-faint)] hover:text-[var(--rc-text)]'
