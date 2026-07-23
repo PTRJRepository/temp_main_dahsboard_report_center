@@ -163,3 +163,11 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - **DECK MOVEMENT DIPERKAYA:** `movementCards` dari 3 → 8 kartu: Frekuensi Issue (TotalDokumen + ActiveIssueDays + doc/hari), Opening vs Closing Qty (+delta), Goods Receive Qty (+net qty), Issued Qty Split (Ledger/Station/Vehicle), Paling Sering Di-issue (top item by doc frequency). Kartu baru memakai tone warna baru di `cardTitleTone` (pink/indigo/teal/orange/purple).
 - **VERIFIKASI:** tsc 0; error lint `react-hooks/set-state-in-effect` di `ProcurementKpiStrip.tsx` dikonfirmasi pre-existing (git stash check); build exit 0 dengan route `/report-center/control` muncul.
 - **PLANNED:** smoke-test live di browser (auth gate); smoke-test SQL gateway; uji carousel mobile; agregasi diperluas ke 21 handler.
+
+## 2026-07-23 (lanjut) - Report catalog jadi sliding rail (ReportRail)
+- **KOMPONEN BARU:** `components/report-center/ReportRail.tsx` - rail horizontal per catalog group menggantikan grid vertikal yang memaksa scroll panjang. Behaviour unik: native scroll-snap x mandatory (GPU, tanpa lib), edge-fade kiri/kanan via mask-image (sinyal kartu di luar viewport), counter posisi mono `03 / 12`, progress hairline, tombol prev/next geser ~1 viewport kartu + auto-disable di ujung.
+- **INTEGRASI:** grid `md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4` di `InventoryReportsClient.tsx` diganti `<ReportRail>` per group; `ReportTile` tidak berubah (props identik).
+- **CSS:** `.rc-rail-track` di `globals.css` - scrollbar tipis forest, kartu "terangkat" (translateY -3px) saat hover, reduced-motion aman.
+- **LINT:** pola initial-measure dari DOM dipindah ke `requestAnimationFrame` agar memenuhi `react-hooks/set-state-in-effect` (0 error).
+- **VERIFIKASI:** tsc 0; eslint file baru/tersentuh 0 error; build exit 0.
+- **PLANNED:** uji swipe di mobile; auto-scroll rail ke kartu yang dipilih saat berpindah group.

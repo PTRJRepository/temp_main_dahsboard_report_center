@@ -936,6 +936,50 @@ body {
   scroll-margin-top: 6rem;
 }
 
+/* ReportRail — sliding rail horizontal per catalog group.
+   Hairline + edge-fade; kartu aktif "terangkat". Tanpa glow berwarna. */
+.rc-rail-track {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(52, 211, 153, 0.3) transparent;
+}
+
+.rc-rail-track::-webkit-scrollbar {
+  height: 5px;
+}
+
+.rc-rail-track::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.rc-rail-track::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.32);
+  border-radius: 999px;
+}
+
+.rc-rail-track::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.5);
+}
+
+/* Kartu di dalam rail: transisi angkat saat hover (elevasi via lightness). */
+.rc-rail-track [data-rail-card] > * {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+
+.rc-rail-track [data-rail-card]:hover > * {
+  transform: translateY(-3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-rail-track [data-rail-card] > * {
+    transition: none;
+  }
+  .rc-rail-track [data-rail-card]:hover > * {
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rc-catalog-jump-chip {
     transition: none;

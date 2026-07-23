@@ -36,6 +36,7 @@ import type { LucideIcon } from 'lucide-react'
 import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@/lib/reports/inventory/config'
 import type { InsightContent } from '@/lib/reports/intelligence'
 import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
+import ReportRail from '@/components/report-center/ReportRail'
 import type { AiDashboardDefinition } from '@/lib/reports/ai-dashboard'
 import { useReportStore } from '@/store/reportStore'
 import type { ReportFilterInput } from '@/lib/reports/report-filtering'
@@ -2190,7 +2191,7 @@ export default function InventoryReportsClient({
                         </div>
                         <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/5 px-3 py-1 text-xs font-bold text-[var(--rc-forest-accent)]">{reports.length} report</span>
                       </div>
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                      <ReportRail ariaLabel={`Rail report ${group.title}`} railId={`rail-${group.group}`}>
                         {reports.map((report) => (
                           <ReportTile
                             key={report.reportCode}
@@ -2205,7 +2206,7 @@ export default function InventoryReportsClient({
                             onPdf={() => exportLivePdf(report)}
                           />
                         ))}
-                      </div>
+                      </ReportRail>
                     </section>
                   )
                 })}
