@@ -447,29 +447,38 @@ export function InventoryOverview({
         <div>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-4xl">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--rc-forest-accent)]">Procurement inventory overview</p>
-              <h2 className="mt-2 text-3xl font-black leading-[0.96] tracking-[-0.06em] text-[var(--rc-text)] sm:text-5xl">
-                Lihat keputusan inventory dulu, baru buka report.
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--rc-forest-accent)]">Evidence · movement + exception</p>
+              <h2 className="mt-1.5 text-xl font-black tracking-[-0.04em] text-[var(--rc-text)] sm:text-2xl">
+                Movement mix after KPI deck
               </h2>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--rc-text-muted)]">
-                KPI dan movement mix diambil dari full-scope API `all-stock-movement-analysis` dengan grouping MovementCategory periodik, bukan dari lokasi atau rows preview.
+              <p className="mt-2 max-w-3xl text-xs leading-6 text-[var(--rc-text-muted)] sm:text-sm sm:leading-6">
+                Full-scope API <code className="text-[var(--rc-forest-accent)]">{OVERVIEW_REPORT_ID}</code>
+                {' '}· MovementCategory periodik · bukan preview rows. Valuasi/PR-PO KPI live di command deck.
               </p>
             </div>
 
-            <div className="grid min-w-[300px] gap-2 rounded-2xl border-2 border-amber-400/50 bg-[rgba(120,53,15,.28)] p-3 shadow-[0_0_0_1px_rgba(251,191,36,.25)]">
+            <div className={cx(
+              'grid min-w-[280px] gap-2 rounded-2xl border p-3',
+              hideScopeControls
+                ? 'border-[var(--rc-forest-border)] bg-white/[0.03]'
+                : 'border-2 border-amber-400/50 bg-[rgba(120,53,15,.28)] shadow-[0_0_0_1px_rgba(251,191,36,.25)]',
+            )}>
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-200">
-                    {hideScopeControls ? 'Scope dari filter modul' : 'Period + Movement Category Window'}
+                  <p className={cx(
+                    'text-[11px] font-black uppercase tracking-[0.16em]',
+                    hideScopeControls ? 'text-[var(--rc-text-faint)]' : 'text-amber-200',
+                  )}>
+                    {hideScopeControls ? 'Threshold editor' : 'Period + Movement Category Window'}
                   </p>
                   {hideScopeControls ? (
-                    <p className="mt-1 text-xs font-semibold text-amber-50/80">{period} · MC {movementWindow}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-[var(--rc-text-muted)]">{movementDefinitionLabel(movementDefinition)}</p>
                   ) : null}
                 </div>
                 <button
                   type="button"
                   onClick={() => setRefreshKey((value) => value + 1)}
-                  className="rc-forest-focus grid h-11 w-11 place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.05] text-[var(--rc-forest-accent)] hover:bg-white/10"
+                  className="rc-forest-focus grid h-10 w-10 place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.05] text-[var(--rc-forest-accent)] hover:bg-white/10"
                   aria-label="Refresh inventory overview"
                 >
                   <RefreshCw size={16} className={loading ? 'animate-spin' : undefined} />
@@ -503,92 +512,120 @@ export function InventoryOverview({
                   </p>
                 </>
               ) : null}
-              <div className="grid grid-cols-2 gap-2">
+              <div className={cx('grid grid-cols-2 gap-2', hideScopeControls && 'opacity-90')}>
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-100/80">Fast &gt;=</span>
+                  <span className={cx('text-[10px] font-black uppercase tracking-[0.12em]', hideScopeControls ? 'text-[var(--rc-text-faint)]' : 'text-amber-100/80')}>Fast &gt;=</span>
                   <input
                     type="number"
                     min={1}
                     max={999}
                     value={movementDefinition.fastMin}
                     onChange={(event) => updateMovementDefinition('fastMin', event.target.value)}
-                    className="h-10 rounded-xl border border-amber-300/40 bg-[#1a1005] px-3 text-sm font-black text-amber-50 outline-none"
+                    className={cx(
+                      'h-9 rounded-xl border px-3 text-sm font-black outline-none',
+                      hideScopeControls
+                        ? 'border-[var(--rc-forest-border)] bg-[rgba(5,17,10,.82)] text-[var(--rc-text)]'
+                        : 'border-amber-300/40 bg-[#1a1005] text-amber-50',
+                    )}
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-100/80">Slow =</span>
+                  <span className={cx('text-[10px] font-black uppercase tracking-[0.12em]', hideScopeControls ? 'text-[var(--rc-text-faint)]' : 'text-amber-100/80')}>Slow =</span>
                   <input
                     type="number"
                     min={1}
                     max={999}
                     value={movementDefinition.slowCount}
                     onChange={(event) => updateMovementDefinition('slowCount', event.target.value)}
-                    className="h-10 rounded-xl border border-amber-300/40 bg-[#1a1005] px-3 text-sm font-black text-amber-50 outline-none"
+                    className={cx(
+                      'h-9 rounded-xl border px-3 text-sm font-black outline-none',
+                      hideScopeControls
+                        ? 'border-[var(--rc-forest-border)] bg-[rgba(5,17,10,.82)] text-[var(--rc-text)]'
+                        : 'border-amber-300/40 bg-[#1a1005] text-amber-50',
+                    )}
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-100/80">Moving min</span>
+                  <span className={cx('text-[10px] font-black uppercase tracking-[0.12em]', hideScopeControls ? 'text-[var(--rc-text-faint)]' : 'text-amber-100/80')}>Moving min</span>
                   <input
                     type="number"
                     min={1}
                     max={999}
                     value={movementDefinition.movingMin}
                     onChange={(event) => updateMovementDefinition('movingMin', event.target.value)}
-                    className="h-10 rounded-xl border border-amber-300/40 bg-[#1a1005] px-3 text-sm font-black text-amber-50 outline-none"
+                    className={cx(
+                      'h-9 rounded-xl border px-3 text-sm font-black outline-none',
+                      hideScopeControls
+                        ? 'border-[var(--rc-forest-border)] bg-[rgba(5,17,10,.82)] text-[var(--rc-text)]'
+                        : 'border-amber-300/40 bg-[#1a1005] text-amber-50',
+                    )}
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-100/80">Moving max</span>
+                  <span className={cx('text-[10px] font-black uppercase tracking-[0.12em]', hideScopeControls ? 'text-[var(--rc-text-faint)]' : 'text-amber-100/80')}>Moving max</span>
                   <input
                     type="number"
                     min={1}
                     max={999}
                     value={movementDefinition.movingMax}
                     onChange={(event) => updateMovementDefinition('movingMax', event.target.value)}
-                    className="h-10 rounded-xl border border-amber-300/40 bg-[#1a1005] px-3 text-sm font-black text-amber-50 outline-none"
+                    className={cx(
+                      'h-9 rounded-xl border px-3 text-sm font-black outline-none',
+                      hideScopeControls
+                        ? 'border-[var(--rc-forest-border)] bg-[rgba(5,17,10,.82)] text-[var(--rc-text)]'
+                        : 'border-amber-300/40 bg-[#1a1005] text-amber-50',
+                    )}
                   />
                 </label>
               </div>
-              <div className="flex items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2 text-[11px] font-semibold text-amber-50/80">
+              <div className={cx(
+                'flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold',
+                hideScopeControls ? 'bg-black/20 text-[var(--rc-text-muted)]' : 'bg-black/20 text-amber-50/80',
+              )}>
                 <span>{movementDefinitionLabel(movementDefinition)}</span>
                 <button
                   type="button"
                   onClick={() => setMovementDefinition(DEFAULT_MOVEMENT_DEFINITION)}
-                  className="rounded-lg border border-amber-300/30 px-2 py-1 font-black text-amber-100 hover:bg-amber-300/10"
+                  className={cx(
+                    'rounded-lg border px-2 py-1 font-black hover:bg-white/10',
+                    hideScopeControls
+                      ? 'border-[var(--rc-forest-border)] text-[var(--rc-text-muted)]'
+                      : 'border-amber-300/30 text-amber-100 hover:bg-amber-300/10',
+                  )}
                 >
                   Reset
                 </button>
               </div>
-              <div className="grid grid-cols-[auto_1fr] gap-2 rounded-xl bg-black/20 px-3 py-2 text-xs font-semibold text-amber-50/80">
-                <Database size={14} />
-                <span>{sourceDescription(source)}</span>
-                <CalendarDays size={14} />
-                <span>{period} · {itemTypeLabel(itemType)} · MC {movementWindow} · {movementDefinitionLabel(movementDefinition)} · {partial ? 'partial detail, full KPI' : 'full KPI scope'}</span>
-              </div>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-black text-[var(--rc-text-muted)]">
-              {sourceLabel(source)}
+          <div className="mt-3 grid gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.035] px-3 py-2.5 text-[11px] font-semibold leading-5 text-[var(--rc-text-muted)] sm:grid-cols-2" aria-label="Evidence provenance">
+            <span className="inline-flex items-start gap-2">
+              <Database size={13} className="mt-0.5 shrink-0 text-[var(--rc-forest-accent)]" />
+              <span>
+                <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Query</span>
+                {OVERVIEW_REPORT_ID}
+              </span>
             </span>
-            <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-black text-[var(--rc-text-muted)]">
-              {period}
+            <span className="inline-flex items-start gap-2">
+              <CalendarDays size={13} className="mt-0.5 shrink-0 text-[var(--rc-forest-accent)]" />
+              <span>
+                <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Scope</span>
+                {sourceLabel(source)} · {period} · {itemTypeLabel(itemType)} · MC {movementWindow}
+              </span>
             </span>
-            <span className={cx(
-              'rounded-full border px-3 py-1.5 text-xs font-black',
-              error ? 'border-rose-300/25 bg-rose-400/10 text-rose-100' : stale ? 'border-amber-300/25 bg-amber-400/10 text-amber-100' : 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100',
-            )}>
-              {error ? 'API error, context retained' : stale ? 'Refreshing, previous data retained' : generatedAt ? `Generated ${new Date(generatedAt).toLocaleTimeString('id-ID')}` : 'Ready'}
+            <span className="sm:col-span-2">
+              <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Provenance</span>
+              {sourceDescription(source)} · {movementDefinitionLabel(movementDefinition)} · {partial ? 'partial detail, full KPI' : 'full KPI scope'}
+              {' · '}
+              <span className={cx(
+                error ? 'text-rose-100' : stale ? 'text-amber-100' : 'text-emerald-100',
+              )}>
+                {error ? 'API error, context retained' : stale ? 'Refreshing, previous retained' : generatedAt ? `Generated ${new Date(generatedAt).toLocaleTimeString('id-ID')}` : 'Ready'}
+              </span>
+              {empty ? ' · Empty movement scope' : ''}
             </span>
-            {empty ? (
-              <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1.5 text-xs font-black text-amber-100">Empty movement scope</span>
-            ) : null}
           </div>
-
-          <p className="mt-4 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2 text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">
-            KPI valuasi/item/quantity/movement ada di Procurement command deck di atas, dikelompokkan per konteks. Panel ini fokus movement mix + exception queue.
-          </p>
         </div>
 
         <ExceptionQueue

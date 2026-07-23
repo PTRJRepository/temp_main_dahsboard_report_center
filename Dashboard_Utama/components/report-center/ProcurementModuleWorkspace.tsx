@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -61,6 +61,12 @@ function sourceHref(source: ReportSource) {
   return `/report-center/procurement?source=${source}`
 }
 
+function formatPeriodLabel(period: string) {
+  const [year, month] = period.split('-').map(Number)
+  if (!year || !month) return period || 'Bulan berjalan'
+  return new Intl.DateTimeFormat('id-ID', { month: 'short', year: 'numeric' }).format(new Date(year, month - 1, 1))
+}
+
 export default function ProcurementModuleWorkspace({ source, stockGroup }: ProcurementModuleWorkspaceProps) {
   const workspace = getProcurementWorkspace(source, stockGroup)
   const activeGroup = workspace.activeGroupDetail
@@ -71,6 +77,13 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
       ? 'workshop'
       : undefined
   const [moduleFilters, setModuleFilters] = useState<ProcurementKpiFilters>(() => createDefaultProcurementKpiFilters())
+  const activePeriodLabel = formatPeriodLabel(moduleFilters.period)
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('report-center-period-change', {
+      detail: { period: moduleFilters.period, label: activePeriodLabel },
+    }))
+  }, [activePeriodLabel, moduleFilters.period])
 
   const kpiLinks = {
     stock: createProcurementReportHref('asset-stock-valuasi-listing', source),
@@ -82,100 +95,77 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
       itemType: overviewItemType,
       movementWindow: moduleFilters.movementWindow || 'all',
     }),
+    usage: createProcurementReportHref('pengeluaran-barang', source),
+    return: createProcurementReportHref('return-barang', source),
   }
 
   return (
     <main className="min-h-full bg-transparent">
       <div className="mx-auto max-w-screen-2xl space-y-5 px-4 pb-8 pt-5 sm:px-6 lg:px-8">
-        <section className="relative overflow-hidden rounded-[34px] border border-[var(--rc-forest-border)] bg-[radial-gradient(circle_at_18%_18%,rgba(65,231,139,.22),transparent_30%),linear-gradient(135deg,rgba(3,18,11,.96),rgba(8,34,23,.92)_48%,rgba(21,14,7,.9))] shadow-[0_28px_100px_rgba(0,0,0,.32)]">
-          <div className="pointer-events-none absolute -right-24 top-8 h-72 w-72 rounded-full border border-amber-300/20 bg-amber-300/10 blur-3xl" aria-hidden="true" />
-          <div className="pointer-events-none absolute bottom-0 left-0 h-28 w-full bg-[linear-gradient(90deg,rgba(65,231,139,.08),transparent,rgba(245,158,11,.08))]" aria-hidden="true" />
-
-          <div className="relative z-10 grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_430px] lg:p-7">
-            <div>
-              <nav className="flex flex-wrap items-center gap-2 text-xs font-bold text-[var(--rc-text-faint)]">
+        <section className="rounded-[24px] border border-[var(--rc-forest-border)] bg-[linear-gradient(135deg,rgba(3,18,11,.94),rgba(8,34,23,.9))] px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <nav className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-[var(--rc-text-faint)]">
                 <Link href={`/report-center?source=${source}`} className="hover:text-[var(--rc-forest-accent)]">Dashboard</Link>
                 <span>/</span>
                 <span className="text-[var(--rc-forest-accent)]">Procurement</span>
               </nav>
-
-              <div className="mt-6 inline-flex flex-wrap items-center gap-2 rounded-full border border-[var(--rc-forest-border)] bg-black/20 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-[var(--rc-forest-accent)]">
-                <Package size={14} />
-                Procurement control tower
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-black tracking-[-0.04em] text-[var(--rc-text)] sm:text-2xl">
+                  Procurement · {activeGroup.id === 'process' ? 'Ordering' : activeGroup.id === 'gudang' ? 'Gudang' : activeGroup.id === 'workshop' ? 'Workshop' : 'Inventory'}
+                </h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--rc-forest-border)] bg-black/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-forest-accent)]">
+                  <ShieldCheck size={12} />
+                  {sourceInfo.label}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--rc-text-faint)]" title={sourceInfo.description}>
+                  {sourceInfo.description}
+                </span>
               </div>
-
-              <h1 className="mt-5 max-w-5xl text-[2.35rem] font-black leading-[1.05] tracking-[-0.025em] text-[var(--rc-text)] sm:text-5xl sm:leading-[0.98] sm:tracking-[-0.05em] lg:text-7xl lg:leading-[0.94] lg:tracking-[-0.06em]">
-                Procurement global: Inventory dan proses dalam satu layar.
-              </h1>
-              <p className="mt-5 max-w-3xl text-sm leading-7 text-[var(--rc-text-muted)] sm:text-base">
-                Procurement adalah modul global. Di dalamnya, Inventory adalah master stock yang terdiri dari Gudang
-                dan Workshop/Mesin. Proses procurement tetap terpisah untuk PR, PO, receiving, issue, dan supplier.
+              <p className="mt-1 text-xs font-semibold text-[var(--rc-text-muted)]">
+                Period {activePeriodLabel} · MC {moduleFilters.movementWindow}
+                {moduleFilters.itemType ? ` · Scope ${moduleFilters.itemType}` : ' · Scope Inventory 1+4'}
               </p>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href={`/report-center?source=${source}`}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
-                >
-                  <ArrowLeft size={16} />
-                  Dashboard
-                </Link>
-                <Link
-                  href={`/report-center/inventory?source=${source}`}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[var(--rc-forest-primary)] px-4 py-3 text-sm font-black text-[#03130c] hover:bg-[var(--rc-forest-accent)]"
-                >
-                  Buka inventory live
-                  <ArrowRight size={16} />
-                </Link>
-              </div>
             </div>
 
-            <aside className="rounded-[28px] border border-[var(--rc-forest-border)] bg-[rgba(1,12,7,.58)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--rc-text-faint)]">Active source</p>
-                  <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-[var(--rc-text)]">{sourceInfo.label}</h2>
-                  <p className="mt-1 text-xs font-semibold text-[var(--rc-text-faint)]">{sourceInfo.description}</p>
-                </div>
-                <div className="grid h-12 w-12 place-items-center rounded-2xl border border-emerald-300/25 bg-emerald-400/10 text-emerald-200">
-                  <ShieldCheck size={22} />
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-2 gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-xl border border-white/10 bg-black/20 p-1">
                 {(['estate', 'pabrik'] as const).map((item) => (
                   <Link
                     key={item}
                     href={sourceHref(item)}
-                    className={`rounded-2xl border px-3 py-3 text-sm font-black transition ${
+                    className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${
                       item === source
-                        ? 'border-[var(--rc-forest-border-strong)] bg-[var(--rc-forest-primary)] text-[#03130c]'
-                        : 'border-white/10 bg-white/[0.04] text-[var(--rc-text-muted)] hover:bg-white/[0.08] hover:text-[var(--rc-text)]'
+                        ? 'bg-[var(--rc-forest-primary)] text-[#03130c]'
+                        : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]'
                     }`}
                   >
                     {sourceCopy[item].label}
                   </Link>
                 ))}
               </div>
-
-              <div className="mt-5 rounded-2xl border border-[var(--rc-border)] bg-white/[0.04] p-4">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">Workspace scope</p>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <strong className="block text-xl text-[var(--rc-forest-accent)]">{workspace.totalLiveReports}</strong>
-                    <span className="text-[var(--rc-text-faint)]">live report</span>
-                  </div>
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <strong className="block text-xl text-[var(--rc-forest-accent)]">{workspace.totalStockReports}</strong>
-                    <span className="text-[var(--rc-text-faint)]">stock view</span>
-                  </div>
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <strong className="block text-xl text-[var(--rc-forest-accent)]">{workspace.totalProcessReports}</strong>
-                    <span className="text-[var(--rc-text-faint)]">process</span>
-                  </div>
-                </div>
+              <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold text-[var(--rc-text-faint)] sm:flex" title="Workspace report counts">
+                <span><strong className="text-[var(--rc-forest-accent)]">{workspace.totalLiveReports}</strong> live</span>
+                <span className="text-white/20">·</span>
+                <span><strong className="text-[var(--rc-forest-accent)]">{workspace.totalStockReports}</strong> stock</span>
+                <span className="text-white/20">·</span>
+                <span><strong className="text-[var(--rc-forest-accent)]">{workspace.totalProcessReports}</strong> process</span>
               </div>
-            </aside>
+              <Link
+                href={`/report-center?source=${source}`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-black text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
+              >
+                <ArrowLeft size={14} />
+                Dashboard
+              </Link>
+              <Link
+                href={`/report-center/inventory?source=${source}`}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--rc-forest-primary)] px-3 py-2 text-xs font-black text-[#03130c] hover:bg-[var(--rc-forest-accent)]"
+              >
+                Inventory live
+                <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -242,7 +232,7 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
                   <Link
                     key={`${activeGroup.id}-${report.id}-${report.metricLabel}`}
                     href={report.href}
-                    className="group flex min-h-[255px] flex-col rounded-3xl border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.025))] p-4 transition hover:-translate-y-1 hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.08]"
+                    className="group flex min-h-[210px] flex-col rounded-3xl border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.025))] p-4 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.08]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--rc-forest-border)] bg-black/20 text-[var(--rc-forest-accent)]">

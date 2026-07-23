@@ -2,16 +2,19 @@
 
 import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, Truck, Wrench } from 'lucide-react'
+import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, TrendingDown, TrendingUp, Truck, Wrench } from 'lucide-react'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
+
+type DeckSection = 'valuasi' | 'proses' | 'movement'
 
 type DbRow = Record<string, unknown>
 
-type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement'
+type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'usage' | 'return'
 
 type Snapshot = {
   ok: boolean
   summary: DbRow
+  chart?: DbRow[]
   updatedAt?: string
 }
 
@@ -28,7 +31,6 @@ type ProcurementAnalysisGroup =
   | 'ProductBrandCode'
   | 'ProductModelCode'
   | 'ProductMaterialCode'
-  | 'MovementCategory'
 
 export type ProcurementKpiFilters = {
   period: string
@@ -41,7 +43,7 @@ export type ProcurementKpiFilters = {
 
 type ProcurementKpiStripProps = {
   source: ReportSource
-  links: Record<'stock' | 'receive' | 'process' | 'workshop' | 'movement', string>
+  links: Record<'stock' | 'receive' | 'process' | 'workshop' | 'movement' | 'usage' | 'return', string>
   /** Parent-owned filters → one scope for all KPI + sibling overview. */
   filters?: ProcurementKpiFilters
   onFiltersChange?: (next: ProcurementKpiFilters) => void
@@ -56,6 +58,8 @@ type ProcurementKpiCard = {
   id: string
   label: string
   value: string
+  /** Full-precision value for title/aria when value is compact. */
+  valueExact?: string
   description: string
   formula: string
   source: string
@@ -65,6 +69,12 @@ type ProcurementKpiCard = {
   className: string
 }
 
+const DECK_SECTIONS: Array<{ id: DeckSection; label: string; tone: string }> = [
+  { id: 'valuasi', label: 'Valuasi', tone: 'text-emerald-100/80 border-emerald-300/30 data-[active=true]:bg-emerald-400/15 data-[active=true]:text-emerald-50' },
+  { id: 'proses', label: 'Proses', tone: 'text-sky-100/80 border-sky-300/30 data-[active=true]:bg-sky-400/15 data-[active=true]:text-sky-50' },
+  { id: 'movement', label: 'Movement', tone: 'text-rose-100/80 border-rose-300/30 data-[active=true]:bg-rose-400/15 data-[active=true]:text-rose-50' },
+]
+
 const kpiRequests: Array<{ key: KpiKey; report: string }> = [
   { key: 'stock', report: 'asset-stock-valuasi-listing' },
   { key: 'receive', report: 'goods-receiving-receipt-activity' },
@@ -72,6 +82,8 @@ const kpiRequests: Array<{ key: KpiKey; report: string }> = [
   { key: 'pr', report: 'purchase-request-inventory' },
   { key: 'workshop', report: 'asset-stock-valuasi-listing' },
   { key: 'movement', report: 'all-stock-movement-analysis' },
+  { key: 'usage', report: 'pengeluaran-barang' },
+  { key: 'return', report: 'return-barang' },
 ]
 
 const analysisGroupOptions: Array<{ value: ProcurementAnalysisGroup; label: string; placeholder: string }> = [
@@ -81,7 +93,6 @@ const analysisGroupOptions: Array<{ value: ProcurementAnalysisGroup; label: stri
   { value: 'ProductBrandCode', label: 'Product Brand', placeholder: 'Kode brand' },
   { value: 'ProductModelCode', label: 'Product Model', placeholder: 'Kode model' },
   { value: 'ProductMaterialCode', label: 'Product Material', placeholder: 'Kode material' },
-  { value: 'MovementCategory', label: 'Movement Actual', placeholder: 'Fast Moving / Dead Stock' },
 ]
 
 const movementWindowOptions = [
@@ -128,6 +139,16 @@ function formatCurrency(value: number) {
   }).format(value)
 }
 
+function formatCurrencyCompact(value: number) {
+  if (!Number.isFinite(value)) return 'Rp0'
+  const abs = Math.abs(value)
+  const sign = value < 0 ? '-' : ''
+  if (abs >= 1_000_000_000_000) return `${sign}Rp${(abs / 1_000_000_000_000).toFixed(2)} T`
+  if (abs >= 1_000_000_000) return `${sign}Rp${(abs / 1_000_000_000).toFixed(2)} M`
+  if (abs >= 1_000_000) return `${sign}Rp${(abs / 1_000_000).toFixed(1)} jt`
+  return formatCurrency(value)
+}
+
 function formatPercent(value: number) {
   if (!Number.isFinite(value)) return '0%'
   return `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(value)}%`
@@ -140,6 +161,12 @@ function percentOf(value: number, total: number) {
 
 function currentPeriod(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function formatPeriodLabel(period: string) {
+  const [year, month] = period.split('-').map(Number)
+  if (!year || !month) return period || 'Bulan berjalan'
+  return new Intl.DateTimeFormat('id-ID', { month: 'short', year: 'numeric' }).format(new Date(year, month - 1, 1))
 }
 
 function periodOptions(now = new Date()) {
@@ -161,7 +188,7 @@ function appendParam(params: Record<string, string>, key: string, value: string 
   if (value) params[key] = value
 }
 
-function analysisScopeParams(filters: ProcurementKpiFilters, options: { includeMovementCategory?: boolean } = {}) {
+function analysisScopeParams(filters: ProcurementKpiFilters) {
   const value = cleanFilterValue(filters.scopeCode)
   const params: Record<string, string> = {}
   if (!value) return params
@@ -180,8 +207,6 @@ function analysisScopeParams(filters: ProcurementKpiFilters, options: { includeM
     params.productModel = value
   } else if (filters.groupBy === 'ProductMaterialCode') {
     params.productMaterial = value
-  } else if (filters.groupBy === 'MovementCategory' && options.includeMovementCategory) {
-    params.movementCategory = value
   }
 
   return params
@@ -190,7 +215,7 @@ function analysisScopeParams(filters: ProcurementKpiFilters, options: { includeM
 function procurementFilterParams(filters: ProcurementKpiFilters, options: { includeGroupBy?: boolean; includeMovement?: boolean } = {}) {
   const params: Record<string, string> = {
     period: filters.period,
-    ...analysisScopeParams(filters, { includeMovementCategory: options.includeMovement }),
+    ...analysisScopeParams(filters),
   }
   appendParam(params, 'location', cleanFilterValue(filters.location))
   appendParam(params, 'itemType', filters.itemType)
@@ -205,18 +230,52 @@ function procurementFilterParams(filters: ProcurementKpiFilters, options: { incl
 function hrefWithFilters(
   href: string,
   filters: ProcurementKpiFilters,
-  options: { forceMovement?: boolean; includeMovementGroup?: boolean } = {},
+  options: { forceMovement?: boolean; includeGroupBy?: boolean } = {},
 ) {
   const [path, rawQuery = ''] = href.split('?')
   const params = new URLSearchParams(rawQuery)
   const filterParams = procurementFilterParams(filters, {
-    includeGroupBy: true,
-    includeMovement: options.forceMovement || (options.includeMovementGroup !== false && filters.groupBy === 'MovementCategory'),
+    includeGroupBy: options.includeGroupBy !== false,
+    includeMovement: options.forceMovement,
   })
   Object.entries(filterParams).forEach(([key, value]) => {
     if (value) params.set(key, value)
   })
   return `${path}?${params.toString()}`
+}
+
+type CardTitleTone = {
+  pillClass: string
+  dotClass: string
+}
+
+function cardTitleTone(cardId: string): CardTitleTone {
+  switch (cardId) {
+    case 'stock':
+      return { pillClass: 'border-emerald-200/35 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,.12)]', dotClass: 'bg-emerald-200' }
+    case 'gudang-value':
+      return { pillClass: 'border-teal-200/35 bg-teal-400/15 text-teal-50 shadow-[0_0_0_1px_rgba(45,212,191,.12)]', dotClass: 'bg-teal-200' }
+    case 'workshop':
+      return { pillClass: 'border-orange-200/35 bg-orange-400/15 text-orange-50 shadow-[0_0_0_1px_rgba(251,146,60,.12)]', dotClass: 'bg-orange-200' }
+    case 'receive-value':
+      return { pillClass: 'border-sky-200/35 bg-sky-400/15 text-sky-50 shadow-[0_0_0_1px_rgba(56,189,248,.12)]', dotClass: 'bg-sky-200' }
+    case 'pr-outstanding':
+      return { pillClass: 'border-amber-200/35 bg-amber-400/15 text-amber-50 shadow-[0_0_0_1px_rgba(251,191,36,.12)]', dotClass: 'bg-amber-200' }
+    case 'po-outstanding':
+      return { pillClass: 'border-yellow-200/35 bg-yellow-400/15 text-yellow-50 shadow-[0_0_0_1px_rgba(250,204,21,.12)]', dotClass: 'bg-yellow-200' }
+    case 'movement-total':
+      return { pillClass: 'border-rose-200/35 bg-rose-400/15 text-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,.12)]', dotClass: 'bg-rose-200' }
+    case 'movement-qty':
+      return { pillClass: 'border-lime-200/35 bg-lime-400/15 text-lime-50 shadow-[0_0_0_1px_rgba(163,230,53,.12)]', dotClass: 'bg-lime-200' }
+    case 'movement-amount':
+      return { pillClass: 'border-cyan-200/35 bg-cyan-400/15 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,.12)]', dotClass: 'bg-cyan-200' }
+    case 'net-flow':
+      return { pillClass: 'border-violet-200/35 bg-violet-400/15 text-violet-50 shadow-[0_0_0_1px_rgba(167,139,250,.12)]', dotClass: 'bg-violet-200' }
+    case 'total-usage':
+      return { pillClass: 'border-fuchsia-200/35 bg-fuchsia-400/15 text-fuchsia-50 shadow-[0_0_0_1px_rgba(232,121,249,.12)]', dotClass: 'bg-fuchsia-200' }
+    default:
+      return { pillClass: 'border-white/15 bg-white/10 text-white shadow-[0_0_0_1px_rgba(255,255,255,.08)]', dotClass: 'bg-white/80' }
+  }
 }
 
 async function fetchSummary(
@@ -240,7 +299,7 @@ async function fetchSummary(
   })
   const data = await response.json().catch(() => ({})) as {
     success?: boolean
-    data?: { summary?: DbRow }
+    data?: { summary?: DbRow; chart?: DbRow[] }
   }
   if (!response.ok || data.success !== true || !data.data?.summary) {
     return { ok: false, summary: {} }
@@ -249,6 +308,7 @@ async function fetchSummary(
   return {
     ok: true,
     summary,
+    chart: data.data.chart ?? [],
     updatedAt: firstText(summary, ['TerakhirUpdate', 'LastMovementDate', 'LastUsageDate', 'LastRunningUpdate']),
   }
 }
@@ -287,28 +347,50 @@ export default function ProcurementKpiStrip({
     loading: true,
     snapshots: {},
   }))
+  const [scopeDraft, setScopeDraft] = useState(filters.scopeCode)
+  const [openSection, setOpenSection] = useState<DeckSection>('valuasi')
   const selectedGroup = analysisGroupOptions.find((option) => option.value === filters.groupBy) ?? analysisGroupOptions[0]
   const periods = periodOptions()
+  const activePeriodLabel = formatPeriodLabel(filters.period)
   const filteredLinks = {
-    stock: hrefWithFilters(links.stock, filters, { includeMovementGroup: false }),
-    receive: hrefWithFilters(links.receive, filters, { includeMovementGroup: false }),
-    process: hrefWithFilters(links.process, filters, { includeMovementGroup: false }),
+    stock: hrefWithFilters(links.stock, filters, { includeGroupBy: false }),
+    receive: hrefWithFilters(links.receive, filters, { includeGroupBy: false }),
+    process: hrefWithFilters(links.process, filters, { includeGroupBy: false }),
     workshop: hrefWithFilters(links.workshop, {
       ...filters,
       itemType: filters.itemType === 'gudang' ? 'gudang' : 'workshop',
-    }, { includeMovementGroup: false }),
-    movement: hrefWithFilters(links.movement, filters, { forceMovement: true }),
+    }, { includeGroupBy: false }),
+    movement: hrefWithFilters(links.movement, filters, { forceMovement: true, includeGroupBy: false }),
+    usage: hrefWithFilters(links.usage, filters, { includeGroupBy: false }),
+    return: hrefWithFilters(links.return, filters, { includeGroupBy: false }),
   }
   const updateFilter = <K extends keyof ProcurementKpiFilters>(key: K, value: ProcurementKpiFilters[K]) => {
     setFilters((current) => {
       const next = { ...current, [key]: value }
-      if (key === 'groupBy') next.scopeCode = ''
+      if (key === 'groupBy') {
+        next.scopeCode = ''
+        setScopeDraft('')
+      }
       return next
     })
   }
   const resetFilters = () => {
-    setFilters(createDefaultProcurementKpiFilters())
+    const defaults = createDefaultProcurementKpiFilters()
+    setScopeDraft(defaults.scopeCode)
+    setFilters(defaults)
   }
+
+  useEffect(() => {
+    setScopeDraft(filters.scopeCode)
+  }, [filters.scopeCode])
+
+  useEffect(() => {
+    if (scopeDraft === filters.scopeCode) return
+    const timer = window.setTimeout(() => {
+      updateFilter('scopeCode', scopeDraft)
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [scopeDraft, filters.scopeCode])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -332,14 +414,9 @@ export default function ProcurementKpiStrip({
         } else if (request.key === 'movement') {
           extra = {
             ...extra,
-            ...analysisScopeParams(filters, { includeMovementCategory: true }),
+            ...analysisScopeParams(filters),
             groupBy: 'MovementCategory',
             chartDimension: 'MovementCategory',
-            movementWindow: filters.movementWindow || 'all',
-          }
-        } else if (filters.groupBy === 'MovementCategory') {
-          extra = {
-            ...extra,
             movementWindow: filters.movementWindow || 'all',
           }
         }
@@ -368,6 +445,9 @@ export default function ProcurementKpiStrip({
   const pr = snapshots.pr?.summary
   const workshop = snapshots.workshop?.summary
   const movement = snapshots.movement?.summary
+  const usage = snapshots.usage?.summary
+  const stockReturn = snapshots.return?.summary
+  const topUsageItems = (snapshots.usage?.chart ?? []).slice(0, 5)
 
   const poCount = firstNumber(po, ['TotalPO'])
   const prCount = firstNumber(pr, ['TotalPR'])
@@ -385,11 +465,9 @@ export default function ProcurementKpiStrip({
   const totalOnHand = firstNumber(stock, ['total_quantity_on_hand'])
   const totalOnHold = firstNumber(stock, ['total_quantity_on_hold'])
   const receiveDocs = firstNumber(receive, ['TotalGoodsReceive', 'TotalBaris'])
-  const receiveLines = firstNumber(receive, ['TotalBaris'])
   const receiveQty = firstNumber(receive, ['TotalQuantity'])
   const receiveAmount = firstNumber(receive, ['TotalAmount'])
   const receiveSupplier = firstNumber(receive, ['TotalSupplier'])
-  const receiveItem = firstNumber(receive, ['TotalItem'])
   const poAmount = firstNumber(po, ['TotalPOAmount'])
   const poQtyOrder = firstNumber(po, ['TotalQtyOrder'])
   const poQtyReceive = firstNumber(po, ['TotalQtyReceive'])
@@ -401,27 +479,25 @@ export default function ProcurementKpiStrip({
   const movementEvent = firstNumber(movement, ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'])
   const movementQty = firstNumber(movement, ['TotalStockIssueMovementQty', 'TotalStockIssueQty'])
   const movementAmount = firstNumber(movement, ['TotalStockIssueMovementAmount', 'TotalStockIssueAmount'])
+  const usageDocuments = firstNumber(usage, ['TotalDokumen', 'TotalIssueDocuments'])
+  const usageEvents = firstNumber(usage, ['TotalBaris', 'TotalIssueEvents'])
+  const usageItems = firstNumber(usage, ['TotalItem', 'TotalItemsUsed'])
+  const usageQty = firstNumber(usage, ['TotalQty', 'TotalIssueQty']) || movementQty
+  const usageAmount = firstNumber(usage, ['TotalAmount', 'TotalIssueAmount']) || movementAmount
+  const returnAmount = firstNumber(stockReturn, ['TotalAmount', 'TotalReturnAmount'])
+  const netFlowAmount = receiveAmount - usageAmount + returnAmount
   const regularMovement = firstNumber(movement, ['RegularStockIssueMovementCount'])
   const workshopMovement = firstNumber(movement, ['WorkshopStockIssueMovementCount'])
-  const fastMovingItem = firstNumber(movement, ['FastMovingItem'])
-  const movingItem = firstNumber(movement, ['MovingItem'])
-  const slowMovingItem = firstNumber(movement, ['SlowMovingItem'])
-  const deadMovementItem = firstNumber(movement, ['DeadMovementItem'])
-  const staleItem = firstNumber(movement, ['StaleItem', 'NoMovementItem'])
-  const riskMovementItem = slowMovingItem + deadMovementItem + staleItem
-  const dataQualityAlert =
-    firstNumber(stock, ['zero_quantity_item', 'ItemStokNol']) +
-    firstNumber(stock, ['zero_unit_cost_item']) +
-    firstNumber(receive, ['MissingPOLineCostRows']) +
-    firstNumber(pr, ['OutstandingAmountNol'])
+  const usageIntensity = inventoryValue > 0 ? usageAmount / inventoryValue : 0
 
   const valuationCards: ProcurementKpiCard[] = [
     {
       id: 'stock',
       label: 'Total Valuasi Inventory',
-      value: formatCurrency(inventoryValue),
-      description: 'Nilai stock full-scope Procurement. Bukan Gudang saja.',
-      formula: 'SUM((QtyOnHand + QtyOnHold) x AverageCost); ItemType 1 + 4.',
+      value: formatCurrencyCompact(inventoryValue),
+      valueExact: formatCurrency(inventoryValue),
+      description: 'Total inventory stock value in IDR for ItemType 1 + 4.',
+      formula: 'Stock value = SUM((Qty On Hand + Qty On Hold) × Average Cost) for Gudang + Workshop/Mesin.',
       source: 'asset-stock-valuasi-listing',
       breakdown: [
         { label: 'Gudang', value: `${formatCurrency(gudangValue)} · ${formatPercent(percentOf(gudangValue, inventoryValue))}` },
@@ -436,8 +512,8 @@ export default function ProcurementKpiStrip({
       id: 'gudang-value',
       label: 'Valuasi Gudang',
       value: formatCurrency(gudangValue),
-      description: 'Porsi valuasi ItemType 1.',
-      formula: 'SUM(total_amount) WHERE ItemType = 1.',
+      description: 'Gudang stock value in IDR for ItemType 1.',
+      formula: 'Stock value = SUM(total_amount) where ItemType = 1. Qty chips show on hand and on hold.',
       source: 'asset-stock-valuasi-listing · Gudang',
       breakdown: [
         { label: 'Item Gudang', value: formatNumber(gudangItem) },
@@ -452,8 +528,8 @@ export default function ProcurementKpiStrip({
       id: 'workshop',
       label: 'Valuasi Workshop',
       value: formatCurrency(workshopValue),
-      description: 'Porsi valuasi ItemType 4.',
-      formula: 'SUM(total_amount) WHERE ItemType = 4.',
+      description: 'Workshop/Mesin stock value in IDR for ItemType 4.',
+      formula: 'Stock value = SUM(total_amount) where ItemType = 4. Quantity chip shows physical stock scope.',
       source: 'asset-stock-valuasi-listing · Workshop',
       breakdown: [
         { label: 'Item Workshop', value: formatNumber(workshopItem || firstNumber(workshop, ['total_item', 'WorkshopItemCount', 'TotalItem'])) },
@@ -471,8 +547,8 @@ export default function ProcurementKpiStrip({
       id: 'receive-value',
       label: 'Nilai Goods Receive',
       value: formatCurrency(receiveAmount),
-      description: 'Barang masuk supplier ke inventory.',
-      formula: 'SUM(ReceiveQty x PO Cost).',
+      description: 'Goods Receive amount in IDR for selected period.',
+      formula: 'Goods Receive amount = SUM(Receive Qty × PO Cost). Qty chip shows received quantity.',
       source: 'goods-receiving-receipt-activity',
       breakdown: [
         { label: 'Dokumen receive', value: formatNumber(receiveDocs) },
@@ -487,8 +563,8 @@ export default function ProcurementKpiStrip({
       id: 'pr-outstanding',
       label: 'PR Outstanding',
       value: formatQuantity(prQtyOutstanding),
-      description: 'Kebutuhan PR belum terpenuhi.',
-      formula: 'SUM(IN_PRLN.QtyOutstanding).',
+      description: 'Outstanding PR quantity not yet fulfilled.',
+      formula: 'PR Outstanding = SUM(Qty Outstanding) from purchase request lines.',
       source: 'purchase-request-inventory',
       breakdown: [
         { label: 'Total PR', value: formatNumber(prCount) },
@@ -503,8 +579,8 @@ export default function ProcurementKpiStrip({
       id: 'po-outstanding',
       label: 'PO Outstanding',
       value: formatQuantity(poQtyOutstanding),
-      description: 'PO belum diterima penuh.',
-      formula: 'SUM(QtyOrder - QtyReceive).',
+      description: 'Outstanding PO quantity not yet received.',
+      formula: 'PO Outstanding = SUM(Qty Order − Qty Receive). Amount chip shows PO value in IDR.',
       source: 'purchase-order-history',
       breakdown: [
         { label: 'Total PO', value: formatNumber(poCount) },
@@ -519,41 +595,96 @@ export default function ProcurementKpiStrip({
 
   const movementCards: ProcurementKpiCard[] = [
     {
-      id: 'movement-risk',
-      label: 'Slow / Dead / Stale',
-      value: formatNumber(riskMovementItem),
-      description: 'Item perlu review movement.',
-      formula: 'Slow + Dead + Stale dari MovementCategory periodik.',
-      source: `all-stock-movement-analysis · MC ${filters.movementWindow}`,
+      id: 'movement-total',
+      label: 'Total Issue Movement',
+      value: formatNumber(movementEvent),
+      description: 'Count of issue/usage movement events in selected movement window.',
+      formula: 'Event count = regular StockIssue lines + Workshop/Mesin issue lines in movement window.',
+      source: 'all-stock-movement-analysis · total event',
       breakdown: [
-        { label: 'Fast Moving', value: formatNumber(fastMovingItem) },
-        { label: 'Moving', value: formatNumber(movingItem) },
-        { label: 'Event movement', value: formatNumber(movementEvent) },
+        { label: 'Regular', value: formatNumber(regularMovement) },
+        { label: 'Workshop', value: formatNumber(workshopMovement) },
+        { label: 'Docs', value: formatNumber(usageDocuments) },
       ],
       href: filteredLinks.movement,
-      icon: AlertTriangle,
+      icon: Gauge,
       className: 'border-rose-300/25 bg-rose-400/10 text-rose-100',
     },
     {
-      id: 'data-quality',
-      label: 'Quality Alert',
-      value: formatNumber(dataQualityAlert),
-      description: 'Sinyal data yang bikin KPI salah tafsir.',
-      formula: 'Zero qty + zero cost + missing PO cost + PR amount 0.',
-      source: 'valuation + receive + PR quality',
+      id: 'movement-qty',
+      label: 'Issue Qty',
+      value: formatQuantity(movementQty),
+      description: 'Total quantity issued/used in selected period/window.',
+      formula: 'Issue Qty = SUM issued physical quantity from movement and usage reports.',
+      source: 'all-stock-movement-analysis · qty',
       breakdown: [
-        { label: 'Zero qty item', value: formatNumber(firstNumber(stock, ['zero_quantity_item', 'ItemStokNol'])) },
-        { label: 'Zero unit cost', value: formatNumber(firstNumber(stock, ['zero_unit_cost_item'])) },
-        { label: 'Issue amount', value: formatCurrency(movementAmount) },
+        { label: 'Usage qty', value: formatQuantity(usageQty) },
+        { label: 'Event line', value: formatNumber(usageEvents) },
+        { label: 'Issue docs', value: formatNumber(usageDocuments) },
       ],
-      href: filteredLinks.stock,
-      icon: Gauge,
-      className: 'border-red-300/25 bg-red-400/10 text-red-100',
+      href: filteredLinks.movement,
+      icon: Package,
+      className: 'border-lime-300/25 bg-lime-400/10 text-lime-100',
+    },
+    {
+      id: 'movement-amount',
+      label: 'Issue Amount',
+      value: formatCurrency(movementAmount),
+      description: 'Total issue/usage value in IDR.',
+      formula: 'Issue Amount = SUM issued amount from movement and usage reports.',
+      source: 'all-stock-movement-analysis · amount',
+      breakdown: [
+        { label: 'Usage amount', value: formatCurrency(usageAmount) },
+        { label: 'Qty issue', value: formatQuantity(movementQty) },
+        { label: 'Issue docs', value: formatNumber(usageDocuments) },
+      ],
+      href: filteredLinks.movement,
+      icon: CircleDollarSign,
+      className: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
+    },
+  ]
+
+  const heroCards: ProcurementKpiCard[] = [
+    valuationCards[0],
+    {
+      id: 'net-flow',
+      label: 'Arus Bersih Periode',
+      value: formatCurrencyCompact(netFlowAmount),
+      valueExact: formatCurrency(netFlowAmount),
+      description: netFlowAmount >= 0 ? 'Net flow amount in IDR: receive + return is greater than issue.' : 'Net flow amount in IDR: issue is greater than receive + return.',
+      formula: 'Net Flow = Goods Receive Amount − Issue Amount + Return Amount.',
+      source: 'receive − pengeluaran + return',
+      breakdown: [
+        { label: 'Receive', value: formatCurrency(receiveAmount) },
+        { label: 'Issue', value: formatCurrency(usageAmount) },
+        { label: 'Return', value: formatCurrency(returnAmount) },
+      ],
+      href: filteredLinks.receive,
+      icon: netFlowAmount >= 0 ? TrendingUp : TrendingDown,
+      className: netFlowAmount >= 0 ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100' : 'border-amber-300/25 bg-amber-400/10 text-amber-100',
+    },
+    {
+      id: 'total-usage',
+      label: 'Total Usage (Issue)',
+      value: formatCurrencyCompact(usageAmount),
+      valueExact: formatCurrency(usageAmount),
+      description: 'Total usage/issue amount in IDR for selected period.',
+      formula: 'Total Usage = SUM issue Amount. Event = line; document count stays in chip.',
+      source: 'pengeluaran-barang',
+      breakdown: [
+        { label: 'Qty issue', value: formatQuantity(usageQty) },
+        { label: 'Event line', value: formatNumber(usageEvents) },
+        { label: 'Item dipakai', value: formatNumber(usageItems) },
+      ],
+      href: filteredLinks.usage,
+      icon: Package,
+      className: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
     },
   ]
 
   const partial = Object.values(snapshots).some((snapshot) => snapshot && !snapshot.ok)
-  const headlineCard = valuationCards[0]
+  const headlineCard = heroCards[0]
+  const heroSideCards = heroCards.slice(1)
   const valuationSideCards = valuationCards.slice(1)
   const gudangShare = Math.min(Math.max(percentOf(gudangValue, inventoryValue), 0), 100)
   const workshopShare = Math.min(Math.max(percentOf(workshopValue, inventoryValue), 0), 100)
@@ -562,17 +693,27 @@ export default function ProcurementKpiStrip({
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {cards.map((card) => {
         const Icon = card.icon
+        const tone = cardTitleTone(card.id)
+        const exact = card.valueExact ?? card.value
         return (
           <Link
             key={card.id}
             href={card.href}
+            title={exact}
+            aria-label={`${card.label}: ${exact}`}
             className="group relative min-h-[150px] overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.025))] p-3 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.085]"
           >
             <span className="pointer-events-none absolute -right-10 -top-12 h-24 w-24 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
             <span className="relative z-10 flex items-start justify-between gap-2">
               <span className="min-w-0">
-                <span className="block truncate text-[10px] font-black uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{card.label}</span>
-                <strong className="mt-1 block truncate text-[1.45rem] font-black leading-none tracking-[-0.06em] text-[var(--rc-text)]">
+                <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${tone.pillClass}`}>
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClass}`} />
+                  <span className="truncate">{card.label}</span>
+                </span>
+                <strong
+                  className="mt-2 block truncate text-[1.45rem] font-black leading-none tracking-[-0.06em] text-[var(--rc-text)]"
+                  title={exact}
+                >
                   {loading ? '...' : card.value}
                 </strong>
               </span>
@@ -601,6 +742,11 @@ export default function ProcurementKpiStrip({
     </div>
   )
 
+  const sectionCards =
+    openSection === 'proses' ? processCards
+      : openSection === 'movement' ? movementCards
+        : valuationSideCards
+
   return (
     <section className="relative overflow-hidden rounded-[32px] border border-[var(--rc-forest-border)] bg-[radial-gradient(circle_at_8%_0%,rgba(155,226,61,.18),transparent_28%),radial-gradient(circle_at_90%_8%,rgba(41,199,200,.16),transparent_25%),linear-gradient(135deg,rgba(2,10,7,.94),rgba(7,25,17,.9)_46%,rgba(10,14,7,.92))] shadow-[0_26px_90px_rgba(0,0,0,.34)]">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,rgba(255,255,255,.08),transparent_18%,transparent_72%,rgba(155,226,61,.08))]" aria-hidden="true" />
@@ -609,7 +755,7 @@ export default function ProcurementKpiStrip({
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[var(--rc-forest-accent)]">Procurement command deck</p>
           <h2 className="mt-1 text-xl font-black tracking-[-0.05em] text-[var(--rc-text)] sm:text-2xl">KPI dikelompokkan per konteks.</h2>
           <p className="mt-1 max-w-4xl text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">
-            Valuasi stock · Proses PR/PO/receive · Movement risk/quality. Satu filter pusat, tidak ada KPI inventory terpisah di bawah.
+            Hero always on: Total Valuasi · Arus Bersih · Total Usage. Tab secondary: Valuasi · Proses · Movement.
           </p>
         </div>
         <span className="w-fit rounded-full border border-[var(--rc-forest-border-strong)] bg-[rgba(155,226,61,.08)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--rc-forest-accent)]">
@@ -620,7 +766,7 @@ export default function ProcurementKpiStrip({
       <div className="relative z-10 border-b border-[var(--rc-border)] bg-[rgba(2,10,7,.42)] px-3 py-3">
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[150px_150px_190px_minmax(180px,1fr)_150px_140px_auto]">
           <label className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Periode</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Periode usage/receive</span>
             <select
               value={filters.period}
               onChange={(event) => updateFilter('period', event.target.value)}
@@ -633,7 +779,7 @@ export default function ProcurementKpiStrip({
           </label>
 
           <label className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Movement</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Jendela aging movement</span>
             <select
               value={filters.movementWindow}
               onChange={(event) => updateFilter('movementWindow', event.target.value)}
@@ -661,8 +807,8 @@ export default function ProcurementKpiStrip({
           <label className="grid gap-1">
             <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Kode Filter</span>
             <input
-              value={filters.scopeCode}
-              onChange={(event) => updateFilter('scopeCode', event.target.value)}
+              value={scopeDraft}
+              onChange={(event) => setScopeDraft(event.target.value)}
               placeholder={selectedGroup.placeholder}
               className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d] px-3 text-xs font-black text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-[var(--rc-forest-accent)]"
             />
@@ -702,10 +848,12 @@ export default function ProcurementKpiStrip({
           </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--rc-text-faint)]">
-          <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Period {filters.period}</span>
-          <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Group {selectedGroup.label}</span>
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--rc-text-faint)]" aria-label="Active filter context">
+          <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-amber-100" title="Periode usage/receive">
+            Period {activePeriodLabel} · {filters.period}
+          </span>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">MC {filters.movementWindow}</span>
+          <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Group {selectedGroup.label}</span>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{filters.itemType ? `Scope ${filters.itemType}` : 'Scope Inventory 1+4'}</span>
           {filters.scopeCode ? <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-2.5 py-1 text-lime-100">Code {filters.scopeCode}</span> : null}
           {filters.location ? <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-cyan-100">Lokasi {filters.location}</span> : null}
@@ -716,6 +864,8 @@ export default function ProcurementKpiStrip({
         {headlineCard ? (
           <Link
             href={headlineCard.href}
+            title={headlineCard.valueExact ?? headlineCard.value}
+            aria-label={`${headlineCard.label}: ${headlineCard.valueExact ?? headlineCard.value}`}
             className="group relative min-h-[222px] overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[linear-gradient(145deg,rgba(24,185,107,.2),rgba(4,18,12,.72)_52%,rgba(214,184,92,.13))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)]"
           >
             <span className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-emerald-300/20 blur-3xl transition group-hover:bg-lime-300/25" aria-hidden="true" />
@@ -724,7 +874,10 @@ export default function ProcurementKpiStrip({
             <span className="relative z-10 flex items-start justify-between gap-3">
               <span>
                 <span className="block text-[10px] font-black uppercase tracking-[0.28em] text-emerald-100/70">Master valuation</span>
-                <strong className="mt-2 block text-[2.35rem] font-black leading-none tracking-[-0.08em] text-[var(--rc-text)] sm:text-5xl">
+                <strong
+                  className="mt-2 block text-[2.35rem] font-black leading-none tracking-[-0.08em] text-[var(--rc-text)] sm:text-5xl"
+                  title={headlineCard.valueExact ?? headlineCard.value}
+                >
                   {loading ? '...' : headlineCard.value}
                 </strong>
               </span>
@@ -740,14 +893,14 @@ export default function ProcurementKpiStrip({
             <span className="relative z-10 mt-4 grid gap-2">
               <span className="flex items-center justify-between gap-3 text-[11px] font-black text-emerald-50/80">
                 <span>Gudang</span>
-                <span>{loading ? '...' : `${formatCurrency(gudangValue)} · ${formatPercent(gudangShare)}`}</span>
+                <span title={formatCurrency(gudangValue)}>{loading ? '...' : `${formatCurrencyCompact(gudangValue)} · ${formatPercent(gudangShare)}`}</span>
               </span>
               <span className="h-2 overflow-hidden rounded-full bg-white/10">
                 <span className="block h-full rounded-full bg-[linear-gradient(90deg,#18b96b,#9be23d)]" style={{ width: `${gudangShare}%` }} />
               </span>
               <span className="flex items-center justify-between gap-3 text-[11px] font-black text-amber-50/80">
                 <span>Workshop/Mesin</span>
-                <span>{loading ? '...' : `${formatCurrency(workshopValue)} · ${formatPercent(workshopShare)}`}</span>
+                <span title={formatCurrency(workshopValue)}>{loading ? '...' : `${formatCurrencyCompact(workshopValue)} · ${formatPercent(workshopShare)}`}</span>
               </span>
               <span className="h-2 overflow-hidden rounded-full bg-white/10">
                 <span className="block h-full rounded-full bg-[linear-gradient(90deg,#f59e0b,#d6b85c)]" style={{ width: `${workshopShare}%` }} />
@@ -763,19 +916,66 @@ export default function ProcurementKpiStrip({
 
         <div className="space-y-3">
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/70">1. Valuasi stock</p>
-            {renderCardGrid(valuationSideCards)}
+            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/70">Always visible · Arus Bersih + Total Usage</p>
+            {renderCardGrid(heroSideCards)}
           </div>
+
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-sky-100/70">2. Proses procurement</p>
-            {renderCardGrid(processCards)}
-          </div>
-          <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-rose-100/70">3. Movement + quality</p>
-            {renderCardGrid(movementCards)}
+            <div className="mb-2 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="KPI secondary sections">
+              {DECK_SECTIONS.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={openSection === section.id}
+                  data-active={openSection === section.id}
+                  onClick={() => setOpenSection(section.id)}
+                  className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition hover:bg-white/[0.06] ${section.tone}`}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+            <div role="tabpanel" aria-label={`Section ${openSection}`}>
+              {renderCardGrid(sectionCards)}
+            </div>
           </div>
         </div>
       </div>
+
+      {topUsageItems.length > 0 ? (
+        <div className="relative z-10 border-t border-[var(--rc-border)] bg-black/15 px-3 py-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/70">Top item usage periode</p>
+              <p className="mt-0.5 text-xs font-semibold text-[var(--rc-text-muted)]">Top 5 dari report pengeluaran-barang. AccCode tetap dibaca sebagai cost center / dept.</p>
+            </div>
+            <Link href={filteredLinks.usage} className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-black text-cyan-100 hover:bg-cyan-400/15">
+              Buka detail issue
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+            {topUsageItems.map((item, index) => {
+              const amount = firstNumber(item, ['NilaiKeluar', 'Amount', 'TotalAmount'])
+              const qty = firstNumber(item, ['QtyKeluar', 'Qty', 'TotalQty'])
+              const label = firstText(item, ['NamaBarang', 'ItemName', 'KodeBarang']) || `Item ${index + 1}`
+              return (
+                <Link
+                  key={`${index}-${label}`}
+                  href={filteredLinks.usage}
+                  className="rounded-2xl border border-white/10 bg-white/[0.045] p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-cyan-300/10"
+                >
+                  <span className="block truncate text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100/60">#{index + 1} · {firstText(item, ['KodeBarang']) || 'item'}</span>
+                  <strong className="mt-1 block line-clamp-2 text-sm font-black leading-5 text-[var(--rc-text)]">{label}</strong>
+                  <span className="mt-2 block text-xs font-bold text-cyan-100">{formatCurrency(amount)}</span>
+                  <span className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Qty {formatQuantity(qty)}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
