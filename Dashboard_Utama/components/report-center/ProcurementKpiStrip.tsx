@@ -7,6 +7,8 @@ import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageInt
 import KpiCarousel from './KpiCarousel'
 import MovementTrendChart from './MovementTrendChart'
 import TopMovementScatter from './TopMovementScatter'
+import StockRiverChart from './StockRiverChart'
+import InsightTicker from './InsightTicker'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
@@ -626,6 +628,27 @@ export default function ProcurementKpiStrip({
   const monthlyIssuedVehicleQty = firstNumber(movementMonthly, ['IssuedVehicleQty'])
   const monthlyIssuedTotalQty = firstNumber(movementMonthly, ['IssuedTotalQty'])
   const monthlyQtyDelta = monthlyClosingQty - monthlyOpeningQty
+  const hasMovementMonthly = monthlyOpeningQty + monthlyGoodsReceiveQty + monthlyLedgerQty + monthlyIssuedStationQty + monthlyIssuedVehicleQty + monthlyClosingQty > 0
+  const insightItems = (() => {
+    const items: string[] = []
+    const trend = Array.isArray(usageTrend) ? usageTrend : []
+    const last = trend.length > 0 ? Number((trend[trend.length - 1] as { qty?: number; quantity?: number })?.qty ?? (trend[trend.length - 1] as { quantity?: number })?.quantity ?? 0) : 0
+    const prev3 = trend.slice(-4, -1).map((row) => Number((row as { qty?: number; quantity?: number })?.qty ?? (row as { quantity?: number })?.quantity ?? 0))
+    const avg3 = prev3.length > 0 ? prev3.reduce((a, b) => a + b, 0) / prev3.length : 0
+    if (avg3 > 0 && last > 0) {
+      const pct = Math.round(((last - avg3) / avg3) * 100)
+      if (pct !== 0) items.push(`Qty issue ${pct > 0 ? '+' : ''}${pct}% vs rata-rata 3 bulan`)
+    }
+    if (monthlyClosingQty > 0 && monthlyOpeningQty > 0 && monthlyClosingQty < monthlyOpeningQty) {
+      items.push('Closing qty di bawah opening periode ini')
+    }
+    const topNames = new Set((topLists?.items ?? []).map((it) => String((it as { name?: string })?.name ?? '')))
+    const fresh = (issueFrequency?.topItems ?? []).filter((it) => !topNames.has(String((it as { name?: string })?.name ?? '')))
+    if (fresh.length > 0 && topNames.size > 0) items.push(`${fresh.length} item baru masuk Top movement`)
+    if (usageDocuments > 0) items.push(`${formatNumber(usageDocuments)} dokumen issue · ${formatNumber(activeIssueDays)} hari aktif`)
+    return items.slice(0, 5)
+  })()
+
   const topIssueFreq = issueFrequencyTop[0]
   const topIssueFreqDocs = topIssueFreq ? Number(topIssueFreq.docs) || 0 : 0
   const flowStages: FlowStage[] = [
@@ -1164,6 +1187,12 @@ export default function ProcurementKpiStrip({
           {filters.scopeCode ? <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-2.5 py-1 text-lime-100">Code {filters.scopeCode}</span> : null}
           {filters.location ? <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-cyan-100">Lokasi {filters.location}</span> : null}
         </div>
+
+        {insightItems.length > 0 ? (
+          <div className="mt-2">
+            <InsightTicker items={insightItems} />
+          </div>
+        ) : null}
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">
@@ -1281,6 +1310,24 @@ export default function ProcurementKpiStrip({
           </div>
         </div>
       </div>
+
+      {hasMovementMonthly ? (
+        <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
+          <div className="rc-reveal min-h-[190px] rounded-[28px] p-1" style={{ '--reveal-order': 4 } as React.CSSProperties}>
+            <div className="h-[280px]">
+              <StockRiverChart
+                opening={monthlyOpeningQty}
+                goodsReceive={monthlyGoodsReceiveQty}
+                ledger={monthlyLedgerQty}
+                station={monthlyIssuedStationQty}
+                vehicle={monthlyIssuedVehicleQty}
+                closing={monthlyClosingQty}
+                loading={loading}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {topRows.length > 0 ? (
         <div className="relative z-10 border-t border-[var(--rc-border)] bg-black/15 px-3 py-3">

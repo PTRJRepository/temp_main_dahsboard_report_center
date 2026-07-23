@@ -179,3 +179,10 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - **RENDER:** blok UsageTrendChart di strip diganti MovementTrendChart (h-240) + TopMovementScatter (h-260, Top 10 item movement tertinggi).
 - **VERIFIKASI:** tsc 0; eslint file tersentuh 0 error baru (error `set-state-in-effect` di strip + warning `no-unused-vars` di route inventory pre-existing, dikonfirmasi git stash); build exit 0.
 - **PLANNED:** smoke-test browser (auth gate); uji mode tahun ke data nyata; perluas metrik scatter ke sub-module lain.
+
+## 2026-07-23 (lanjut) - Stock River (sankey alur stok) + Insight ticker deterministik
+- **STOCK RIVER:** `StockRiverChart.tsx` - sankey DIY murni SVG (tanpa library, 0 dependency) alur Opening -> kanal (Goods Receive / Issue Ledger / Issue Station / Issue Vehicle) -> Closing periode. Pita bezier dengan tebal proporsional qty, warna kanal konsisten dengan tone movementCards (indigo/rose/teal/orange). Hover kanal memudarkan kanal lain; label qty di tiap node; chip "selisih +/-X" menampilkan imbalance opening+receive-issue-closing secara jujur (tidak dipalsukan balance). Empty-state bila seluruh qty nol.
+- **INSIGHT TICKER:** `InsightTicker.tsx` - bar marquee pelan (CSS keyframes `.rc-ticker-track` di globals.css, jeda saat hover, reduced-motion = statis). Item deterministik dirakit di strip dari data yang sudah ada: delta qty issue vs rata-rata 3 bulan, closing di bawah opening, item baru di Top movement (irisan topLists vs issueFrequency), frekuensi dokumen x hari aktif.
+- **INTEGRASI:** ticker di bawah bar chip konteks aktif; Stock River sebagai blok `h-[280px]` (reveal-order 4) setelah TopMovementScatter, hanya dirender bila data movementMonthly ada (`hasMovementMonthly`).
+- **VERIFIKASI:** tsc 0; eslint 3 file 0 error baru (error `set-state-in-effect` di strip pre-existing); build exit 0.
+- **PLANNED:** klik kanal Sankey = filter deck ke channel itu; smoke-test browser (auth gate); kontrak `movementMonthly.summary` ke data nyata belum diverifikasi live.
