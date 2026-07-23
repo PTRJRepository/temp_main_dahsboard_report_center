@@ -110,6 +110,11 @@ type ReportPayload = {
   }
   /** Trend bulanan opsional (misal issue command deck) — satu baris per bulan: qty/amount/events. */
   trend?: DbRow[]
+  /** Frekuensi issue opsional (additive) — dokumen unik per bulan + item paling sering di-issue. */
+  issueFrequency?: {
+    byMonth?: DbRow[]
+    topItems?: DbRow[]
+  }
 }
 
 type ReportHandlerOptions = { limit: number; limitAll?: boolean; search: string; ctx: QueryContext; stale: string; filters?: ReportFilterInput }
@@ -3457,6 +3462,35 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     ORDER BY month
   `)
 
+  // Frekuensi issue — additive. Bedakan dari `trend` (baris transaksi):
+  // di sini yang dihitung adalah DOKUMEN unik per bulan + item yang paling
+  // sering di-issue (by COUNT), sesuai permintaan "jumlah sebaran frekuensi
+  // issue & issue yang sering terjadi".
+  const trendFrequency = await rows(ctx, `
+    ${issueRowsCte}
+    SELECT
+      CONVERT(varchar(7), Tanggal, 120) AS month,
+      COUNT(DISTINCT Dokumen) AS docs,
+      COUNT(DISTINCT CONVERT(date, Tanggal)) AS activeDays,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty
+    FROM issue_rows
+    WHERE Tanggal IS NOT NULL
+    GROUP BY CONVERT(varchar(7), Tanggal, 120)
+    ORDER BY month
+  `)
+  const issueFrequencyTop = await rows(ctx, `
+    ${issueRowsCte}
+    SELECT TOP 5
+      KodeBarang AS code,
+      NamaBarang AS name,
+      COUNT(DISTINCT Dokumen) AS docs,
+      COUNT(*) AS events,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty
+    FROM issue_rows
+    GROUP BY KodeBarang, NamaBarang
+    ORDER BY COUNT(DISTINCT Dokumen) DESC, COUNT(*) DESC
+  `)
+
   return {
     title: 'Pengeluaran Barang Operasional',
     description: 'Audit pemakaian barang ke operasional, cost center, blok, kendaraan, dan status posting.',
@@ -3470,6 +3504,10 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       vehicles: topVehicles,
     },
     trend,
+    issueFrequency: {
+      byMonth: trendFrequency,
+      topItems: issueFrequencyTop,
+    },
     metadata: metadata(ctx, {
       sourceTables: 'IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK, WS_JOB, IN_STOCKISSUELN_ACC',
       issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType = 1.',

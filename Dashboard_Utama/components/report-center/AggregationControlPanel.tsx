@@ -57,7 +57,7 @@ export default function AggregationControlPanel({ source, compact = false }: Agg
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/reports/inventory/aggregation?months=6', { cache: 'no-store' })
+      const response = await fetch('/api/reports/inventory/aggregation?months=18', { cache: 'no-store' })
       const data = (await response.json()) as AggregationStatus
       if (data.success) setStatus(data)
     } catch {
@@ -122,11 +122,11 @@ export default function AggregationControlPanel({ source, compact = false }: Agg
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border-[var(--rc-forest-border)] bg-black/25 px-3 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="relative overflow-hidden rounded-3xl border-[var(--rc-forest-border)] bg-black/25 px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-[var(--rc-text)]">Ruang kontrol agregasi</p>
-          <p className="mt-0.5 text-[11px] font-semibold text-[var(--rc-text-faint)]">
+          <p className="text-sm font-semibold text-[var(--rc-text)]" style={{ fontFamily: 'var(--font-display)' }}>Ruang kontrol agregasi</p>
+          <p className="mt-1 text-xs font-semibold text-[var(--rc-text-faint)]">
             Periode closed di-render sekali (immutable). Periode current{' '}
             <span className="text-[var(--rc-forest-accent)]">{formatPeriodShort(status.currentPeriod)}</span> selalu live.
           </p>
@@ -135,14 +135,14 @@ export default function AggregationControlPanel({ source, compact = false }: Agg
           type="button"
           onClick={() => void build()}
           disabled={building}
-          className="h-9 rounded-xl border-[var(--rc-forest-border-strong)] bg-[rgba(155,226,61,.12)] px-3 text-[11px] font-bold text-[var(--rc-forest-accent)] outline-none transition hover:bg-[rgba(155,226,61,.2)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-10 rounded-xl border-[var(--rc-forest-border-strong)] bg-[rgba(155,226,61,.12)] px-4 text-xs font-bold text-[var(--rc-forest-accent)] outline-none transition hover:bg-[rgba(155,226,61,.2)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {building ? 'Membangun…' : 'Bangun agregasi closed'}
         </button>
       </div>
 
-      <div className="mt-3 flex-col gap-2">
-        <div className="flex items-center gap-2 text-[11px] font-semibold">
+      <div className="mt-4 flex-col gap-3">
+        <div className="flex items-center gap-2 text-xs font-semibold">
           <span className="text-[var(--rc-text-faint)]">Periode berjalan</span>
           <span className="inline-flex items-center gap-1 rounded-full border-[var(--rc-forest-border)] bg-[rgba(155,226,61,.08)] px-2 py-0.5 font-bold text-[var(--rc-forest-accent)]">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--rc-forest-accent)]" aria-hidden="true" />
@@ -150,10 +150,10 @@ export default function AggregationControlPanel({ source, compact = false }: Agg
           </span>
         </div>
 
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           {status.cells.map((cell) => (
-            <div key={cell.handlerKey} className="flex items-center gap-2">
-              <span className="w-20 shrink-0 text-[10px] font-bold text-[var(--rc-text-faint)]">
+            <div key={cell.handlerKey} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+              <span className="w-24 shrink-0 text-[11px] font-bold text-[var(--rc-text-faint)]">
                 {HANDLER_LABEL[cell.handlerKey] ?? cell.handlerKey}
               </span>
               <div className="flex flex-1 flex-wrap gap-1">
@@ -176,11 +176,11 @@ export default function AggregationControlPanel({ source, compact = false }: Agg
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--rc-border)] pt-2">
-          <p className="text-[10px] font-semibold text-[var(--rc-text-faint)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--rc-border)] pt-3">
+          <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">
             {builtCount} dari {totalClosed * status.handlerKeys.length} sel KPI closed ter-render
           </p>
-          {message ? <p className="text-[10px] font-bold text-[var(--rc-forest-accent)]">{message}</p> : null}
+          {message ? <p className="text-[11px] font-bold text-[var(--rc-forest-accent)]">{message}</p> : null}
         </div>
       </div>
     </div>

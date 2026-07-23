@@ -57,8 +57,15 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **Store:** Prisma `MonthlyReportAggregate` (SQLite) — key `(handlerKey, source, period, filterHash)`, simpan `summary/chart/topLists/trend`. Detail `rows` tidak disimpan.
 - **Helper:** `isClosedActualPeriod` + `currentActualPeriodJakarta` (`accounting-period.ts`); `monthly-aggregate-store.ts` (Prisma + `filterHashFor`); `monthly-aggregate.ts` (`resolveAggregationPeriod`/`serveAggregate`/`persistAggregate`). Unit test lulus.
 - **Hook:** `handleInventoryGet` melayani periode closed dari store (hit) atau hitung live + persist (miss); pipeline post-handler tetap → kontrak identik. `metadata.aggregation.mode = pre-aggregated|live`.
-- **Control room:** `GET/POST/DELETE /api/reports/inventory/aggregation` + panel di deck (badge compact + panel penuh).
+- **Control room:** `GET/POST/DELETE /api/reports/inventory/aggregation` + halaman penuh `/report-center/control` (dipisah dari deck).
 - **Status:** tsc 0, test lulus, build exit 0. Belum smoke-test SQL gateway live; prioritas 8 KPI deck (report lain ikuti jalur yang sama).
+
+### 8. Dedicated control-room route + movement deck diperkaya (2026-07-23)
+- **Route baru:** `/report-center/control` (statis) — halaman Ruang Kontrol Agregasi penuh (ringkasan ter-render/sel/baris, toggle source, panel penuh, tabel data ter-render). Panel dicabut dari deck; deck hanya menautkan ke sana.
+- **API additive:** `stockIssue` menambah `issueFrequency` (dokumen unik per bulan + Top 5 item by frekuensi dokumen); `ReportPayload.issueFrequency` ditambahkan.
+- **Command deck:** `KpiKey movementMonthly` → `monthly-stock-account-movement-details`; `issueFrequency` diteruskan ke client.
+- **Movement deck:** `movementCards` 3 → 8 kartu (Frekuensi Issue, Opening vs Closing Qty, Goods Receive Qty, Issued Qty Split Ledger/Station/Vehicle, Paling Sering Di-issue) — quantity 14-kolom, bukan hanya amount.
+- **Verifikasi:** tsc 0, build exit 0, route `/report-center/control` muncul.
 
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).

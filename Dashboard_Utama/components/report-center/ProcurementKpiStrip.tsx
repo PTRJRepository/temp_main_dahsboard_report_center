@@ -7,14 +7,13 @@ import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageInt
 import KpiCarousel from './KpiCarousel'
 import UsageTrendChart from './UsageTrendChart'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
-import AggregationControlPanel from './AggregationControlPanel'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
 type DeckSection = 'valuasi' | 'proses' | 'movement'
 
 type DbRow = Record<string, unknown>
 
-type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'usage' | 'return'
+type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'movementMonthly' | 'usage' | 'return'
 
 type TopListItem = {
   code?: string
@@ -41,6 +40,10 @@ type Snapshot = {
     vehicles?: TopListItem[]
   }
   trend?: TrendPoint[]
+  issueFrequency?: {
+    byMonth?: Array<{ month?: string; docs?: number | string; activeDays?: number | string; qty?: number | string }>
+    topItems?: Array<{ code?: string; name?: string; docs?: number | string; events?: number | string; qty?: number | string }>
+  }
   updatedAt?: string
 }
 
@@ -295,6 +298,16 @@ function cardTitleTone(cardId: string): CardTitleTone {
       return { pillClass: 'border-lime-200/35 bg-lime-400/15 text-lime-50 shadow-[0_0_0_1px_rgba(163,230,53,.12)]', dotClass: 'bg-lime-200' }
     case 'movement-amount':
       return { pillClass: 'border-cyan-200/35 bg-cyan-400/15 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,.12)]', dotClass: 'bg-cyan-200' }
+    case 'movement-frequency':
+      return { pillClass: 'border-pink-200/35 bg-pink-400/15 text-pink-50 shadow-[0_0_0_1px_rgba(244,114,182,.12)]', dotClass: 'bg-pink-200' }
+    case 'movement-open-close-qty':
+      return { pillClass: 'border-indigo-200/35 bg-indigo-400/15 text-indigo-50 shadow-[0_0_0_1px_rgba(129,140,248,.12)]', dotClass: 'bg-indigo-200' }
+    case 'movement-gr-qty':
+      return { pillClass: 'border-teal-200/35 bg-teal-400/15 text-teal-50 shadow-[0_0_0_1px_rgba(45,212,191,.12)]', dotClass: 'bg-teal-200' }
+    case 'movement-issued-split':
+      return { pillClass: 'border-orange-200/35 bg-orange-400/15 text-orange-50 shadow-[0_0_0_1px_rgba(251,146,60,.12)]', dotClass: 'bg-orange-200' }
+    case 'movement-top-frequency':
+      return { pillClass: 'border-purple-200/35 bg-purple-400/15 text-purple-50 shadow-[0_0_0_1px_rgba(192,132,252,.12)]', dotClass: 'bg-purple-200' }
     case 'net-flow':
       return { pillClass: 'border-violet-200/35 bg-violet-400/15 text-violet-50 shadow-[0_0_0_1px_rgba(167,139,250,.12)]', dotClass: 'bg-violet-200' }
     case 'total-usage':
@@ -527,6 +540,7 @@ export default function ProcurementKpiStrip({
   const pr = snapshots.pr?.summary
   const workshop = snapshots.workshop?.summary
   const movement = snapshots.movement?.summary
+  const movementMonthly = snapshots.movementMonthly?.summary
   const usage = snapshots.usage?.summary
   const stockReturn = snapshots.return?.summary
   const topUsageItems = (snapshots.usage?.chart ?? []).slice(0, 5)
@@ -583,6 +597,18 @@ export default function ProcurementKpiStrip({
     { id: 'vehicles', label: 'Kendaraan' },
   ]
   const usageTrend = snapshots.usage?.trend ?? []
+  const issueFrequency = snapshots.usage?.issueFrequency
+  const issueFrequencyTop = (issueFrequency?.topItems ?? []).slice(0, 5)
+  const monthlyOpeningQty = firstNumber(movementMonthly, ['OpeningQty'])
+  const monthlyClosingQty = firstNumber(movementMonthly, ['ClosingQty'])
+  const monthlyGoodsReceiveQty = firstNumber(movementMonthly, ['GoodsReceiveQty'])
+  const monthlyLedgerQty = firstNumber(movementMonthly, ['LedgerQty'])
+  const monthlyIssuedStationQty = firstNumber(movementMonthly, ['IssuedStationQty'])
+  const monthlyIssuedVehicleQty = firstNumber(movementMonthly, ['IssuedVehicleQty'])
+  const monthlyIssuedTotalQty = firstNumber(movementMonthly, ['IssuedTotalQty'])
+  const monthlyQtyDelta = monthlyClosingQty - monthlyOpeningQty
+  const topIssueFreq = issueFrequencyTop[0]
+  const topIssueFreqDocs = topIssueFreq ? Number(topIssueFreq.docs) || 0 : 0
   const flowStages: FlowStage[] = [
     {
       id: 'pr',
@@ -781,6 +807,85 @@ export default function ProcurementKpiStrip({
       icon: CircleDollarSign,
       className: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
     },
+    {
+      id: 'movement-frequency',
+      label: 'Frekuensi Issue',
+      value: formatNumber(usageDocuments),
+      description: 'Jumlah dokumen issue unik dan sebaran hari aktif issue dalam periode terpilih.',
+      formula: 'Frekuensi = COUNT(DISTINCT Dokumen) issue; intensitas = dokumen / hari aktif issue.',
+      source: 'pengeluaran-barang · issueFrequency',
+      breakdown: [
+        { label: 'Hari aktif', value: formatNumber(activeIssueDays) },
+        { label: 'Doc/hari', value: formatQuantity(activeIssueDays > 0 ? usageDocuments / activeIssueDays : 0) },
+        { label: 'Event line', value: formatNumber(usageEvents) },
+      ],
+      href: filteredLinks.movement,
+      icon: Gauge,
+      className: 'border-pink-300/25 bg-pink-400/10 text-pink-100',
+    },
+    {
+      id: 'movement-open-close-qty',
+      label: 'Opening vs Closing Qty',
+      value: formatQuantity(monthlyClosingQty),
+      description: 'Quantity closing bulan berjalan dibanding opening, dari movement report bulanan.',
+      formula: 'Closing Qty = SUM(ClosingQty); Opening Qty = SUM(OpeningQty); delta = closing − opening.',
+      source: 'monthly-stock-account-movement-details',
+      breakdown: [
+        { label: 'Opening qty', value: formatQuantity(monthlyOpeningQty) },
+        { label: 'Closing qty', value: formatQuantity(monthlyClosingQty) },
+        { label: 'Delta', value: `${monthlyQtyDelta >= 0 ? '+' : ''}${formatQuantity(monthlyQtyDelta)}` },
+      ],
+      href: filteredLinks.movement,
+      icon: Layers3,
+      className: 'border-indigo-300/25 bg-indigo-400/10 text-indigo-100',
+    },
+    {
+      id: 'movement-gr-qty',
+      label: 'Goods Receive Qty',
+      value: formatQuantity(monthlyGoodsReceiveQty),
+      description: 'Total quantity barang yang diterima (goods receive) pada periode berjalan.',
+      formula: 'Goods Receive Qty = SUM(GoodsReceiveQty) dari movement report bulanan.',
+      source: 'monthly-stock-account-movement-details',
+      breakdown: [
+        { label: 'Issued total qty', value: formatQuantity(monthlyIssuedTotalQty) },
+        { label: 'Net qty (GR − issued)', value: formatQuantity(monthlyGoodsReceiveQty - monthlyIssuedTotalQty) },
+      ],
+      href: filteredLinks.movement,
+      icon: Truck,
+      className: 'border-teal-300/25 bg-teal-400/10 text-teal-100',
+    },
+    {
+      id: 'movement-issued-split',
+      label: 'Issued Qty Split',
+      value: formatQuantity(monthlyIssuedTotalQty),
+      description: 'Rincian quantity issue: ledger, station, dan vehicle pada periode berjalan.',
+      formula: 'Issued Total = Ledger + Issued Station + Issued Vehicle (qty), dari movement report bulanan.',
+      source: 'monthly-stock-account-movement-details',
+      breakdown: [
+        { label: 'Ledger qty', value: formatQuantity(monthlyLedgerQty) },
+        { label: 'Station qty', value: formatQuantity(monthlyIssuedStationQty) },
+        { label: 'Vehicle qty', value: formatQuantity(monthlyIssuedVehicleQty) },
+      ],
+      href: filteredLinks.movement,
+      icon: Package,
+      className: 'border-orange-300/25 bg-orange-400/10 text-orange-100',
+    },
+    {
+      id: 'movement-top-frequency',
+      label: 'Paling Sering Di-issue',
+      value: topIssueFreq ? (topIssueFreq.code ?? topIssueFreq.name ?? '—') : '—',
+      description: 'Item dengan frekuensi dokumen issue tertinggi dalam periode terpilih.',
+      formula: 'Top frequency = item dengan COUNT(DISTINCT Dokumen) issue terbanyak.',
+      source: 'pengeluaran-barang · issueFrequency.topItems',
+      breakdown: [
+        { label: 'Doc issue', value: formatNumber(topIssueFreqDocs) },
+        { label: 'Nama item', value: topIssueFreq?.name ?? '—' },
+        { label: 'Event line', value: formatNumber(topIssueFreq ? Number(topIssueFreq.events) || 0 : 0) },
+      ],
+      href: filteredLinks.movement,
+      icon: TrendingUp,
+      className: 'border-purple-300/25 bg-purple-400/10 text-purple-100',
+    },
   ]
 
   const heroCards: ProcurementKpiCard[] = [
@@ -905,7 +1010,14 @@ export default function ProcurementKpiStrip({
         <span className="w-fit rounded-full border border-[var(--rc-forest-border-strong)] bg-[rgba(155,226,61,.08)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--rc-forest-accent)]">
           {loading ? 'Mengambil summary live' : partial ? 'Live sebagian, fallback aktif' : 'Live dari SQL Gateway'}
         </span>
-        <AggregationControlPanel source={source} compact />
+        <Link
+          href={`/report-center/control?source=${source}`}
+          className="inline-flex w-fit items-center gap-1.5 rounded-full border-[var(--rc-forest-border)] bg-[rgba(155,226,61,.06)] px-3 py-1.5 text-[11px] font-bold text-[var(--rc-forest-accent)] transition hover:bg-[rgba(155,226,61,.14)]"
+          title="Bangun & kelola agregasi KPI bulanan pre-rendered"
+        >
+          Ruang kontrol agregasi
+          <ArrowRight size={12} />
+        </Link>
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] bg-[rgba(2,10,7,.42)] px-3 py-3">
@@ -1003,10 +1115,6 @@ export default function ProcurementKpiStrip({
           {filters.scopeCode ? <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-2.5 py-1 text-lime-100">Code {filters.scopeCode}</span> : null}
           {filters.location ? <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-cyan-100">Lokasi {filters.location}</span> : null}
         </div>
-      </div>
-
-      <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">
-        <AggregationControlPanel source={source} />
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">

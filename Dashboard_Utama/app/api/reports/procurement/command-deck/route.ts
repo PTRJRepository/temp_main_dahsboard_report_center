@@ -27,10 +27,14 @@ type Snapshot = {
     vehicles?: DbRow[]
   }
   trend?: DbRow[]
+  issueFrequency?: {
+    byMonth?: DbRow[]
+    topItems?: DbRow[]
+  }
   updatedAt?: string
 }
 
-type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'usage' | 'return'
+type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'movementMonthly' | 'usage' | 'return'
 
 type KpiSpec = {
   key: KpiKey
@@ -44,6 +48,7 @@ const KPI_SPECS: KpiSpec[] = [
   { key: 'pr', report: 'purchase-request-inventory' },
   { key: 'workshop', report: 'asset-stock-valuasi-listing' },
   { key: 'movement', report: 'all-stock-movement-analysis' },
+  { key: 'movementMonthly', report: 'monthly-stock-account-movement-details' },
   { key: 'usage', report: 'pengeluaran-barang' },
   { key: 'return', report: 'return-barang' },
 ]
@@ -160,7 +165,13 @@ async function fetchSnapshot(
     })
     const data = (await response.json().catch(() => ({}))) as {
       success?: boolean
-      data?: { summary?: DbRow; chart?: DbRow[]; topLists?: Snapshot['topLists']; trend?: DbRow[] }
+      data?: {
+        summary?: DbRow
+        chart?: DbRow[]
+        topLists?: Snapshot['topLists']
+        trend?: DbRow[]
+        issueFrequency?: Snapshot['issueFrequency']
+      }
     }
     if (!response.ok || data.success !== true || !data.data?.summary) {
       return [spec.key, { ok: false, summary: {} }] as const
@@ -172,6 +183,7 @@ async function fetchSnapshot(
       chart: data.data.chart ?? [],
       topLists: data.data.topLists,
       trend: data.data.trend,
+      issueFrequency: data.data.issueFrequency,
       updatedAt: firstText(summary, ['TerakhirUpdate', 'LastMovementDate', 'LastUsageDate', 'LastRunningUpdate']),
     }] as const
   } catch {
