@@ -896,8 +896,7 @@ export default function ProcurementKpiStrip({
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,rgba(255,255,255,.08),transparent_18%,transparent_72%,rgba(155,226,61,.08))]" aria-hidden="true" />
       <div className="relative z-10 flex flex-col gap-2 border-b border-[var(--rc-border)] bg-black/10 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="rc-eyebrow text-[var(--rc-forest-accent)]">Procurement command deck</p>
-          <h2 className="rc-display mt-1 text-xl font-bold text-[var(--rc-text)] sm:text-2xl">KPI dikelompokkan per konteks.</h2>
+          <h2 className="rc-display text-xl font-bold text-[var(--rc-text)] sm:text-2xl">Procurement command deck</h2>
           <p className="mt-1 max-w-4xl text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">
             Hero always on: Total Valuasi · Arus Bersih · Total Usage. Tab secondary: Valuasi · Proses · Movement.
           </p>
@@ -1005,7 +1004,7 @@ export default function ProcurementKpiStrip({
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">
-        <p className="rc-eyebrow mb-2 text-[var(--rc-text-faint)]">Alur proses · klik tahap untuk buka detail</p>
+        <p className="mb-2 text-[11px] font-semibold text-[var(--rc-text-faint)]">Alur proses — klik tahap untuk buka detail</p>
         <ProcurementFlowStrip
           stages={flowStages}
           onSelect={(stageId) => {
@@ -1028,7 +1027,7 @@ export default function ProcurementKpiStrip({
 
             <span className="relative z-10 flex items-start justify-between gap-3">
               <span>
-                <span className="rc-eyebrow block text-emerald-100/70">Master valuation</span>
+                <span className="block text-[11px] font-semibold text-emerald-100/60">Master valuation</span>
                 <strong
                   className="rc-metric mt-2 block text-[2.35rem] font-bold text-[var(--rc-text)] sm:text-5xl"
                   title={headlineCard.valueExact ?? headlineCard.value}
@@ -1101,7 +1100,7 @@ export default function ProcurementKpiStrip({
       </div>
 
       <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
-        <div className="rc-reveal rounded-[28px] border-[var(--rc-forest-border)] bg-black/20 p-4" style={{ '--reveal-order': 2 } as React.CSSProperties}>
+        <div className="rc-reveal min-h-[190px] rounded-[28px] p-1" style={{ '--reveal-order': 2 } as React.CSSProperties}>
           <div className="h-[220px]">
             <UsageTrendChart data={usageTrend} loading={loading} />
           </div>
@@ -1112,7 +1111,7 @@ export default function ProcurementKpiStrip({
         <div className="relative z-10 border-t border-[var(--rc-border)] bg-black/15 px-3 py-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/70">Top usage periode</p>
+              <p className="text-[11px] font-semibold text-cyan-100/70">Top usage periode</p>
               <p className="mt-0.5 text-xs font-semibold text-[var(--rc-text-muted)]">Top 5 dari report pengeluaran-barang. AccCode dibaca sebagai cost center / dept.</p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Dimensi top usage">

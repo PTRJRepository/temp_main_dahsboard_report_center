@@ -122,3 +122,12 @@ Bukan git log otomatis.
 - **CHANGED:** `renderCardGrid` dipecah — `renderCardItems` (elemen) dipakai carousel & grid wrapper.
 - **PLANNED:** smoke-test visual di browser (butuh login manual); sparkline per kartu; density pass untuk tabel report detail.
 
+
+## 2026-07-23 (lanjut) - Hallmark audit pass (skill terinstall)
+
+- **SKILL:** hallmark terinstall via `npx skills add nutlope/hallmark@hallmark -g -y` (+ 8 lainnya sesi ini: web-design-guidelines, vercel-react-best-practices, systematic-debugging, writing-plans, frontend-design, design-taste-frontend, context7 find-docs, using-superpowers).
+- **FIX:** Eyebrow purge - eyebrow dipakai dekoratif melanggar Hallmark (default OFF). Deck header, hero "Master valuation", flow note, dan label "Top usage periode" diganti text 11-12px semibold plain.
+- **FIX:** Elevation on dark via lightness, bukan colored glow - `.rc-kpi-surface:hover` tidak lagi shadow-glow emas; naik ke surface-raised + gradient lebih terang + inset hairline.
+- **FIX:** Card-in-card di trend chart wrapper diredam (border/bg wrapper dihapus, sisa container ukuran netral).
+- **SCORE:** self-critique P4 H4 E4 S4 R4 V4 (semua >=3).
+- **PLANNED:** screenshot media tetap gap (butuh login manual); `topLists`/`trend` belum smoke-test ke SQL live; carousel di mobile belum diuji.

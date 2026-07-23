@@ -1100,31 +1100,27 @@ body {
   display: none;
 }
 
-/* KPI card surface — hairline border, inner top-light, forest glow on hover */
+/* KPI card surface — hairline border, inner top-light, elevation via lightness on dark */
 .report-center-dark .rc-kpi-surface {
   position: relative;
   background:
     linear-gradient(165deg, rgba(172, 255, 188, 0.055), rgba(172, 255, 188, 0.012) 42%, rgba(0, 0, 0, 0.16)),
     var(--rc-forest-surface);
   border: 1px solid var(--rc-forest-border);
-  box-shadow:
-    inset 0 1px 0 rgba(235, 255, 240, 0.07),
-    0 14px 34px rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 1px 0 rgba(235, 255, 240, 0.07);
   transition:
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 220ms ease,
-    box-shadow 220ms ease,
     background 220ms ease;
 }
 
 .report-center-dark .rc-kpi-surface:hover {
   transform: translateY(-2px);
   border-color: var(--rc-forest-border-strong);
-  box-shadow:
-    inset 0 1px 0 rgba(235, 255, 240, 0.1),
-    0 18px 44px rgba(0, 0, 0, 0.36),
-    0 0 0 1px rgba(155, 226, 61, 0.08),
-    0 0 28px rgba(24, 185, 107, 0.12);
+  background:
+    linear-gradient(165deg, rgba(172, 255, 188, 0.085), rgba(172, 255, 188, 0.02) 42%, rgba(0, 0, 0, 0.14)),
+    var(--rc-forest-surface-raised);
+  box-shadow: inset 0 1px 0 rgba(235, 255, 240, 0.1);
 }
 
 /* Focus ring konsisten lime */
