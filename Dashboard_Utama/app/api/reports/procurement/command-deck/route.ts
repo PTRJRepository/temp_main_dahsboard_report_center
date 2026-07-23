@@ -21,6 +21,11 @@ type Snapshot = {
   ok: boolean
   summary: DbRow
   chart?: DbRow[]
+  topLists?: {
+    items?: DbRow[]
+    costCenters?: DbRow[]
+    vehicles?: DbRow[]
+  }
   updatedAt?: string
 }
 
@@ -154,7 +159,7 @@ async function fetchSnapshot(
     })
     const data = (await response.json().catch(() => ({}))) as {
       success?: boolean
-      data?: { summary?: DbRow; chart?: DbRow[] }
+      data?: { summary?: DbRow; chart?: DbRow[]; topLists?: Snapshot['topLists'] }
     }
     if (!response.ok || data.success !== true || !data.data?.summary) {
       return [spec.key, { ok: false, summary: {} }] as const
@@ -164,6 +169,7 @@ async function fetchSnapshot(
       ok: true,
       summary,
       chart: data.data.chart ?? [],
+      topLists: data.data.topLists,
       updatedAt: firstText(summary, ['TerakhirUpdate', 'LastMovementDate', 'LastUsageDate', 'LastRunningUpdate']),
     }] as const
   } catch {

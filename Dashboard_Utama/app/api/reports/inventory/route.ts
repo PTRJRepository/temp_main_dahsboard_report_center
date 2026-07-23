@@ -101,6 +101,12 @@ type ReportPayload = {
   chart: DbRow[]
   metadata: DbRow
   analytics?: InventoryAnalyticsContract
+  /** Top-N lists opsional (misal issue command deck) — lolos pipeline post-filter/paginate. */
+  topLists?: {
+    items?: DbRow[]
+    costCenters?: DbRow[]
+    vehicles?: DbRow[]
+  }
 }
 
 type ReportHandlerOptions = { limit: number; limitAll?: boolean; search: string; ctx: QueryContext; stale: string; filters?: ReportFilterInput }
@@ -3376,6 +3382,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       SUM(CASE WHEN RTRIM(ISNULL(BlkCode, '')) = '' THEN 1 ELSE 0 END) AS BarisBlkCodeKosong,
       SUM(CASE WHEN RTRIM(ISNULL(VehCode, '')) = '' THEN 1 ELSE 0 END) AS BarisVehCodeKosong,
       SUM(CASE WHEN SourceTable = 'WS_JOBSTOCK' THEN 1 ELSE 0 END) AS BarisWorkshop,
+      COUNT(DISTINCT CONVERT(date, Tanggal)) AS ActiveIssueDays,
       MAX(Tanggal) AS TerakhirUpdate
     FROM issue_rows
   `,)
@@ -3395,6 +3402,43 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     ORDER BY NilaiKeluar DESC
   `)
 
+  // Top lists untuk KPI Command Deck — additive, reuse issue_rows CTE yang sama
+  // sehingga RTRIM/char-compare + cabang gudang/workshop tetap konsisten.
+  const topItems = await rows(ctx, `
+    ${issueRowsCte}
+    SELECT TOP 5
+      KodeBarang AS code,
+      NamaBarang AS name,
+      COUNT(*) AS events,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+    FROM issue_rows
+    GROUP BY KodeBarang, NamaBarang
+    ORDER BY SUM(ISNULL(Amount, 0)) DESC
+  `)
+  const topCostCenters = await rows(ctx, `
+    ${issueRowsCte}
+    SELECT TOP 5
+      RTRIM(AccCode) AS code,
+      COUNT(*) AS events,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+    FROM issue_rows
+    WHERE RTRIM(ISNULL(AccCode, '')) <> ''
+    GROUP BY RTRIM(AccCode)
+    ORDER BY SUM(ISNULL(Amount, 0)) DESC
+  `)
+  const topVehicles = await rows(ctx, `
+    ${issueRowsCte}
+    SELECT TOP 5
+      RTRIM(VehCode) AS code,
+      COUNT(*) AS events,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+    FROM issue_rows
+    WHERE RTRIM(ISNULL(VehCode, '')) <> ''
+    GROUP BY RTRIM(VehCode)
+    ORDER BY SUM(ISNULL(Amount, 0)) DESC
+  `)
+
   return {
     title: 'Pengeluaran Barang Operasional',
     description: 'Audit pemakaian barang ke operasional, cost center, blok, kendaraan, dan status posting.',
@@ -3402,6 +3446,11 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     columns: columnsFrom(reportRows),
     summary,
     chart,
+    topLists: {
+      items: topItems,
+      costCenters: topCostCenters,
+      vehicles: topVehicles,
+    },
     metadata: metadata(ctx, {
       sourceTables: 'IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK, WS_JOB, IN_STOCKISSUELN_ACC',
       issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType = 1.',

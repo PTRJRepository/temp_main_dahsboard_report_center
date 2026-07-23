@@ -11,10 +11,23 @@ type DbRow = Record<string, unknown>
 
 type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'usage' | 'return'
 
+type TopListItem = {
+  code?: string
+  name?: string
+  events?: number
+  qty?: number
+  amount?: number
+}
+
 type Snapshot = {
   ok: boolean
   summary: DbRow
   chart?: DbRow[]
+  topLists?: {
+    items?: TopListItem[]
+    costCenters?: TopListItem[]
+    vehicles?: TopListItem[]
+  }
   updatedAt?: string
 }
 
