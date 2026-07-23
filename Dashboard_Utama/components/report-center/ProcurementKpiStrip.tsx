@@ -10,6 +10,7 @@ import TopMovementScatter from './TopMovementScatter'
 import StockRiverChart from './StockRiverChart'
 import AnalysisDrawer from './AnalysisDrawer'
 import PeriodScrubber from './PeriodScrubber'
+import Sparkline, { MomentumDelta } from './Sparkline'
 import InsightTicker from './InsightTicker'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
@@ -105,6 +106,8 @@ type ProcurementKpiCard = {
   href: string
   icon: typeof Package
   className: string
+  /** Deret nilai tren untuk sparkline mini (opsional). */
+  spark?: number[]
 }
 
 const DECK_SECTIONS: Array<{ id: DeckSection; label: string; tone: string }> = [
@@ -288,41 +291,18 @@ type CardTitleTone = {
 }
 
 function cardTitleTone(cardId: string): CardTitleTone {
+  // Calm-minimal: dua warna fungsional saja.
+  // emerald = nilai/positif, amber = perhatian/anomali, sisanya neutral.
   switch (cardId) {
     case 'stock':
-      return { pillClass: 'border-emerald-200/35 bg-emerald-400/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,.12)]', dotClass: 'bg-emerald-200' }
     case 'gudang-value':
-      return { pillClass: 'border-teal-200/35 bg-teal-400/15 text-teal-50 shadow-[0_0_0_1px_rgba(45,212,191,.12)]', dotClass: 'bg-teal-200' }
-    case 'workshop':
-      return { pillClass: 'border-orange-200/35 bg-orange-400/15 text-orange-50 shadow-[0_0_0_1px_rgba(251,146,60,.12)]', dotClass: 'bg-orange-200' }
     case 'receive-value':
-      return { pillClass: 'border-sky-200/35 bg-sky-400/15 text-sky-50 shadow-[0_0_0_1px_rgba(56,189,248,.12)]', dotClass: 'bg-sky-200' }
+      return { pillClass: 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100/90', dotClass: 'bg-emerald-300/70' }
     case 'pr-outstanding':
-      return { pillClass: 'border-amber-200/35 bg-amber-400/15 text-amber-50 shadow-[0_0_0_1px_rgba(251,191,36,.12)]', dotClass: 'bg-amber-200' }
     case 'po-outstanding':
-      return { pillClass: 'border-yellow-200/35 bg-yellow-400/15 text-yellow-50 shadow-[0_0_0_1px_rgba(250,204,21,.12)]', dotClass: 'bg-yellow-200' }
-    case 'movement-total':
-      return { pillClass: 'border-rose-200/35 bg-rose-400/15 text-rose-50 shadow-[0_0_0_1px_rgba(244,63,94,.12)]', dotClass: 'bg-rose-200' }
-    case 'movement-qty':
-      return { pillClass: 'border-lime-200/35 bg-lime-400/15 text-lime-50 shadow-[0_0_0_1px_rgba(163,230,53,.12)]', dotClass: 'bg-lime-200' }
-    case 'movement-amount':
-      return { pillClass: 'border-cyan-200/35 bg-cyan-400/15 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,.12)]', dotClass: 'bg-cyan-200' }
-    case 'movement-frequency':
-      return { pillClass: 'border-pink-200/35 bg-pink-400/15 text-pink-50 shadow-[0_0_0_1px_rgba(244,114,182,.12)]', dotClass: 'bg-pink-200' }
-    case 'movement-open-close-qty':
-      return { pillClass: 'border-indigo-200/35 bg-indigo-400/15 text-indigo-50 shadow-[0_0_0_1px_rgba(129,140,248,.12)]', dotClass: 'bg-indigo-200' }
-    case 'movement-gr-qty':
-      return { pillClass: 'border-teal-200/35 bg-teal-400/15 text-teal-50 shadow-[0_0_0_1px_rgba(45,212,191,.12)]', dotClass: 'bg-teal-200' }
-    case 'movement-issued-split':
-      return { pillClass: 'border-orange-200/35 bg-orange-400/15 text-orange-50 shadow-[0_0_0_1px_rgba(251,146,60,.12)]', dotClass: 'bg-orange-200' }
-    case 'movement-top-frequency':
-      return { pillClass: 'border-purple-200/35 bg-purple-400/15 text-purple-50 shadow-[0_0_0_1px_rgba(192,132,252,.12)]', dotClass: 'bg-purple-200' }
-    case 'net-flow':
-      return { pillClass: 'border-violet-200/35 bg-violet-400/15 text-violet-50 shadow-[0_0_0_1px_rgba(167,139,250,.12)]', dotClass: 'bg-violet-200' }
-    case 'total-usage':
-      return { pillClass: 'border-fuchsia-200/35 bg-fuchsia-400/15 text-fuchsia-50 shadow-[0_0_0_1px_rgba(232,121,249,.12)]', dotClass: 'bg-fuchsia-200' }
+      return { pillClass: 'border-amber-300/25 bg-amber-400/10 text-amber-100/90', dotClass: 'bg-amber-300/70' }
     default:
-      return { pillClass: 'border-white/15 bg-white/10 text-white shadow-[0_0_0_1px_rgba(255,255,255,.08)]', dotClass: 'bg-white/80' }
+      return { pillClass: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]', dotClass: 'bg-white/40' }
   }
 }
 
@@ -721,7 +701,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.stock,
       icon: Package,
-      className: 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'gudang-value',
@@ -737,7 +717,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.stock,
       icon: Layers3,
-      className: 'border-teal-300/25 bg-teal-400/10 text-teal-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'workshop',
@@ -753,7 +733,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.workshop,
       icon: Wrench,
-      className: 'border-orange-300/25 bg-orange-400/10 text-orange-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
   ]
 
@@ -772,7 +752,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.receive,
       icon: Truck,
-      className: 'border-sky-300/25 bg-sky-400/10 text-sky-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'pr-outstanding',
@@ -788,7 +768,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.process,
       icon: ClipboardList,
-      className: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'po-outstanding',
@@ -805,7 +785,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.process,
       icon: CircleDollarSign,
-      className: 'border-yellow-300/25 bg-yellow-400/10 text-yellow-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
   ]
 
@@ -824,7 +804,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: Gauge,
-      className: 'border-rose-300/25 bg-rose-400/10 text-rose-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'movement-qty',
@@ -840,7 +820,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: Package,
-      className: 'border-lime-300/25 bg-lime-400/10 text-lime-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'movement-amount',
@@ -856,7 +836,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: CircleDollarSign,
-      className: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'movement-frequency',
@@ -872,7 +852,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: Gauge,
-      className: 'border-pink-300/25 bg-pink-400/10 text-pink-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'movement-open-close-qty',
@@ -888,7 +868,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: Layers3,
-      className: 'border-indigo-300/25 bg-indigo-400/10 text-indigo-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'movement-gr-qty',
@@ -903,7 +883,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: Truck,
-      className: 'border-teal-300/25 bg-teal-400/10 text-teal-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'movement-issued-split',
@@ -919,7 +899,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: Package,
-      className: 'border-orange-300/25 bg-orange-400/10 text-orange-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
     {
       id: 'movement-top-frequency',
@@ -935,7 +915,7 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.movement,
       icon: TrendingUp,
-      className: 'border-purple-300/25 bg-purple-400/10 text-purple-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
     },
   ]
 
@@ -975,7 +955,8 @@ export default function ProcurementKpiStrip({
       ],
       href: filteredLinks.usage,
       icon: Package,
-      className: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
+      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
+      spark: (Array.isArray(usageTrend) ? usageTrend : []).map((t) => Number(t?.amount ?? 0)).filter((v) => Number.isFinite(v)),
     },
   ]
 
@@ -986,43 +967,65 @@ export default function ProcurementKpiStrip({
   const gudangShare = Math.min(Math.max(percentOf(gudangValue, inventoryValue), 0), 100)
   const workshopShare = Math.min(Math.max(percentOf(workshopValue, inventoryValue), 0), 100)
 
-  const renderCardItems = (cards: ProcurementKpiCard[]) =>
+  const renderCardItems = (cards: ProcurementKpiCard[], variant: 'headline' | 'standard' = 'standard') =>
     cards.map((card, cardIndex) => {
         const Icon = card.icon
         const tone = cardTitleTone(card.id)
         const exact = card.valueExact ?? card.value
+        const isHeadline = variant === 'headline'
         return (
           <Link
             key={card.id}
             href={card.href}
             title={exact}
             aria-label={`${card.label}: ${exact}`}
-            className="rc-kpi-surface rc-reveal group relative min-h-[150px] overflow-hidden rounded-[22px] p-3"
+            className={isHeadline
+              ? 'rc-kpi-surface rc-reveal group relative min-h-[190px] overflow-hidden rounded-[24px] p-5'
+              : 'rc-kpi-surface rc-reveal group relative min-h-[150px] overflow-hidden rounded-[22px] p-3'}
             style={{ '--reveal-order': cardIndex } as React.CSSProperties}
           >
             <span className="pointer-events-none absolute -right-10 -top-12 h-24 w-24 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
             <span className="relative z-10 flex items-start justify-between gap-2">
               <span className="min-w-0">
-                <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${tone.pillClass}`}>
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClass}`} />
-                  <span className="truncate">{card.label}</span>
-                </span>
+                {isHeadline ? (
+                  <span className="rc-data inline-flex max-w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-[var(--rc-text-faint)]">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClass}`} />
+                    <span className="truncate">{card.label}</span>
+                  </span>
+                ) : (
+                  <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold normal-case tracking-normal ${tone.pillClass}`}>
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClass}`} />
+                    <span className="truncate">{card.label}</span>
+                  </span>
+                )}
                 <strong
-                  className="rc-metric mt-2 block truncate text-[1.45rem] font-bold text-[var(--rc-text)]"
+                  className={isHeadline
+                    ? 'rc-display mt-3 block truncate text-[2.6rem] font-bold leading-none text-[var(--rc-text)]'
+                    : 'rc-metric mt-2 block truncate text-[1.15rem] font-semibold text-[var(--rc-text)]'}
                   title={exact}
                 >
                   {loading ? '...' : card.value}
                 </strong>
               </span>
-              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${card.className}`}>
-                <Icon size={17} />
+              <span className={isHeadline
+                ? `grid h-12 w-12 shrink-0 place-items-center rounded-2xl border ${card.className}`
+                : `grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${card.className}`}>
+                <Icon size={isHeadline ? 22 : 16} />
               </span>
             </span>
-            <span className="relative z-10 mt-2 block truncate text-[11px] font-semibold text-[var(--rc-text-muted)]">
+            <span className={isHeadline
+              ? 'relative z-10 mt-2 block truncate text-xs text-[var(--rc-text-muted)]'
+              : 'relative z-10 mt-2 block truncate text-[11px] text-[var(--rc-text-muted)]'}>
               {loading ? 'Menunggu response gateway' : card.description}
             </span>
+            {card.spark && card.spark.length > 1 ? (
+              <span className="relative z-10 mt-2 flex items-center gap-3">
+                <Sparkline values={card.spark} width={isHeadline ? 150 : 110} height={isHeadline ? 36 : 28} />
+                <MomentumDelta values={card.spark} />
+              </span>
+            ) : null}
             <span className="relative z-10 mt-2 flex flex-wrap gap-1.5">
-              {card.breakdown.map((item) => (
+              {(isHeadline ? card.breakdown.slice(0, 3) : card.breakdown).map((item) => (
                 <span key={item.label} className="rc-chip max-w-full truncate">
                   <span>{item.label}: </span>
                   <strong>{loading ? '...' : item.value}</strong>
@@ -1097,8 +1100,8 @@ export default function ProcurementKpiStrip({
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">MC {filters.movementWindow}</span>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Group {selectedGroup.label}</span>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{filters.itemType ? `Scope ${filters.itemType}` : 'Scope Inventory 1+4'}</span>
-          {filters.scopeCode ? <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-2.5 py-1 text-lime-100">Code {filters.scopeCode}</span> : null}
-          {filters.location ? <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-cyan-100">Lokasi {filters.location}</span> : null}
+          {filters.scopeCode ? <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Code {filters.scopeCode}</span> : null}
+          {filters.location ? <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Lokasi {filters.location}</span> : null}
         </div>
 
         {insightItems.length > 0 ? (
@@ -1132,9 +1135,9 @@ export default function ProcurementKpiStrip({
 
             <span className="relative z-10 flex items-start justify-between gap-3">
               <span>
-                <span className="block text-[11px] font-semibold text-emerald-100/60">Master valuation</span>
+                <span className="rc-data block text-[10px] uppercase tracking-[0.22em] text-[var(--rc-text-faint)]">Master valuation</span>
                 <strong
-                  className="rc-metric mt-2 block text-[2.35rem] font-bold text-[var(--rc-text)] sm:text-5xl"
+                  className="rc-display mt-3 block text-[2.8rem] font-bold leading-none text-[var(--rc-text)] sm:text-[3.4rem]"
                   title={headlineCard.valueExact ?? headlineCard.value}
                 >
                   {loading ? '...' : headlineCard.value}
@@ -1145,19 +1148,19 @@ export default function ProcurementKpiStrip({
               </span>
             </span>
 
-            <span className="relative z-10 mt-3 block text-xs font-semibold leading-5 text-emerald-50/70">
+            <span className="relative z-10 mt-3 block text-xs leading-5 text-[var(--rc-text-muted)]">
               {headlineCard.formula}
             </span>
 
             <span className="relative z-10 mt-4 grid gap-2">
-              <span className="flex items-center justify-between gap-3 text-[11px] font-black text-emerald-50/80">
+              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
                 <span>Gudang</span>
                 <span title={formatCurrency(gudangValue)}>{loading ? '...' : `${formatCurrencyCompact(gudangValue)} · ${formatPercent(gudangShare)}`}</span>
               </span>
               <span className="h-2 overflow-hidden rounded-full bg-white/10">
                 <span className="block h-full rounded-full bg-[linear-gradient(90deg,#18b96b,#9be23d)]" style={{ width: `${gudangShare}%` }} />
               </span>
-              <span className="flex items-center justify-between gap-3 text-[11px] font-black text-amber-50/80">
+              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
                 <span>Workshop/Mesin</span>
                 <span title={formatCurrency(workshopValue)}>{loading ? '...' : `${formatCurrencyCompact(workshopValue)} · ${formatPercent(workshopShare)}`}</span>
               </span>
@@ -1166,7 +1169,7 @@ export default function ProcurementKpiStrip({
               </span>
             </span>
 
-            <span className="relative z-10 mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-[11px] font-bold text-emerald-50/60">
+            <span className="rc-data relative z-10 mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-[10px] text-[var(--rc-text-faint)]">
               {headlineCard.source}
               <ArrowRight size={13} className="text-[var(--rc-forest-accent)]" />
             </span>
@@ -1175,7 +1178,7 @@ export default function ProcurementKpiStrip({
 
         <div className="space-y-3">
           <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/70">Always visible · Arus Bersih + Total Usage</p>
+            <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">Always visible · Arus Bersih + Total Usage</p>
             {renderCardGrid(heroSideCards)}
           </div>
 
@@ -1189,7 +1192,7 @@ export default function ProcurementKpiStrip({
                   aria-selected={openSection === section.id}
                   data-active={openSection === section.id}
                   onClick={() => setOpenSection(section.id)}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition hover:bg-white/[0.06] ${section.tone}`}
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold normal-case tracking-normal transition hover:bg-white/[0.06] ${section.tone}`}
                 >
                   {section.label}
                 </button>
@@ -1212,7 +1215,7 @@ export default function ProcurementKpiStrip({
             className="flex w-full items-center justify-between gap-2 rounded-2xl border-[var(--rc-border)] bg-[rgba(3,14,10,.5)] px-4 py-3 text-left transition hover:border-[var(--rc-forest-accent)]"
           >
             <span className="rc-data text-xs text-[var(--rc-text-faint)]">Grafik & analisis lengkap dimuat bertahap agar angka utama tampil duluan.</span>
-            <span className="shrink-0 rounded-full border-[var(--rc-forest-accent)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--rc-forest-accent)]">Lihat semua</span>
+            <span className="shrink-0 rounded-full border-[var(--rc-forest-accent)] px-3 py-1 text-[11px] font-semibold text-[var(--rc-forest-accent)]">Lihat semua</span>
           </button>
         </div>
       ) : (
@@ -1271,7 +1274,7 @@ export default function ProcurementKpiStrip({
                   aria-selected={topDimension === dim.id}
                   data-active={topDimension === dim.id}
                   onClick={() => setTopDimension(dim.id)}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition hover:bg-white/[0.06] ${
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold normal-case tracking-normal transition hover:bg-white/[0.06] ${
                     topDimension === dim.id
                       ? 'border-cyan-300/40 bg-cyan-400/15 text-cyan-100'
                       : 'border-white/10 bg-white/[0.04] text-[var(--rc-text-muted)]'
@@ -1281,7 +1284,7 @@ export default function ProcurementKpiStrip({
                 </button>
               ))}
             </div>
-            <Link href={filteredLinks.usage} className="inline-flex w-fit items-center gap-1.5 rounded-xl border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-black text-cyan-100 hover:bg-cyan-400/15">
+            <Link href={filteredLinks.usage} className="inline-flex w-fit items-center gap-1.5 rounded-xl border-white/10 bg-white/[0.045] px-3 py-2 text-xs font-semibold text-[var(--rc-text)] hover:bg-white/[0.08]">
               Buka detail issue
               <ArrowRight size={13} />
             </Link>

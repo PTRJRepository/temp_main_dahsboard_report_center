@@ -46,7 +46,8 @@ const METRIC_LABEL: Record<MetricKey, string> = {
   docs: 'Frekuensi',
 }
 
-const BAR_COLORS = ['#9be23d', '#7fd14f', '#63c061', '#47af73', '#2b9e85', '#1f8d95', '#1b7ba0', '#1a6aa0', '#1b5896', '#1d478a']
+// Calm-minimal: gradasi forest -> abu netral (bukan pelangi)
+const BAR_COLORS = ['#34d399', '#3bb98f', '#419f86', '#47857c', '#4d6b73', '#535f63', '#565a5c', '#525254', '#4c4a4d', '#464547']
 
 function formatCompact(value: number) {
   if (!Number.isFinite(value)) return '0'

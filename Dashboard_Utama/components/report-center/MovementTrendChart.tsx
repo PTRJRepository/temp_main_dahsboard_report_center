@@ -184,7 +184,7 @@ export default function MovementTrendChart({ trend, frequency, loading }: Moveme
               wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: 10, color: '#7ea88f' }}
               formatter={(value) => (value === 'amount' ? 'Nilai' : value === 'qty' ? 'Qty' : 'Doc issue')}
             />
-            <Bar yAxisId="qty" dataKey="qty" fill="rgba(56,189,248,0.4)" radius={[3, 3, 0, 0]} maxBarSize={18} />
+            <Bar yAxisId="qty" dataKey="qty" fill="rgba(148,163,164,0.4)" radius={[3, 3, 0, 0]} maxBarSize={18} />
             <Area
               yAxisId="amt"
               type="monotone"
@@ -199,11 +199,11 @@ export default function MovementTrendChart({ trend, frequency, loading }: Moveme
               yAxisId="qty"
               type="monotone"
               dataKey="docs"
-              stroke="#f472b6"
+              stroke="#f59e0b"
               strokeWidth={1.8}
               strokeDasharray="5 4"
               dot={false}
-              activeDot={{ r: 3, fill: '#f472b6', stroke: '#050b08', strokeWidth: 2 }}
+              activeDot={{ r: 3, fill: '#f59e0b', stroke: '#050b08', strokeWidth: 2 }}
             />
           </ComposedChart>
         </ResponsiveContainer>

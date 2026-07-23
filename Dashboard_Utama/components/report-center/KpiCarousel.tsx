@@ -47,7 +47,7 @@ export default function KpiCarousel({ children, ariaLabel, autoScroll = false }:
       if (!paused) {
         const max = el.scrollWidth - el.clientWidth
         if (max > 0) {
-          el.scrollLeft += 38 * dt
+          el.scrollLeft += 22 * dt
           if (el.scrollLeft >= max - 1) el.scrollLeft = 0
         }
       }

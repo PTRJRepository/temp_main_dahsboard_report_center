@@ -71,11 +71,11 @@ export default function StockRiverChart({
     const veh = clampQty(vehicle)
     const close = clampQty(closing)
 
-    const inflows: Channel[] = [{ key: 'gr', label: 'Goods Receive', value: gr, color: '#818cf8' }]
+    const inflows: Channel[] = [{ key: 'gr', label: 'Goods Receive', value: gr, color: '#34d399' }]
     const outflows: Channel[] = [
-      { key: 'ledger', label: 'Issue Ledger', value: led, color: '#fb7185' },
-      { key: 'station', label: 'Issue Station', value: sta, color: '#2dd4bf' },
-      { key: 'vehicle', label: 'Issue Vehicle', value: veh, color: '#fb923c' },
+      { key: 'ledger', label: 'Issue Ledger', value: led, color: '#8fa39a' },
+      { key: 'station', label: 'Issue Station', value: sta, color: '#6b7f76' },
+      { key: 'vehicle', label: 'Issue Vehicle', value: veh, color: '#4a5a53' },
     ]
 
     const leftTotal = open + gr

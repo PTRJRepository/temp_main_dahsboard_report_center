@@ -1205,29 +1205,7 @@ body {
   box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.35);
 }
 
-/* Insight ticker — marquee pelan, jeda saat hover, reduced-motion = statis */
-@keyframes rc-ticker-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.report-center-dark .rc-ticker-track {
-  animation: rc-ticker-scroll 36s linear infinite;
-}
-
-.report-center-dark .rc-ticker-track:hover {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .report-center-dark .rc-ticker-track {
-    animation: none;
-  }
-}
+/* Insight ticker kini statis (calm-minimal) — keyframes marquee dihapus. */
 
 /* Analysis drawer — geser dari kanan, reduced-motion = tanpa transisi */
 .report-center-dark .rc-drawer {

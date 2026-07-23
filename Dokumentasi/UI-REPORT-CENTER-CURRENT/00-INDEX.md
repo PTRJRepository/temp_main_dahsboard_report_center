@@ -92,6 +92,14 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **Auto-scroll rail:** `KpiCarousel autoScroll` — rail bergeser pelan (loop), berhenti saat hover/focus, jeda 6 detik setelah interaksi manual, reduced-motion statis. Snap/prev-next/dot utuh.
 - **Verifikasi:** tsc 0, eslint bersih, build exit 0. Checkpoint `6919f16`, `087fd9a`.
 
+### 14. Estetika calm-minimal + sparkline momentum (2026-07-23)
+- **Kurangi warna (H2):** `cardTitleTone` kini hanya 2 warna fungsional — emerald (nilai/positif), amber (perhatian/outstanding); seluruh kartu lain + ikon netral `border-white/10 bg-white/[0.045]`. Grafik: `TopMovementScatter` gradasi forest→abu (bukan pelangi), `StockRiverChart` receive=emerald & 3 issue=neutral lightness berjenjang, `MovementTrendChart` qty=neutral & docs=amber dashed.
+- **Hirarki angka (H1):** satu protagonis — headline Master valuation diperbesar (`rc-display` ~2.8–3.4rem), label jadi meta mono redup; kartu standard diperkecil (`rc-metric` 1.15rem, label normal-case).
+- **Kurangi gerakan (H3):** `InsightTicker` tak lagi marquee — statis, scroll manual; keyframes `.rc-ticker-track` dihapus dari globals.css. `KpiCarousel autoScroll` diperlambat 38→22px/s.
+- **Keterbacaan (H4):** bar chip konteks aktif jadi meta mono satu baris (hanya chip "Period" amber; Code/Lokasi dineutralkan dari lime/cyan); tab section & "Lihat semua" jadi normal-case (bukan uppercase tracking lebar).
+- **Kreativitas:** `Sparkline.tsx` baru (reusable) — sparkline SVG mini halus (smooth bezier, tanpa lib) + `MomentumDelta` (▲/▼ % vs rata-rata 3 periode). Disematkan di kartu hero Total Usage dari `usageTrend.amount`.
+- **Verifikasi:** tsc 0, eslint 0 error baru (error `set-state-in-effect` pre-existing), build exit 0.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.
