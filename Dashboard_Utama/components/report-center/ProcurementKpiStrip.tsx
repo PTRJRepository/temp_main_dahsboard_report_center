@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
 import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, TrendingDown, TrendingUp, Truck, Wrench } from 'lucide-react'
+import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageIntensity } from '@/lib/reports/procurement-kpi-math'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
 type DeckSection = 'valuasi' | 'proses' | 'movement'
@@ -183,7 +184,7 @@ function formatPeriodLabel(period: string) {
 }
 
 function periodOptions(now = new Date()) {
-  return Array.from({ length: 8 }).map((_, index) => {
+  return Array.from({ length: 18 }).map((_, index) => {
     const date = new Date(now.getFullYear(), now.getMonth() - index, 1)
     const value = currentPeriod(date)
     return {
@@ -441,6 +442,7 @@ export default function ProcurementKpiStrip({
   }))
   const [scopeDraft, setScopeDraft] = useState(filters.scopeCode)
   const [openSection, setOpenSection] = useState<DeckSection>('valuasi')
+  const [topDimension, setTopDimension] = useState<'items' | 'costCenters' | 'vehicles'>('items')
   const selectedGroup = analysisGroupOptions.find((option) => option.value === filters.groupBy) ?? analysisGroupOptions[0]
   const periods = periodOptions()
   const activePeriodLabel = formatPeriodLabel(filters.period)
@@ -557,6 +559,17 @@ export default function ProcurementKpiStrip({
   const regularMovement = firstNumber(movement, ['RegularStockIssueMovementCount'])
   const workshopMovement = firstNumber(movement, ['WorkshopStockIssueMovementCount'])
   const usageIntensity = inventoryValue > 0 ? usageAmount / inventoryValue : 0
+  const activeIssueDays = firstNumber(usage, ['ActiveIssueDays'])
+  const usageFreqPerDay = frequencyPerDay(usageEvents, activeIssueDays)
+  const returnRateValue = returnRate(returnAmount, usageAmount)
+  const topLists = snapshots.usage?.topLists
+  const topDimensionRows = topLists?.[topDimension] ?? []
+  const topRows = topDimensionRows.length > 0 ? topDimensionRows.slice(0, 5) : topUsageItems
+  const TOP_DIMENSIONS: { id: 'items' | 'costCenters' | 'vehicles'; label: string }[] = [
+    { id: 'items', label: 'Item' },
+    { id: 'costCenters', label: 'Dept' },
+    { id: 'vehicles', label: 'Kendaraan' },
+  ]
 
   const valuationCards: ProcurementKpiCard[] = [
     {
@@ -654,7 +667,7 @@ export default function ProcurementKpiStrip({
         { label: 'Total PO', value: formatNumber(poCount) },
         { label: 'Qty order', value: formatQuantity(poQtyOrder) },
         { label: 'Nilai PO', value: formatCurrency(poAmount) },
-        { label: 'Fill rate', value: formatPercent(percentOf(poQtyReceive, poQtyOrder)) },
+        { label: 'Fill rate', value: formatPercent(poFillRate(poQtyReceive, poQtyOrder) * 100) },
       ],
       href: filteredLinks.process,
       icon: CircleDollarSign,
@@ -738,12 +751,14 @@ export default function ProcurementKpiStrip({
       value: formatCurrencyCompact(usageAmount),
       valueExact: formatCurrency(usageAmount),
       description: 'Total usage/issue amount in IDR for selected period.',
-      formula: 'Total Usage = SUM issue Amount. Usage intensity = Usage Amount / Total Valuasi Inventory.',
+      formula: 'Total Usage = SUM issue Amount. Freq/hari = Issue Events / Hari Aktif. Return rate = Return / Issue.',
       source: 'pengeluaran-barang',
       breakdown: [
         { label: 'Qty issue', value: formatQuantity(usageQty) },
+        { label: 'Frekuensi', value: `${formatNumber(usageEvents)} event · ${formatQuantity(usageFreqPerDay)}/hari` },
         { label: 'Item dipakai', value: formatNumber(usageItems) },
-        { label: 'Intensitas usage', value: formatPercent(usageIntensity * 100) },
+        { label: 'Intensitas', value: formatPercent(usageIntensity * 100) },
+        { label: 'Return rate', value: formatPercent(returnRateValue * 100) },
       ],
       href: filteredLinks.usage,
       icon: Package,
@@ -1012,33 +1027,55 @@ export default function ProcurementKpiStrip({
         </div>
       </div>
 
-      {topUsageItems.length > 0 ? (
+      {topRows.length > 0 ? (
         <div className="relative z-10 border-t border-[var(--rc-border)] bg-black/15 px-3 py-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/70">Top item usage periode</p>
-              <p className="mt-0.5 text-xs font-semibold text-[var(--rc-text-muted)]">Top 5 dari report pengeluaran-barang. AccCode tetap dibaca sebagai cost center / dept.</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/70">Top usage periode</p>
+              <p className="mt-0.5 text-xs font-semibold text-[var(--rc-text-muted)]">Top 5 dari report pengeluaran-barang. AccCode dibaca sebagai cost center / dept.</p>
             </div>
-            <Link href={filteredLinks.usage} className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-black text-cyan-100 hover:bg-cyan-400/15">
+            <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Dimensi top usage">
+              {TOP_DIMENSIONS.map((dim) => (
+                <button
+                  key={dim.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={topDimension === dim.id}
+                  data-active={topDimension === dim.id}
+                  onClick={() => setTopDimension(dim.id)}
+                  className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition hover:bg-white/[0.06] ${
+                    topDimension === dim.id
+                      ? 'border-cyan-300/40 bg-cyan-400/15 text-cyan-100'
+                      : 'border-white/10 bg-white/[0.04] text-[var(--rc-text-muted)]'
+                  }`}
+                >
+                  {dim.label}
+                </button>
+              ))}
+            </div>
+            <Link href={filteredLinks.usage} className="inline-flex w-fit items-center gap-1.5 rounded-xl border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-black text-cyan-100 hover:bg-cyan-400/15">
               Buka detail issue
               <ArrowRight size={13} />
             </Link>
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-            {topUsageItems.map((item, index) => {
-              const amount = firstNumber(item, ['NilaiKeluar', 'Amount', 'TotalAmount'])
-              const qty = firstNumber(item, ['QtyKeluar', 'Qty', 'TotalQty'])
-              const label = firstText(item, ['NamaBarang', 'ItemName', 'KodeBarang']) || `Item ${index + 1}`
+            {topRows.map((item, index) => {
+              const amount = firstNumber(item, ['amount', 'NilaiKeluar', 'Amount', 'TotalAmount'])
+              const qty = firstNumber(item, ['qty', 'QtyKeluar', 'Qty', 'TotalQty'])
+              const label = firstText(item, ['name', 'NamaBarang', 'ItemName', 'KodeBarang', 'code']) || `${topDimension === 'items' ? 'Item' : topDimension === 'costCenters' ? 'Dept' : 'Kendaraan'} ${index + 1}`
+              const code = firstText(item, ['code', 'KodeBarang'])
               return (
                 <Link
-                  key={`${index}-${label}`}
+                  key={`${topDimension}-${index}-${label}`}
                   href={filteredLinks.usage}
-                  className="rounded-2xl border border-white/10 bg-white/[0.045] p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-cyan-300/10"
+                  className="rounded-2xl border-white/10 bg-white/[0.045] p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-cyan-300/10"
                 >
-                  <span className="block truncate text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100/60">#{index + 1} · {firstText(item, ['KodeBarang']) || 'item'}</span>
+                  <span className="block truncate text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100/60">#{index + 1} · {code || (topDimension === 'items' ? 'item' : topDimension === 'costCenters' ? 'dept' : 'unit')}</span>
                   <strong className="mt-1 block line-clamp-2 text-sm font-black leading-5 text-[var(--rc-text)]">{label}</strong>
                   <span className="mt-2 block text-xs font-bold text-cyan-100">{formatCurrency(amount)}</span>
-                  <span className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Qty {formatQuantity(qty)}</span>
+                  <span className="text-[11px] font-semibold text-[var(--rc-text-faint)]">
+                    {topDimension === 'items' ? `Qty ${formatQuantity(qty)}` : `${formatNumber(firstNumber(item, ['events']))} event`}
+                  </span>
                 </Link>
               )
             })}

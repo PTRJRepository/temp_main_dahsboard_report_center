@@ -100,3 +100,14 @@ Bukan git log otomatis.
 - **LIVE:** Insight deck ditambah tanpa menambah kartu: **Fill rate** (Qty Receive / Qty Order) di kartu PO Outstanding, **Intensitas usage** (Usage Amount / Total Valuasi) di kartu Total Usage.
 - **PLANNED:** composite endpoint belum di-smoke-test terhadap gateway SQL live di sesi ini (tsc + contract test lulus). Dept/vehicle toggle & server PDF resmi tetap planned.
 
+## 2026-07-23 (lanjut) — Enrich summary + insight chips + Top lists toggle
+
+- **LIVE:** `stockIssue` summary diperkaya: `ActiveIssueDays` (hari unik dengan aktivitas issue) + `topLists` (`items`, `costCenters`, `vehicles` — masing-masing Top 5 by amount). Additive, tidak mengubah field lama.
+- **LIVE:** Composite command-deck meneruskan `topLists` dari inventory route ke client.
+- **LIVE:** `lib/reports/procurement-kpi-math.ts` — pure helpers `frequencyPerDay`, `poFillRate`, `returnRate`, `usageIntensity` + unit test (`procurement-kpi-math.test.ts`, lulus).
+- **LIVE:** Kartu **Total Usage** sekarang menampilkan chip: **Frekuensi** (event/hari aktif), **Intensitas** (usage/valuasi), **Return rate** (return amount / usage amount, all-time — label jujur karena `stockReturn` mengabaikan filter periode).
+- **LIVE:** Kartu **PO** memakai `poFillRate()` helper (Qty Receive / Qty Order).
+- **LIVE:** **Top usage periode** footer sekarang punya toggle 3 dimensi: **Item | Dept | Kendaraan**. Data dari `topLists`; fallback ke `usage.chart` bila `topLists` kosong.
+- **LIVE:** Pilihan periode diperluas dari 8 → **18 bulan**.
+- **PLANNED:** smoke-test live DB untuk memastikan `topLists` benar terisi saat runtime; split monolit `ProcurementKpiStrip.tsx` masih planned.
+
