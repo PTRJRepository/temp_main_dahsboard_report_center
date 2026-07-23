@@ -9,6 +9,7 @@ import MovementTrendChart from './MovementTrendChart'
 import TopMovementScatter from './TopMovementScatter'
 import StockRiverChart from './StockRiverChart'
 import AnalysisDrawer from './AnalysisDrawer'
+import PeriodScrubber from './PeriodScrubber'
 import InsightTicker from './InsightTicker'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
@@ -1082,6 +1083,12 @@ export default function ProcurementKpiStrip({
             Ruang Analisis
           </button>
         </div>
+
+        {!isYearMode ? (
+          <div className="mt-2">
+            <PeriodScrubber value={filters.period} onSelect={(period) => updateFilter('period', period)} />
+          </div>
+        ) : null}
 
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--rc-text-faint)]" aria-label="Active filter context">
           <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-amber-100" title="Periode usage/receive">
