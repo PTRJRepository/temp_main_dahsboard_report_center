@@ -200,3 +200,12 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - **INTEGRASI:** blok grid filter di `ProcurementKpiStrip.tsx` diganti baris ringkas tombol pembuka; `SlidersHorizontal` ditambah ke import lucide; `analysisOpen` state baru; chip konteks aktif + InsightTicker dipertahankan.
 - **VERIFIKASI:** tsc 0; eslint `AnalysisDrawer.tsx` bersih total; strip 0 error baru (error `set-state-in-effect` pre-existing); build exit 0.
 - **PLANNED:** uji drawer di browser (auth gate); konfirmasi preset Q vs tahun fiskal ke data nyata; pertimbangkan preset kuartal kalender bila diminta.
+
+## 2026-07-23 (lanjut) - "Lihat cepat": Glance, muat bertahap, time-scrubber, hover kaya, auto-scroll rail
+- **GLANCE + MUAT BERTAHAP:** state `glance` (default true) di strip - saat true, grafik berat (MovementTrend/TopMovementScatter/StockRiver) TIDAK di-mount; sebagai gantinya satu bar "Grafik & analisis lengkap dimuat bertahap" + tombol "Lihat semua". Auto-expand `setGlance(false)` 1400ms setelah `loading` selesai. First paint kini hanya angka utama + ticker -> terasa jauh lebih cepat.
+- **TIME-SCRUBBER:** `PeriodScrubber.tsx` - strip 18 titik bulan (baca `/api/reports/inventory/aggregation?months=18` untuk `currentPeriod` + `closedPeriods`). Klik titik -> `updateFilter('period', ...)`. Titik penuh = periode closed (instan dari agregasi), berongga = live. Letak di atas deck di bawah tombol Ruang Analisis; hanya tampil di mode Bulan (mode Tahun disembunyikan). Label mono bulan+2 digit tahun.
+- **HOVER KAYA:** `TopMovementScatter` Tooltip recharts diganti konten kustom - hover bar menampilkan panel (nama item + Frekuensi dok + Qty + Amount sekaligus), bukan hanya satu metrik.
+- **AUTO-SCROLL RAIL "MAHAL":** `KpiCarousel` diberi prop `autoScroll` - rail bergeser pelan (rAF, 38px/s, loop ke awal di ujung), BERHENTI saat hover/focus, dan menjeda 6 detik setelah interaksi manual (wheel/touch/prev-next/dot). Reduced-motion = statis penuh. Scroll-snap, prev/next, dan dot indicator dipertahankan utuh. Diaktifkan di rail section secondary.
+- **VERIFIKASI:** tsc 0; eslint file baru/tersentuh (PeriodScrubber, TopMovementScatter, KpiCarousel) bersih; strip 0 error baru (error `set-state-in-effect` pre-existing); build exit 0 tiap tahap.
+- **COMMIT CHECKPOINT:** `6919f16` glance, `087fd9a` scrubber, (G3+G4 berikutnya).
+- **PLANNED:** uji visual auto-scroll + scrubber di browser (auth gate); verifikasi status agregasi live ke data nyata.

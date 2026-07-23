@@ -141,11 +141,19 @@ export default function TopMovementScatter({ items, loading, top = 10 }: TopMove
                 fontSize: 11,
               }}
               labelStyle={{ color: '#9be23d', fontWeight: 700 }}
-              formatter={(value, name, item) => {
-                const payload = (item?.payload ?? {}) as { name?: string; qty?: number; amount?: number; docs?: number }
-                const v = typeof value === 'number' ? value : Number(value ?? 0)
-                const label = name === 'amount' ? 'Amount' : name === 'qty' ? 'Qty' : 'Frekuensi'
-                return [name === 'amount' ? `Rp ${formatCompact(v)}` : formatCompact(v), label, payload.name ?? '']
+              content={({ active, payload }) => {
+                if (!active || !payload || payload.length === 0) return null
+                const row = (payload[0]?.payload ?? {}) as { name?: string; qty?: number; amount?: number; docs?: number }
+                return (
+                  <div className="rounded-xl border-[rgba(172,255,188,0.22)] bg-[#07110d] px-3 py-2" style={{ fontFamily: 'var(--font-data)', fontSize: 11 }}>
+                    <p className="mb-1 font-bold text-[#9be23d]">{row.name ?? '—'}</p>
+                    <div className="space-y-0.5 text-[#d7ffe9]">
+                      <p>Frekuensi: <span className="font-bold">{formatCompact(Number(row.docs ?? 0))}</span> dok</p>
+                      <p>Qty: <span className="font-bold">{formatCompact(Number(row.qty ?? 0))}</span></p>
+                      <p>Amount: <span className="font-bold">Rp {formatCompact(Number(row.amount ?? 0))}</span></p>
+                    </div>
+                  </div>
+                )
               }}
             />
             <Bar dataKey={metric} radius={[0, 4, 4, 0]} maxBarSize={18}>

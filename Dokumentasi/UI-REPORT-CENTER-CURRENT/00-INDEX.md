@@ -85,6 +85,13 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **AnalysisDrawer:** seluruh kontrol filter pindah ke panel geser kanan (backdrop blur + ESC + `role="dialog"`); deck hanya menyisakan tombol "Ruang Analisis" + chip konteks aktif + ticker. Isi: preset cepat, periode Bulan/Tahun, aging, group, kode filter, item scope, lokasi, preview sparkline + insight, Reset + Terapkan. Controlled via props — sumber kebenaran filter tetap di strip.
 - **Verifikasi:** tsc 0, eslint drawer bersih, build exit 0.
 
+### 13. Lihat cepat: Glance + muat bertahap + time-scrubber + hover kaya + auto-scroll rail (2026-07-23)
+- **Glance + muat bertahap:** grafik berat tidak di-mount saat `glance`; bar "Lihat semua" + auto-expand setelah loading. First paint = angka utama saja.
+- **PeriodScrubber:** strip 18 titik bulan di atas deck; klik = lompat periode instan (titik penuh = closed/agregasi, berongga = live). Hanya mode Bulan.
+- **Hover kaya:** tooltip `TopMovementScatter` menampilkan Frekuensi + Qty + Amount sekaligus.
+- **Auto-scroll rail:** `KpiCarousel autoScroll` — rail bergeser pelan (loop), berhenti saat hover/focus, jeda 6 detik setelah interaksi manual, reduced-motion statis. Snap/prev-next/dot utuh.
+- **Verifikasi:** tsc 0, eslint bersih, build exit 0. Checkpoint `6919f16`, `087fd9a`.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

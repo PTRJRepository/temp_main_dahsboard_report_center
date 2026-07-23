@@ -1196,7 +1196,7 @@ export default function ProcurementKpiStrip({
               ))}
             </div>
             <div role="tabpanel" aria-label={`Section ${openSection}`}>
-              <KpiCarousel ariaLabel={`KPI section ${openSection}`}>
+              <KpiCarousel ariaLabel={`KPI section ${openSection}`} autoScroll>
                 {renderCardItems(sectionCards)}
               </KpiCarousel>
             </div>
