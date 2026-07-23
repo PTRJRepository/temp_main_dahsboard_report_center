@@ -81,6 +81,10 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **InsightTicker:** marquee pelan di bawah chip konteks; butir deterministik (delta qty issue vs rata-rata 3 bulan, closing < opening, item baru Top movement, frekuensi dokumen × hari aktif).
 - **Verifikasi:** tsc 0, eslint 0 error baru, build exit 0.
 
+### 12. Filter pindah ke Analysis Drawer (2026-07-23)
+- **AnalysisDrawer:** seluruh kontrol filter pindah ke panel geser kanan (backdrop blur + ESC + `role="dialog"`); deck hanya menyisakan tombol "Ruang Analisis" + chip konteks aktif + ticker. Isi: preset cepat, periode Bulan/Tahun, aging, group, kode filter, item scope, lokasi, preview sparkline + insight, Reset + Terapkan. Controlled via props — sumber kebenaran filter tetap di strip.
+- **Verifikasi:** tsc 0, eslint drawer bersih, build exit 0.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

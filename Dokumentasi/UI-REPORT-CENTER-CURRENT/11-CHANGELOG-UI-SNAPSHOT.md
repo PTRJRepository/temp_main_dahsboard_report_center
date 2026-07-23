@@ -191,3 +191,12 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - **MASALAH:** kontrol segmen [Bulan|Tahun] + input/select di kolom grid 150px -> isi meluber/terpotong.
 - **PERBAIKAN:** kolom periode di grid xl dinaikkan 150px -> 250px (`xl:grid-cols-[250px_...]`); tombol segmen dirampingkan (px-2, text-[9px]) agar bar h-10 muat rapi tanpa overflow.
 - **VERIFIKASI:** tsc 0; build exit 0.
+
+## 2026-07-23 (lanjut) - Filter dipindah ke Analysis Drawer (pop-up kanan)
+- **UX:** seluruh kontrol filter dicabut dari bar deck; deck kini hanya menampilkan satu tombol "Ruang Analisis" + chip konteks aktif + ticker insight. Tujuan: deck fokus ke insight, filter jadi lapisan terpisah.
+- **DRAWER BARU:** `AnalysisDrawer.tsx` - panel geser kanan `w-[min(430px,94vw)]` dengan backdrop blur klik-tutup + ESC, `role="dialog" aria-modal`. Isi: Preset cepat (Tahun ini/lalu/2 tahun lalu/Mode bulan), Periode (segmen Bulan/Tahun + input tahun/select bulan), Jendela aging, Analysis Group, Kode Filter, Item Scope, Lokasi, Preview (sparkline SVG mini dari `usageTrend` + 3 butir insight), footer sticky Reset + Terapkan.
+- **KONTROLLED:** drawer murni controlled via props; sumber kebenaran filter tetap di strip (`updateFilter`, `scopeDraft` auto-commit debounce 400ms) - tidak ada state filter kedua. `onApply` menutup drawer (commit berjalan sendiri).
+- **CSS:** `.rc-drawer` di globals.css (transisi transform 320ms, reduced-motion = tanpa transisi).
+- **INTEGRASI:** blok grid filter di `ProcurementKpiStrip.tsx` diganti baris ringkas tombol pembuka; `SlidersHorizontal` ditambah ke import lucide; `analysisOpen` state baru; chip konteks aktif + InsightTicker dipertahankan.
+- **VERIFIKASI:** tsc 0; eslint `AnalysisDrawer.tsx` bersih total; strip 0 error baru (error `set-state-in-effect` pre-existing); build exit 0.
+- **PLANNED:** uji drawer di browser (auth gate); konfirmasi preset Q vs tahun fiskal ke data nyata; pertimbangkan preset kuartal kalender bila diminta.

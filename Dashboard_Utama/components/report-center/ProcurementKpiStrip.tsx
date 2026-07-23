@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
-import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, TrendingDown, TrendingUp, Truck, Wrench } from 'lucide-react'
+import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, SlidersHorizontal, TrendingDown, TrendingUp, Truck, Wrench } from 'lucide-react'
 import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageIntensity } from '@/lib/reports/procurement-kpi-math'
 import KpiCarousel from './KpiCarousel'
 import MovementTrendChart from './MovementTrendChart'
 import TopMovementScatter from './TopMovementScatter'
 import StockRiverChart from './StockRiverChart'
+import AnalysisDrawer from './AnalysisDrawer'
 import InsightTicker from './InsightTicker'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
@@ -484,6 +485,7 @@ export default function ProcurementKpiStrip({
     snapshots: {},
   }))
   const [scopeDraft, setScopeDraft] = useState(filters.scopeCode)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
   const [openSection, setOpenSection] = useState<DeckSection>('valuasi')
   const [topDimension, setTopDimension] = useState<'items' | 'costCenters' | 'vehicles'>('items')
   const selectedGroup = analysisGroupOptions.find((option) => option.value === filters.groupBy) ?? analysisGroupOptions[0]
@@ -1063,118 +1065,16 @@ export default function ProcurementKpiStrip({
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] bg-[rgba(2,10,7,.42)] px-3 py-3">
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[250px_150px_190px_minmax(180px,1fr)_150px_140px_auto]">
-          <div className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Periode usage/receive</span>
-            <div className="flex h-10 overflow-hidden rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d]">
-              <div className="flex shrink-0 items-center border-r border-[var(--rc-forest-border)]">
-                {(['month', 'year'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => updateFilter('periodMode', mode)}
-                    className={`h-full px-2 text-[9px] font-black uppercase tracking-[0.06em] transition ${
-                      (filters.periodMode ?? 'month') === mode
-                        ? 'bg-[var(--rc-forest-accent)] text-[#04130c]'
-                        : 'text-[var(--rc-text-faint)] hover:text-[var(--rc-text)]'
-                    }`}
-                  >
-                    {mode === 'month' ? 'Bulan' : 'Tahun'}
-                  </button>
-                ))}
-              </div>
-              {isYearMode ? (
-                <input
-                  type="number"
-                  min={2000}
-                  max={2100}
-                  placeholder="2025"
-                  value={filters.customYear ?? ''}
-                  onChange={(event) => updateFilter('customYear', event.target.value)}
-                  className="h-full w-full min-w-0 flex-1 bg-transparent px-3 text-xs font-black text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)]"
-                />
-              ) : (
-                <select
-                  value={filters.period}
-                  onChange={(event) => updateFilter('period', event.target.value)}
-                  className="h-full w-full min-w-0 flex-1 bg-transparent px-3 text-xs font-black text-[var(--rc-text)] outline-none"
-                >
-                  {periods.map((period) => (
-                    <option key={period.value} value={period.value}>{period.label}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-
-          <label className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Jendela aging movement</span>
-            <select
-              value={filters.movementWindow}
-              onChange={(event) => updateFilter('movementWindow', event.target.value)}
-              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d] px-3 text-xs font-black text-[var(--rc-text)] outline-none focus:border-[var(--rc-forest-accent)]"
-            >
-              {movementWindowOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Analysis Group</span>
-            <select
-              value={filters.groupBy}
-              onChange={(event) => updateFilter('groupBy', event.target.value as ProcurementAnalysisGroup)}
-              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d] px-3 text-xs font-black text-[var(--rc-text)] outline-none focus:border-[var(--rc-forest-accent)]"
-            >
-              {analysisGroupOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Kode Filter</span>
-            <input
-              value={scopeDraft}
-              onChange={(event) => setScopeDraft(event.target.value)}
-              placeholder={selectedGroup.placeholder}
-              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d] px-3 text-xs font-black text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-[var(--rc-forest-accent)]"
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Item Scope</span>
-            <select
-              value={filters.itemType}
-              onChange={(event) => updateFilter('itemType', event.target.value as ProcurementKpiFilters['itemType'])}
-              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d] px-3 text-xs font-black text-[var(--rc-text)] outline-none focus:border-[var(--rc-forest-accent)]"
-            >
-              <option value="">Inventory 1+4</option>
-              <option value="gudang">Gudang</option>
-              <option value="workshop">Workshop/Mesin</option>
-            </select>
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Lokasi</span>
-            <input
-              value={filters.location}
-              onChange={(event) => updateFilter('location', event.target.value)}
-              placeholder="PTRJ / lokasi"
-              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d] px-3 text-xs font-black text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-[var(--rc-forest-accent)]"
-            />
-          </label>
-
-          <div className="flex items-end">
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="h-10 w-full rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.045] px-3 text-xs font-black uppercase tracking-[0.12em] text-[var(--rc-text-muted)] transition hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.08] hover:text-[var(--rc-text)]"
-            >
-              Reset
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Filter analisis dipindah ke ruang khusus agar deck tetap fokus ke insight.</p>
+          <button
+            type="button"
+            onClick={() => setAnalysisOpen(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border-[var(--rc-forest-accent)] bg-[var(--rc-forest-accent)] px-4 text-xs font-black uppercase tracking-[0.12em] text-[#04130c] transition hover:brightness-110"
+          >
+            <SlidersHorizontal size={14} />
+            Ruang Analisis
+          </button>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--rc-text-faint)]" aria-label="Active filter context">
@@ -1384,6 +1284,22 @@ export default function ProcurementKpiStrip({
           </div>
         </div>
       ) : null}
-    </section>
+    
+      <AnalysisDrawer
+        open={analysisOpen}
+        onClose={() => setAnalysisOpen(false)}
+        filters={filters}
+        onFilter={(key, value) => updateFilter(key as keyof ProcurementKpiFilters, value as never)}
+        scopeDraft={scopeDraft}
+        onScopeDraft={setScopeDraft}
+        onReset={resetFilters}
+        onApply={() => setAnalysisOpen(false)}
+        periods={periods}
+        movementWindowOptions={movementWindowOptions}
+        analysisGroupOptions={analysisGroupOptions}
+        selectedGroup={selectedGroup}
+        preview={{ trend: usageTrend, insightItems }}
+      />
+</section>
   )
 }
