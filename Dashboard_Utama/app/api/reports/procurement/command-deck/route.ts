@@ -60,6 +60,9 @@ type CommandDeckFilters = {
   scopeCode: string
   itemType: '' | 'gudang' | 'workshop'
   location: string
+  /** Rentang tanggal custom (mode tahun) — override period bila diisi. */
+  dateFrom: string
+  dateTo: string
 }
 
 function getParam(request: NextRequest, key: string) {
@@ -75,6 +78,8 @@ function readFilters(request: NextRequest): CommandDeckFilters {
     scopeCode: getParam(request, 'scopeCode'),
     itemType: rawItemType === 'gudang' || rawItemType === 'workshop' ? rawItemType : '',
     location: getParam(request, 'location'),
+    dateFrom: getParam(request, 'dateFrom'),
+    dateTo: getParam(request, 'dateTo'),
   }
 }
 
@@ -119,6 +124,20 @@ function baseFilterParams(filters: CommandDeckFilters): Record<string, string> {
   return params
 }
 
+/**
+ * Param usage (pengeluaran-barang) — mendukung rentang tanggal custom (mode tahun).
+ * dateFrom/dateTo meng-override period untuk handler yang membacanya (stockIssue).
+ */
+function usageParams(filters: CommandDeckFilters): Record<string, string> {
+  const base = baseFilterParams(filters)
+  if (filters.dateFrom) {
+    base.dateFrom = filters.dateFrom
+    base.dateTo = filters.dateTo || filters.dateFrom
+    delete base.period
+  }
+  return base
+}
+
 /** Param khusus per KPI key (GUARDRAIL stock/movement, workshop override, movement dims). */
 function specExtraParams(spec: KpiSpec, filters: CommandDeckFilters): Record<string, string> {
   const base = baseFilterParams(filters)
@@ -133,6 +152,9 @@ function specExtraParams(spec: KpiSpec, filters: CommandDeckFilters): Record<str
       chartDimension: 'MovementCategory',
       movementWindow: filters.movementWindow || 'all',
     }
+  }
+  if (spec.key === 'usage') {
+    return usageParams(filters)
   }
   return base
 }

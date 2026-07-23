@@ -3485,7 +3485,8 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       NamaBarang AS name,
       COUNT(DISTINCT Dokumen) AS docs,
       COUNT(*) AS events,
-      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
     FROM issue_rows
     GROUP BY KodeBarang, NamaBarang
     ORDER BY COUNT(DISTINCT Dokumen) DESC, COUNT(*) DESC

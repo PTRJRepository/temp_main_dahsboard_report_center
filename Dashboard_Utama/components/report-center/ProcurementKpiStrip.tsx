@@ -5,7 +5,8 @@ import { startTransition, useEffect, useState } from 'react'
 import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, TrendingDown, TrendingUp, Truck, Wrench } from 'lucide-react'
 import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageIntensity } from '@/lib/reports/procurement-kpi-math'
 import KpiCarousel from './KpiCarousel'
-import UsageTrendChart from './UsageTrendChart'
+import MovementTrendChart from './MovementTrendChart'
+import TopMovementScatter from './TopMovementScatter'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
@@ -68,6 +69,10 @@ export type ProcurementKpiFilters = {
   scopeCode: string
   itemType: '' | 'gudang' | 'workshop'
   location: string
+  /** Mode periode: bulan tunggal (default) atau satu tahun penuh (custom). */
+  periodMode?: 'month' | 'year'
+  /** Tahun custom (YYYY) saat periodMode === 'year'. */
+  customYear?: string
 }
 
 type ProcurementKpiStripProps = {
@@ -412,6 +417,15 @@ async function fetchDeck(
     itemType: filters.itemType,
     location: cleanFilterValue(filters.location),
   })
+  // Mode tahun custom: override period dengan rentang tanggal setahun penuh
+  // (dipakai handler usage/pengeluaran-barang; snapshot valuasi bulanan tidak
+  // mendukung rentang tahun — lihat catatan plan).
+  const customYear = (filters.customYear ?? '').trim()
+  if (filters.periodMode === 'year' && /^\d{4}$/.test(customYear)) {
+    params.set('dateFrom', `${customYear}-01-01`)
+    params.set('dateTo', `${customYear}-12-31`)
+    params.delete('period')
+  }
   try {
     const response = await fetch(`/api/reports/procurement/command-deck?${params.toString()}`, {
       cache: 'no-store',
@@ -438,6 +452,8 @@ const DEFAULT_PROCUREMENT_KPI_FILTERS: ProcurementKpiFilters = {
   scopeCode: '',
   itemType: '',
   location: '',
+  periodMode: 'month',
+  customYear: '',
 }
 
 export function createDefaultProcurementKpiFilters(now = new Date()): ProcurementKpiFilters {
@@ -470,7 +486,10 @@ export default function ProcurementKpiStrip({
   const [topDimension, setTopDimension] = useState<'items' | 'costCenters' | 'vehicles'>('items')
   const selectedGroup = analysisGroupOptions.find((option) => option.value === filters.groupBy) ?? analysisGroupOptions[0]
   const periods = periodOptions()
-  const activePeriodLabel = formatPeriodLabel(filters.period)
+  const isYearMode = filters.periodMode === 'year' && /^\d{4}$/.test((filters.customYear ?? '').trim())
+  const activePeriodLabel = isYearMode
+    ? `Tahun ${(filters.customYear ?? '').trim()}`
+    : formatPeriodLabel(filters.period)
   const filteredLinks = {
     stock: hrefWithFilters(links.stock, filters, { includeGroupBy: false }),
     receive: hrefWithFilters(links.receive, filters, { includeGroupBy: false }),
@@ -1022,18 +1041,48 @@ export default function ProcurementKpiStrip({
 
       <div className="relative z-10 border-b border-[var(--rc-border)] bg-[rgba(2,10,7,.42)] px-3 py-3">
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[150px_150px_190px_minmax(180px,1fr)_150px_140px_auto]">
-          <label className="grid gap-1">
+          <div className="grid gap-1">
             <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Periode usage/receive</span>
-            <select
-              value={filters.period}
-              onChange={(event) => updateFilter('period', event.target.value)}
-              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d] px-3 text-xs font-black text-[var(--rc-text)] outline-none focus:border-[var(--rc-forest-accent)]"
-            >
-              {periods.map((period) => (
-                <option key={period.value} value={period.value}>{period.label}</option>
-              ))}
-            </select>
-          </label>
+            <div className="flex h-10 overflow-hidden rounded-xl border border-[var(--rc-forest-border)] bg-[#06120d]">
+              <div className="flex shrink-0 items-center border-r border-[var(--rc-forest-border)]">
+                {(['month', 'year'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => updateFilter('periodMode', mode)}
+                    className={`h-full px-2.5 text-[10px] font-black uppercase tracking-[0.08em] transition ${
+                      (filters.periodMode ?? 'month') === mode
+                        ? 'bg-[var(--rc-forest-accent)] text-[#04130c]'
+                        : 'text-[var(--rc-text-faint)] hover:text-[var(--rc-text)]'
+                    }`}
+                  >
+                    {mode === 'month' ? 'Bulan' : 'Tahun'}
+                  </button>
+                ))}
+              </div>
+              {isYearMode ? (
+                <input
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  placeholder="2025"
+                  value={filters.customYear ?? ''}
+                  onChange={(event) => updateFilter('customYear', event.target.value)}
+                  className="h-full w-full min-w-0 flex-1 bg-transparent px-3 text-xs font-black text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)]"
+                />
+              ) : (
+                <select
+                  value={filters.period}
+                  onChange={(event) => updateFilter('period', event.target.value)}
+                  className="h-full w-full min-w-0 flex-1 bg-transparent px-3 text-xs font-black text-[var(--rc-text)] outline-none"
+                >
+                  {periods.map((period) => (
+                    <option key={period.value} value={period.value}>{period.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
 
           <label className="grid gap-1">
             <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Jendela aging movement</span>
@@ -1107,7 +1156,7 @@ export default function ProcurementKpiStrip({
 
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--rc-text-faint)]" aria-label="Active filter context">
           <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-amber-100" title="Periode usage/receive">
-            Period {activePeriodLabel} · {filters.period}
+            Period {activePeriodLabel}{isYearMode ? '' : ` · ${filters.period}`}
           </span>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">MC {filters.movementWindow}</span>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Group {selectedGroup.label}</span>
@@ -1215,8 +1264,20 @@ export default function ProcurementKpiStrip({
 
       <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
         <div className="rc-reveal min-h-[190px] rounded-[28px] p-1" style={{ '--reveal-order': 2 } as React.CSSProperties}>
-          <div className="h-[220px]">
-            <UsageTrendChart data={usageTrend} loading={loading} />
+          <div className="h-[240px]">
+            <MovementTrendChart trend={usageTrend} frequency={issueFrequency?.byMonth} loading={loading} />
+          </div>
+        </div>
+      </div>
+
+      <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
+        <div className="rc-reveal min-h-[190px] rounded-[28px] p-1" style={{ '--reveal-order': 3 } as React.CSSProperties}>
+          <div className="h-[260px]">
+            <TopMovementScatter
+              items={issueFrequencyTop.length > 0 ? issueFrequencyTop : (topLists?.items ?? [])}
+              loading={loading}
+              top={10}
+            />
           </div>
         </div>
       </div>

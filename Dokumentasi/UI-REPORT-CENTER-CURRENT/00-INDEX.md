@@ -67,10 +67,20 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **Movement deck:** `movementCards` 3 → 8 kartu (Frekuensi Issue, Opening vs Closing Qty, Goods Receive Qty, Issued Qty Split Ledger/Station/Vehicle, Paling Sering Di-issue) — quantity 14-kolom, bukan hanya amount.
 - **Verifikasi:** tsc 0, build exit 0, route `/report-center/control` muncul.
 
+### 9. Report catalog jadi sliding rail (2026-07-23)
+- **ReportRail:** grid vertikal catalog diganti rail horizontal scroll-snap per group (edge-fade mask, counter mono, progress hairline, prev/next) — lihat `11-CHANGELOG-UI-SNAPSHOT.md`.
+
+### 10. Movement deck: grafik tampak + tahun custom + sebaran barang (2026-07-23)
+- **Grafik baru:** `MovementTrendChart` (Area amount + Bar qty + Line frekuensi dokumen) + `TopMovementScatter` (Top-N item movement, toggle metrik qty/amount/docs) menggantikan UsageTrendChart di deck.
+- **Filter tahun custom:** segmen [Bulan|Tahun] di filter bar; mode Tahun = input tahun bebas (2000-2100) → `dateFrom=YYYY-01-01&dateTo=YYYY-12-31`, selalu live. Snapshot valuasi bulanan tetap terkunci periode fiskal.
+- **API additive:** `issueFrequency.topItems` kini menyertakan `amount`; command-deck meneruskan `dateFrom`/`dateTo` ke spec usage.
+- **Verifikasi:** tsc 0, eslint 0 error baru, build exit 0.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
-- `topLists` / `trend` belum smoke-test ke SQL Gateway live.
+- `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.
 - Carousel behavior di mobile belum diuji.
+- Grafik movement + mode tahun belum diuji ke data nyata (hanya konsistensi tipe).
 
 ---
 

@@ -171,3 +171,11 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - **LINT:** pola initial-measure dari DOM dipindah ke `requestAnimationFrame` agar memenuhi `react-hooks/set-state-in-effect` (0 error).
 - **VERIFIKASI:** tsc 0; eslint file baru/tersentuh 0 error; build exit 0.
 - **PLANNED:** uji swipe di mobile; auto-scroll rail ke kartu yang dipilih saat berpindah group.
+
+## 2026-07-23 (lanjut) - Movement deck: grafik tampak + tahun custom + sebaran barang
+- **GRAFIK BARU:** `MovementTrendChart.tsx` (ComposedChart recharts) - Area amount (sumbu kiri) + Bar qty (sumbu kanan) + Line frekuensi dokumen (pink dashed) dari `trend` + `issueFrequency.byMonth`. Empty-state bila <2 titik. `TopMovementScatter.tsx` - horizontal BarChart Top-N dengan toggle metrik [qty|amount|docs] (default docs), gradasi warna forest→biru per bar, LabelList kanan.
+- **ADDITIVE API:** `issueFrequency.topItems` kini menyertakan `amount` (SUM Amount) di samping docs/events/qty (route inventory `stockIssue`). Command-deck meneruskan `dateFrom`/`dateTo` (helper `usageParams` - bila dateFrom ada, `period` dihapus agar mode tahun live).
+- **FILTER TAHUN CUSTOM:** `ProcurementKpiFilters` menambah `periodMode: 'month'|'year'` + `customYear`. Segmen [Bulan|Tahun] di filter bar; mode Tahun menampilkan input tahun (2000-2100) menggantikan select bulan. Bila year valid: `dateFrom=YYYY-01-01&dateTo=YYYY-12-31`, `period` dikosongkan, label chip menampilkan "Tahun YYYY". Mode tahun selalu live (tidak diagregasi). Catatan: snapshot valuasi bulanan tetap terkunci periode fiskal; hanya trend/sebaran usage yang tahunan.
+- **RENDER:** blok UsageTrendChart di strip diganti MovementTrendChart (h-240) + TopMovementScatter (h-260, Top 10 item movement tertinggi).
+- **VERIFIKASI:** tsc 0; eslint file tersentuh 0 error baru (error `set-state-in-effect` di strip + warning `no-unused-vars` di route inventory pre-existing, dikonfirmasi git stash); build exit 0.
+- **PLANNED:** smoke-test browser (auth gate); uji mode tahun ke data nyata; perluas metrik scatter ke sub-module lain.
