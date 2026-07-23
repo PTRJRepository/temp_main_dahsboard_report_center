@@ -1271,104 +1271,83 @@ function ReportTile({
     <TileShell
       active={selected}
       className={[
-        'flex min-h-[340px] flex-col overflow-hidden',
-        selected ? 'ring-2 ring-emerald-500/15' : 'ring-1 ring-slate-200/80',
+        'relative flex min-h-[218px] flex-col overflow-hidden p-3 motion-reduce:transform-none',
+        selected ? 'ring-2 ring-emerald-400/25' : 'ring-1 ring-white/5',
       ].join(' ')}
     >
-      <div className="-mx-[18px] -mt-[18px] h-2" style={{ backgroundColor: stage.color }} />
+      <span className="pointer-events-none absolute left-0 top-0 h-full w-1.5" style={{ backgroundColor: stage.color }} aria-hidden="true" />
+      <span className="pointer-events-none absolute right-0 top-0 h-20 w-28 rounded-bl-full bg-white/[0.035]" aria-hidden="true" />
 
-      <div className="mt-4 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-2 rounded-xl border px-2.5 py-1 text-[11px] font-extrabold" style={{ borderColor: `${stage.color}30`, backgroundColor: `${stage.color}14`, color: stage.color }}>
-              <StageIcon size={13} />
-              {stage.stageName}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1 text-[11px] font-extrabold text-[var(--rc-text-muted)]">
-              <Database size={12} />
-              {sourceLabel(source)}
-            </span>
-          </div>
-          <StatusBadge status={report.status} />
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={onPreview}
-        className="mt-3 min-w-0 flex-1 rounded-2xl border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.82)] p-4 text-left transition hover:border-emerald-300 hover:bg-[rgba(24,185,107,.12)]"
-      >
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">{report.categoryLabel}</p>
-        <div className="mt-2 flex items-start gap-2">
-          <span className="shrink-0 rounded-lg border border-[var(--rc-forest-border)] bg-white/[0.06] px-2 py-1 text-[11px] font-extrabold text-[var(--rc-text-muted)]">{report.reportCode}</span>
-          <h3 className="line-clamp-2 text-lg font-extrabold leading-6 text-[var(--rc-text)]">{report.name}</h3>
-        </div>
-        <p className="mt-3 line-clamp-3 text-sm leading-6 text-[var(--rc-text-muted)]">{report.description}</p>
-      </button>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
-          <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Cadence</p>
-          <p className="mt-1 truncate text-sm font-extrabold text-[var(--rc-text)]">{report.cadence}</p>
-        </div>
-        <div className="rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
-          <p className="text-[11px] font-semibold text-[var(--rc-text-faint)]">Owner</p>
-          <p className="mt-1 truncate text-sm font-extrabold text-[var(--rc-text)]">{report.owner}</p>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {report.tags.slice(0, 4).map((tag) => (
-          <span key={tag} className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-[var(--rc-text-muted)]">
-            {tag}
-          </span>
-        ))}
-        <span className="rounded-full border border-[rgba(52,211,153,.28)] bg-[rgba(24,185,107,.12)] px-2.5 py-1 text-xs font-bold text-[var(--rc-forest-accent)]">
-          {analysisQuestions(report).length} pertanyaan AI
+      <div className="flex items-start gap-3 pl-1">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.055] text-[var(--rc-text)]" style={{ boxShadow: `inset 0 0 0 1px ${stage.color}30` }}>
+          <StageIcon size={18} />
         </span>
-      </div>
-
-      <div className="mt-4 grid grid-cols-[auto_1fr_auto_auto] gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] p-3">
+        <button type="button" onClick={onPreview} className="min-w-0 flex-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-lg border border-[var(--rc-forest-border)] bg-white/[0.04] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-forest-accent)]">{report.reportCode}</span>
+            <span className="rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em]" style={{ borderColor: `${stage.color}35`, color: stage.color }}>
+              {stage.shortName}
+            </span>
+            <StatusBadge status={report.status} />
+          </span>
+          <h3 className="mt-2 line-clamp-2 text-base font-black leading-5 tracking-[-0.02em] text-[var(--rc-text)]">{report.name}</h3>
+          <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">{report.description}</p>
+        </button>
         <button
           type="button"
           onClick={onFavorite}
-          className={favorite ? 'grid h-10 w-10 place-items-center rounded-xl border border-[rgba(245,158,11,.28)] bg-amber-100 text-amber-600' : 'grid h-10 w-10 place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-faint)] hover:border-[rgba(245,158,11,.28)] hover:text-amber-500'}
+          className={favorite ? 'grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-amber-300/30 bg-amber-300/12 text-amber-200' : 'grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-faint)] hover:border-amber-300/30 hover:text-amber-200'}
           aria-label={favorite ? 'Hapus favorit' : 'Tambah favorit'}
         >
-          <Star size={16} fill={favorite ? 'currentColor' : 'none'} />
+          <Star size={15} fill={favorite ? 'currentColor' : 'none'} />
         </button>
-        <button type="button" onClick={onPreview} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2 text-sm font-bold text-[var(--rc-text-muted)] hover:border-[rgba(52,211,153,.28)] hover:bg-white/10">
-          <Eye size={15} />
-          Preview
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-1.5 pl-1 text-[10px] font-bold text-[var(--rc-text-faint)]">
+        <span className="truncate rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.035] px-2 py-1">{sourceLabel(source)}</span>
+        <span className="truncate rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.035] px-2 py-1">{report.cadence}</span>
+        <span className="truncate rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.035] px-2 py-1">{report.groupTitle ?? report.categoryLabel}</span>
+      </div>
+
+      {selected && (
+        <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-xs font-semibold leading-5 text-emerald-50/80">
+          <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/75">Active report</span>
+          <span className="mt-1 line-clamp-2">{report.businessPurpose}</span>
+        </div>
+      )}
+
+      <div className="mt-auto grid grid-cols-[auto_1fr_auto_auto] gap-1.5 pt-3">
+        <button type="button" onClick={onPreview} className="grid h-9 w-9 place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-muted)] hover:border-emerald-300/35 hover:bg-white/[0.08]" aria-label="Preview report">
+          <Eye size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={onView}
+          disabled={!openable}
+          className={openable ? 'inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[var(--rc-forest-primary)] px-3 text-xs font-black text-[#03130b] hover:brightness-110' : 'inline-flex h-9 cursor-not-allowed items-center justify-center gap-1.5 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-bold text-[var(--rc-text-faint)]'}
+        >
+          {openable ? 'Open' : 'Preview only'}
+          <ArrowRight size={13} />
         </button>
         <button
           type="button"
           onClick={onExcel}
           disabled={!openable}
-          className={openable ? 'grid h-10 w-10 place-items-center rounded-xl border border-[rgba(52,211,153,.28)] bg-[rgba(24,185,107,.12)] text-[var(--rc-forest-accent)] hover:bg-emerald-100' : 'grid h-10 w-10 cursor-not-allowed place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-muted)]'}
+          className={openable ? 'grid h-9 w-9 place-items-center rounded-xl border border-emerald-300/25 bg-emerald-300/10 text-[var(--rc-forest-accent)] hover:bg-emerald-300/15' : 'grid h-9 w-9 cursor-not-allowed place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-muted)]'}
           aria-label="Export Excel"
         >
-          <FileSpreadsheet size={15} />
+          <FileSpreadsheet size={14} />
         </button>
         <button
           type="button"
           onClick={onPdf}
           disabled={!openable}
-          className={openable ? 'grid h-10 w-10 place-items-center rounded-xl border border-[rgba(251,113,133,.28)] bg-[rgba(251,113,133,.12)] text-red-200 hover:bg-red-100' : 'grid h-10 w-10 cursor-not-allowed place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-muted)]'}
+          className={openable ? 'grid h-9 w-9 place-items-center rounded-xl border border-red-300/25 bg-red-300/10 text-red-200 hover:bg-red-300/15' : 'grid h-9 w-9 cursor-not-allowed place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] text-[var(--rc-text-muted)]'}
           aria-label="Export PDF"
         >
-          <Download size={15} />
+          <Download size={14} />
         </button>
       </div>
-      <button
-        type="button"
-        onClick={onView}
-        disabled={!openable}
-        className={openable ? 'mt-2 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--rc-forest-primary)] px-3 text-sm font-bold text-[#03130b] hover:brightness-110' : 'mt-2 inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-bold text-[var(--rc-text-faint)]'}
-      >
-        {openable ? 'Buka Report' : 'Catalog Preview'}
-        <ArrowRight size={15} />
-      </button>
     </TileShell>
   )
 }
@@ -1926,64 +1905,53 @@ export default function InventoryReportsClient({
     <main className={shellClass}>
       <div className={innerClass}>
         {!embedded ? (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <nav className="text-sm font-medium text-[var(--rc-text-faint)]">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <nav className="text-[11px] font-bold text-[var(--rc-text-faint)]">
               <Link href="/report-center" className="hover:text-[var(--rc-forest-accent)]">Dashboard</Link>
-              <span className="mx-2">/</span>
+              <span className="mx-1.5">/</span>
               <Link href={`/report-center/procurement?source=${selectedSource}`} className="hover:text-[var(--rc-forest-accent)]">Procurement</Link>
-              <span className="mx-2">/</span>
+              <span className="mx-1.5">/</span>
               <span className="text-[var(--rc-text)]">Inventory</span>
             </nav>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-[var(--rc-text)]">Inventory Report Center</h1>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--rc-text-muted)]">
-              Windows Tile operational monitor untuk report Inventory yang sudah live dan bisa dibuka dari Procurement.
-            </p>
+            <h1 className="mt-1 text-xl font-black tracking-[-0.04em] text-[var(--rc-text)] sm:text-2xl">Inventory command palette</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/report-center/procurement?source=${selectedSource}&stockGroup=inventory`}
-              className="inline-flex items-center gap-2 rounded-[18px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.82)] px-4 py-2.5 text-sm font-bold text-[var(--rc-text-muted)] shadow-[0_6px_18px_rgba(15,23,42,0.06)] hover:bg-white/10"
-            >
-              <ArrowLeft size={16} />
-              Procurement
-            </Link>
-          </div>
+          <Link
+            href={`/report-center/procurement?source=${selectedSource}&stockGroup=inventory`}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-2 text-xs font-black text-[var(--rc-text-muted)] hover:bg-white/10"
+          >
+            <ArrowLeft size={14} />
+            Procurement
+          </Link>
         </div>
         ) : (
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--rc-forest-accent)]">
-                Inventory submodule · {itemType === 'gudang' ? 'Gudang' : itemType === 'workshop' ? 'Workshop' : 'All scope'}
-              </p>
-              <h2 className="mt-1 text-2xl font-black tracking-[-0.04em] text-[var(--rc-text)]">
-                Flow catalog + report cards
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-[var(--rc-text-muted)]">
-                Pengelompokan stage sama seperti inventory: request → receive → movement → usage → valuation → audit.
-              </p>
-            </div>
+          <div className="mb-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--rc-forest-accent)]">
+              Inventory submodule · {itemType === 'gudang' ? 'Gudang' : itemType === 'workshop' ? 'Workshop' : 'All scope'}
+            </p>
+            <h2 className="mt-0.5 text-lg font-black tracking-[-0.04em] text-[var(--rc-text)]">Report command palette</h2>
           </div>
         )}
 
-
-        <section className="mb-5 overflow-hidden rounded-[24px] border border-[rgba(52,211,153,.24)] bg-[linear-gradient(145deg,rgba(7,26,20,.96),rgba(4,12,9,.96))] p-4 shadow-[0_18px_54px_rgba(0,0,0,.18)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--rc-forest-accent)]">Filter pusat</p>
-              <h2 className="mt-1 text-2xl font-black tracking-[-0.03em] text-[var(--rc-text)]">Cari report dulu, insight menyusul.</h2>
-              <p className="mt-1 text-sm font-semibold text-[var(--rc-text-muted)]">
-                Semua filter di sini sync ke URL. Ganti pilihan, grid dan preview langsung ikut berubah.
+        <section className="mb-4 overflow-hidden rounded-[22px] border border-[var(--rc-forest-border)] bg-[linear-gradient(145deg,rgba(7,26,20,.96),rgba(4,12,9,.96))] p-3 shadow-[0_14px_40px_rgba(0,0,0,.16)]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--rc-forest-accent)]">Command palette</p>
+              <p className="mt-0.5 text-xs font-semibold text-[var(--rc-text-muted)]">
+                Search first · filters sync URL · open selected report
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs font-bold text-[var(--rc-text-muted)]">
-              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1">{filteredReports.length} dari {liveCount} report</span>
-              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1">{selectedReportGroupLabel}</span>
-              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1">{selectedStage.stageName}</span>
+            <div className="flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">
+              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1">{filteredReports.length}/{liveCount}</span>
+              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1">{selectedReportGroupLabel}</span>
+              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1">{selectedStage.stageName}</span>
+              <span className="max-w-[220px] truncate rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2.5 py-1 text-emerald-100" title={selectedCatalogReport.name}>
+                Active · {selectedCatalogReport.shortName}
+              </span>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(260px,1.5fr)_180px_180px_180px]">
+          <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto]">
             <label className="relative block">
               <span className="sr-only">Cari report</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--rc-text-faint)]" />
@@ -1991,59 +1959,55 @@ export default function InventoryReportsClient({
                 value={search}
                 onChange={(event) => updateSearch(event.target.value)}
                 placeholder="Cari report: PO, supplier, pupuk, solar, valuasi..."
-                className="h-12 w-full rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] pl-9 pr-3 text-sm font-semibold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:bg-[rgba(5,17,10,.95)] focus:ring-4 focus:ring-emerald-500/10"
+                className="h-11 w-full rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] pl-9 pr-3 text-sm font-semibold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
               />
             </label>
-
             <select
-              value={selectedSource}
-              onChange={(event) => selectSource(event.target.value as ReportSource)}
-              className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+              value={selectedCatalogReport.reportCode}
+              onChange={(event) => previewReport(findCatalogReport(event.target.value))}
+              className="h-11 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+              aria-label="Quick report jump"
             >
-              {SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
+              {reportSelectOptions.map((report) => <option key={report.reportCode} value={report.reportCode}>{report.shortName} · {report.reportCode}</option>)}
             </select>
-
-            <select
-              value={activeReportGroup}
-              onChange={(event) => selectReportGroup(event.target.value)}
-              className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
-            >
-              <option value="all">Semua group</option>
-              {reportGroupOptions.map((group) => <option key={group.group} value={group.group}>{group.title}</option>)}
-            </select>
-
-            <select
-              value={activeStage}
-              onChange={(event) => selectStage(event.target.value as FlowStageCode)}
-              className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
-            >
-              <option value="all">Semua flow</option>
-              {LIVE_FLOW_STAGES.map((stage) => <option key={stage.stageCode} value={stage.stageCode}>{stage.stageName} ({stageCounts.get(stage.stageCode) ?? 0})</option>)}
-            </select>
-          </div>
-
-          <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(260px,1.4fr)_auto_160px_minmax(210px,0.9fr)_minmax(180px,0.8fr)_auto]">
-            <label className="block">
-              <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.18em] text-[var(--rc-forest-accent)]">Quick report jump</span>
-              <select
-                value={selectedCatalogReport.reportCode}
-                onChange={(event) => previewReport(findCatalogReport(event.target.value))}
-                className="h-12 w-full rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
-              >
-                {reportSelectOptions.map((report) => <option key={report.reportCode} value={report.reportCode}>{report.shortName} · {report.reportCode}</option>)}
-              </select>
-            </label>
-
             <button
               type="button"
               onClick={() => viewReport(selectedCatalogReport)}
               disabled={!openableSelectedReport}
-              className={openableSelectedReport ? 'mt-5 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--rc-forest-primary)] px-4 text-sm font-black text-[#03130b] hover:brightness-110' : 'mt-5 inline-flex h-12 cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-4 text-sm font-bold text-[var(--rc-text-faint)]'}
+              className={openableSelectedReport ? 'inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--rc-forest-primary)] px-4 text-xs font-black text-[#03130b] hover:brightness-110' : 'inline-flex h-11 cursor-not-allowed items-center justify-center gap-1.5 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-4 text-xs font-bold text-[var(--rc-text-faint)]'}
             >
-              <FileText size={15} />
+              <FileText size={14} />
               Open
             </button>
+          </div>
 
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+            <select
+              value={selectedSource}
+              onChange={(event) => selectSource(event.target.value as ReportSource)}
+              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
+              aria-label="Source"
+            >
+              {SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
+            </select>
+            <select
+              value={activeReportGroup}
+              onChange={(event) => selectReportGroup(event.target.value)}
+              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
+              aria-label="Report group"
+            >
+              <option value="all">Semua group</option>
+              {reportGroupOptions.map((group) => <option key={group.group} value={group.group}>{group.title}</option>)}
+            </select>
+            <select
+              value={activeStage}
+              onChange={(event) => selectStage(event.target.value as FlowStageCode)}
+              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
+              aria-label="Flow stage"
+            >
+              <option value="all">Semua flow</option>
+              {LIVE_FLOW_STAGES.map((stage) => <option key={stage.stageCode} value={stage.stageCode}>{stage.stageName} ({stageCounts.get(stage.stageCode) ?? 0})</option>)}
+            </select>
             <input
               type="month"
               value={periodFilter}
@@ -2054,24 +2018,9 @@ export default function InventoryReportsClient({
                 setPeriodFilter(nextPeriod)
                 updateModuleScope(filters)
               }}
-              className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
+              aria-label="Period"
             />
-
-            <select
-              value={analysisGroup}
-              onChange={(event) => {
-                const nextGroup = event.target.value as InventoryAnalysisGroup
-                const filters = filtersForScope(nextGroup, '')
-                setAiInsightVisible(false)
-                setAnalysisGroup(nextGroup)
-                setScopeCode('')
-                updateModuleScope(filters)
-              }}
-              className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
-            >
-              {INVENTORY_ANALYSIS_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-
             <select
               value={movementWindowFilter}
               onChange={(event) => {
@@ -2082,84 +2031,100 @@ export default function InventoryReportsClient({
                 updateModuleScope(filters)
               }}
               title="Window hitung Movement Category (issue count)."
-              className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
+              aria-label="Movement window"
             >
               {MOVEMENT_WINDOW_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
-
             <button
               type="button"
               onClick={resetFilterHub}
-              className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-4 text-sm font-bold text-[var(--rc-text-muted)] hover:bg-white/10"
+              className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-black uppercase tracking-[0.12em] text-[var(--rc-text-muted)] hover:bg-white/10"
             >
               Reset
             </button>
           </div>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)]">
-            {analysisGroup === 'MovementCategory' ? (
+          <details className="mt-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2">
+            <summary className="cursor-pointer text-[10px] font-black uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">Advanced scope</summary>
+            <div className="mt-2 grid gap-2 md:grid-cols-3">
               <select
-                value={scopeCode}
+                value={analysisGroup}
                 onChange={(event) => {
-                  const nextCode = event.target.value
-                  const filters = filtersForScope(analysisGroup, nextCode)
-                  setScopeCode(nextCode)
-                  updateModuleScope(filters)
-                }}
-                className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
-              >
-                <option value="">Semua movement category</option>
-                {['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock', 'Stale'].map((code) => <option key={code} value={code}>{code}</option>)}
-              </select>
-            ) : (
-              <input
-                value={scopeCode}
-                onChange={(event) => {
-                  const nextCode = cleanScopeCode(event.target.value)
-                  const filters = filtersForScope(analysisGroup, nextCode)
-                  setScopeCode(nextCode)
-                  updateModuleScope(filters)
-                }}
-                placeholder={`Kode ${activeAnalysisGroup.label}, kosong = semua`}
-                className="h-12 rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-extrabold text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
-              />
-            )}
-
-            {selectedCatalogReport.existingReportId === 'item-movement-update-tracking' ? (
-              <select
-                value={staleFilter}
-                onChange={(event) => {
-                  const nextStale = event.target.value
+                  const nextGroup = event.target.value as InventoryAnalysisGroup
+                  const filters = filtersForScope(nextGroup, '')
                   setAiInsightVisible(false)
-                  setStaleFilter(nextStale)
-                  updateModuleScope(moduleScopeFilters, search, nextStale)
+                  setAnalysisGroup(nextGroup)
+                  setScopeCode('')
+                  updateModuleScope(filters)
                 }}
-                className="h-12 rounded-2xl border border-[rgba(245,158,11,.28)] bg-[rgba(245,158,11,.12)] px-3 text-sm font-extrabold text-amber-100 outline-none focus:border-amber-300 focus:ring-4 focus:ring-amber-500/10"
+                className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
               >
-                {STALE_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>Movement update stale {option.label}</option>)}
+                {INVENTORY_ANALYSIS_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-            ) : (
-              <div className="flex h-12 items-center rounded-2xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-sm font-bold text-[var(--rc-text-faint)]">
-                Stale filter muncul hanya untuk report movement update tracking.
-              </div>
-            )}
-          </div>
+              {analysisGroup === 'MovementCategory' ? (
+                <select
+                  value={scopeCode}
+                  onChange={(event) => {
+                    const nextCode = event.target.value
+                    const filters = filtersForScope(analysisGroup, nextCode)
+                    setScopeCode(nextCode)
+                    updateModuleScope(filters)
+                  }}
+                  className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
+                >
+                  <option value="">Semua movement category</option>
+                  {['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock', 'Stale'].map((code) => <option key={code} value={code}>{code}</option>)}
+                </select>
+              ) : (
+                <input
+                  value={scopeCode}
+                  onChange={(event) => {
+                    const nextCode = cleanScopeCode(event.target.value)
+                    const filters = filtersForScope(analysisGroup, nextCode)
+                    setScopeCode(nextCode)
+                    updateModuleScope(filters)
+                  }}
+                  placeholder={`Kode ${activeAnalysisGroup.label}, kosong = semua`}
+                  className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-400"
+                />
+              )}
+              {selectedCatalogReport.existingReportId === 'item-movement-update-tracking' ? (
+                <select
+                  value={staleFilter}
+                  onChange={(event) => {
+                    const nextStale = event.target.value
+                    setAiInsightVisible(false)
+                    setStaleFilter(nextStale)
+                    updateModuleScope(moduleScopeFilters, search, nextStale)
+                  }}
+                  className="h-10 rounded-xl border border-[rgba(245,158,11,.28)] bg-[rgba(245,158,11,.12)] px-3 text-xs font-extrabold text-amber-100 outline-none focus:border-amber-300"
+                >
+                  {STALE_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>Stale {option.label}</option>)}
+                </select>
+              ) : (
+                <div className="flex h-10 items-center rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.03] px-3 text-[11px] font-bold text-[var(--rc-text-faint)]">
+                  Stale filter only for movement update tracking
+                </div>
+              )}
+            </div>
+          </details>
         </section>
 
-        <section className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {kpiCards.map((card) => (
             <KpiTile key={card.label} {...card} />
           ))}
         </section>
 
-        <section className="mt-5" aria-labelledby="report-catalog-heading">
+        <section className="mt-3" aria-labelledby="report-catalog-heading">
           <div>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 id="report-catalog-heading" className="text-lg font-extrabold text-[var(--rc-text)]">Report Catalog</h2>
-                <p className="mt-1 text-sm text-[var(--rc-text-muted)]">{filteredReports.length} report live, dikelompokkan berdasarkan business group. Klik group di bar navigasi untuk lompat langsung.</p>
+                <h2 id="report-catalog-heading" className="text-base font-extrabold text-[var(--rc-text)]">Report Catalog</h2>
+                <p className="mt-0.5 text-xs text-[var(--rc-text-muted)]">{filteredReports.length} live · group jump di bawah</p>
               </div>
-              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-[var(--rc-text-muted)]">
+              <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1 text-[10px] font-bold text-[var(--rc-text-muted)]">
                 {selectedStage.stageName}
               </span>
             </div>
@@ -2182,7 +2147,7 @@ export default function InventoryReportsClient({
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--rc-forest-accent)]">Lompat group</p>
                     <span className="text-[10px] font-bold text-[var(--rc-text-faint)]">{groupedReports.length} group · klik = scroll</span>
                   </div>
-                  <div className="rc-catalog-jump-track flex gap-2 overflow-x-auto pb-0.5">
+                  <div className="rc-catalog-jump-track flex flex-wrap gap-2 pb-0.5">
                     {groupedReports.map(({ group, reports }) => {
                       const active = activeCatalogGroup === group.group
                       return (
@@ -2193,10 +2158,11 @@ export default function InventoryReportsClient({
                           aria-current={active ? 'true' : undefined}
                           className={
                             active
-                              ? 'rc-catalog-jump-chip is-active inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/50 bg-[var(--rc-forest-primary)] px-3.5 py-2 text-xs font-black text-[#03130b] shadow-[0_0_0_3px_rgba(52,211,153,.18)] outline-none focus-visible:ring-2 focus-visible:ring-emerald-300'
-                              : 'rc-catalog-jump-chip inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3.5 py-2 text-xs font-bold text-[var(--rc-text-muted)] outline-none transition-[background-color,border-color,color] duration-150 hover:border-emerald-400/35 hover:bg-white/[0.08] hover:text-[var(--rc-text)] focus-visible:ring-2 focus-visible:ring-emerald-400/70'
+                              ? 'rc-catalog-jump-chip is-active inline-flex items-center gap-2 rounded-full border border-emerald-400/50 bg-[var(--rc-forest-primary)] px-3.5 py-2 text-xs font-black text-[#03130b] shadow-[0_0_0_3px_rgba(52,211,153,.18)] outline-none focus-visible:ring-2 focus-visible:ring-emerald-300'
+                              : 'rc-catalog-jump-chip inline-flex items-center gap-2 rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-3.5 py-2 text-xs font-bold text-[var(--rc-text-muted)] outline-none transition-[background-color,border-color,color] duration-150 hover:border-emerald-400/35 hover:bg-white/[0.08] hover:text-[var(--rc-text)] focus-visible:ring-2 focus-visible:ring-emerald-400/70'
                           }
                         >
+                          <span className="h-px w-5 bg-current opacity-25" aria-hidden="true" />
                           <span className="max-w-[14rem] truncate">{group.title}</span>
                           <span
                             className={
@@ -2228,7 +2194,7 @@ export default function InventoryReportsClient({
                         </div>
                         <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/5 px-3 py-1 text-xs font-bold text-[var(--rc-forest-accent)]">{reports.length} report</span>
                       </div>
-                      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {reports.map((report) => (
                           <ReportTile
                             key={report.reportCode}
