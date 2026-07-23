@@ -278,6 +278,10 @@ function cardTitleTone(cardId: string): CardTitleTone {
   }
 }
 
+function sqlGatewayBase() {
+  return window.localStorage.getItem('report-center:sql-gateway-base') || 'http://10.0.0.110:8001'
+}
+
 async function fetchSummary(
   source: ReportSource,
   report: string,
@@ -295,7 +299,7 @@ async function fetchSummary(
   const response = await fetch(`/api/reports/inventory?${params.toString()}`, {
     cache: 'no-store',
     signal,
-    headers: { 'x-sql-gateway-base': window.localStorage.getItem('report-center:sql-gateway-base') || 'http://10.0.0.110:8001' },
+    headers: { 'x-sql-gateway-base': sqlGatewayBase() },
   })
   const data = await response.json().catch(() => ({})) as {
     success?: boolean
@@ -310,6 +314,81 @@ async function fetchSummary(
     summary,
     chart: data.data.chart ?? [],
     updatedAt: firstText(summary, ['TerakhirUpdate', 'LastMovementDate', 'LastUsageDate', 'LastRunningUpdate']),
+  }
+}
+
+/** Fallback: jalur 8-fetch paralel lama (dipakai bila composite endpoint gagal). */
+async function fetchDeckLegacy(
+  source: ReportSource,
+  filters: ProcurementKpiFilters,
+  signal: AbortSignal,
+): Promise<Partial<Record<KpiKey, Snapshot>>> {
+  const baseParams = procurementFilterParams(filters)
+  const results = await Promise.allSettled(kpiRequests.map(async (request) => {
+    let extra: Record<string, string> = { ...baseParams }
+    // GUARDRAIL(procurement-kpi-inventory-scope):
+    // Stock KPI is the Procurement > Inventory master value, not Gudang-only.
+    // Leave stock/movement without itemType so API uses ItemType IN ('1','4').
+    if (request.key === 'workshop') {
+      extra = {
+        ...extra,
+        itemType: filters.itemType === 'gudang' ? 'gudang' : 'workshop',
+      }
+    } else if (request.key === 'movement') {
+      extra = {
+        ...extra,
+        ...analysisScopeParams(filters),
+        groupBy: 'MovementCategory',
+        chartDimension: 'MovementCategory',
+        movementWindow: filters.movementWindow || 'all',
+      }
+    }
+    return [request.key, await fetchSummary(source, request.report, signal, extra)] as const
+  }))
+  const snapshots: Partial<Record<KpiKey, Snapshot>> = {}
+  results.forEach((result, index) => {
+    const key = kpiRequests[index].key
+    snapshots[key] = result.status === 'fulfilled'
+      ? result.value[1]
+      : { ok: false, summary: {} }
+  })
+  return snapshots
+}
+
+/**
+ * Jalur utama: SATU fetch ke composite command-deck endpoint (server menjalankan
+ * 8 report secara server-side). Fallback ke jalur 8-fetch lama bila endpoint gagal.
+ */
+async function fetchDeck(
+  source: ReportSource,
+  filters: ProcurementKpiFilters,
+  signal: AbortSignal,
+): Promise<Partial<Record<KpiKey, Snapshot>>> {
+  const params = new URLSearchParams({
+    source,
+    period: filters.period,
+    movementWindow: filters.movementWindow || 'all',
+    groupBy: filters.groupBy,
+    scopeCode: cleanFilterValue(filters.scopeCode),
+    itemType: filters.itemType,
+    location: cleanFilterValue(filters.location),
+  })
+  try {
+    const response = await fetch(`/api/reports/procurement/command-deck?${params.toString()}`, {
+      cache: 'no-store',
+      signal,
+      headers: { 'x-sql-gateway-base': sqlGatewayBase() },
+    })
+    if (!response.ok) throw new Error(`command-deck ${response.status}`)
+    const data = (await response.json().catch(() => ({}))) as {
+      success?: boolean
+      snapshots?: Partial<Record<KpiKey, Snapshot>>
+    }
+    if (data.success !== true || !data.snapshots) throw new Error('command-deck payload invalid')
+    return data.snapshots
+  } catch (error) {
+    if (signal.aborted) throw error
+    return fetchDeckLegacy(source, filters, signal)
   }
 }
 
@@ -394,44 +473,20 @@ export default function ProcurementKpiStrip({
 
   useEffect(() => {
     const controller = new AbortController()
-    const baseParams = procurementFilterParams(filters)
     startTransition(() => setState((current) => ({
       source,
       loading: true,
       snapshots: current.source === source ? current.snapshots : {},
     })))
 
-    Promise.allSettled(kpiRequests.map(async (request) => {
-        let extra: Record<string, string> = { ...baseParams }
-        // GUARDRAIL(procurement-kpi-inventory-scope):
-        // Stock KPI is the Procurement > Inventory master value, not Gudang-only.
-        // Leave stock/movement without itemType so API uses ItemType IN ('1','4').
-        if (request.key === 'workshop') {
-          extra = {
-            ...extra,
-            itemType: filters.itemType === 'gudang' ? 'gudang' : 'workshop',
-          }
-        } else if (request.key === 'movement') {
-          extra = {
-            ...extra,
-            ...analysisScopeParams(filters),
-            groupBy: 'MovementCategory',
-            chartDimension: 'MovementCategory',
-            movementWindow: filters.movementWindow || 'all',
-          }
-        }
-        return [request.key, await fetchSummary(source, request.report, controller.signal, extra)] as const
-      }))
-      .then((results) => {
+    fetchDeck(source, filters, controller.signal)
+      .then((snapshots) => {
         if (controller.signal.aborted) return
-        const snapshots: Partial<Record<KpiKey, Snapshot>> = {}
-        results.forEach((result, index) => {
-          const key = kpiRequests[index].key
-          snapshots[key] = result.status === 'fulfilled'
-            ? result.value[1]
-            : { ok: false, summary: {} }
-        })
         startTransition(() => setState({ source, loading: false, snapshots }))
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return
+        startTransition(() => setState({ source, loading: false, snapshots: {} }))
       })
 
     return () => controller.abort()
