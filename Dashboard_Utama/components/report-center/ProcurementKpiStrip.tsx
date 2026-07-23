@@ -486,6 +486,7 @@ export default function ProcurementKpiStrip({
   }))
   const [scopeDraft, setScopeDraft] = useState(filters.scopeCode)
   const [analysisOpen, setAnalysisOpen] = useState(false)
+  const [glance, setGlance] = useState(true)
   const [openSection, setOpenSection] = useState<DeckSection>('valuasi')
   const [topDimension, setTopDimension] = useState<'items' | 'costCenters' | 'vehicles'>('items')
   const selectedGroup = analysisGroupOptions.find((option) => option.value === filters.groupBy) ?? analysisGroupOptions[0]
@@ -556,6 +557,11 @@ export default function ProcurementKpiStrip({
   }, [filters, source])
 
   const loading = state.source !== source || state.loading
+  useEffect(() => {
+    if (loading || !glance) return
+    const idle = window.setTimeout(() => setGlance(false), 1400)
+    return () => window.clearTimeout(idle)
+  }, [loading, glance])
   const snapshots = state.source === source ? state.snapshots : {}
   const stock = snapshots.stock?.summary
   const receive = snapshots.receive?.summary
@@ -1191,6 +1197,18 @@ export default function ProcurementKpiStrip({
         </div>
       </div>
 
+      {glance ? (
+        <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-4">
+          <button
+            type="button"
+            onClick={() => setGlance(false)}
+            className="flex w-full items-center justify-between gap-2 rounded-2xl border-[var(--rc-border)] bg-[rgba(3,14,10,.5)] px-4 py-3 text-left transition hover:border-[var(--rc-forest-accent)]"
+          >
+            <span className="rc-data text-xs text-[var(--rc-text-faint)]">Grafik & analisis lengkap dimuat bertahap agar angka utama tampil duluan.</span>
+            <span className="shrink-0 rounded-full border-[var(--rc-forest-accent)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[var(--rc-forest-accent)]">Lihat semua</span>
+          </button>
+        </div>
+      ) : (
       <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
         <div className="rc-reveal min-h-[190px] rounded-[28px] p-1" style={{ '--reveal-order': 2 } as React.CSSProperties}>
           <div className="h-[240px]">
@@ -1198,6 +1216,7 @@ export default function ProcurementKpiStrip({
           </div>
         </div>
       </div>
+      )}
 
       <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
         <div className="rc-reveal min-h-[190px] rounded-[28px] p-1" style={{ '--reveal-order': 3 } as React.CSSProperties}>
