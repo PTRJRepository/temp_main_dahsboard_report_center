@@ -56,10 +56,10 @@ function btnClass(expanded: boolean, kind: 'default' | 'success' | 'warning' | '
     if (kind === 'success') return 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-700/30 bg-emerald-50 px-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100'
     return 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800 hover:bg-slate-50'
   }
-  if (kind === 'success') return 'inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-400 hover:bg-emerald-500/20'
-  if (kind === 'warning') return 'inline-flex h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 text-sm font-bold text-amber-400 hover:bg-amber-500/20'
+  if (kind === 'success') return 'inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20'
+  if (kind === 'warning') return 'inline-flex h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 text-sm font-bold text-amber-300 hover:bg-amber-500/20'
   if (kind === 'primary') return 'inline-flex h-11 items-center gap-2 rounded-xl bg-[#167A3A] px-4 text-sm font-black text-white hover:bg-[#0f6a30]'
-  return 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]'
+  return 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-[#0F2B1A] px-4 text-sm font-bold text-white/85 hover:bg-[#12351F] hover:text-white'
 }
 
 export function ReportTableToolbar({
@@ -181,7 +181,7 @@ export function ReportTableToolbar({
         <details className="relative">
           <summary className={tableExpanded
             ? 'h-8 cursor-pointer rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-800 hover:bg-slate-50'
-            : 'h-11 cursor-pointer rounded-xl border border-white/20 bg-[#1A1A1A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#252525]'}>
+            : 'h-11 cursor-pointer rounded-xl border border-white/15 bg-[#0F2B1A] px-4 py-2.5 text-sm font-semibold text-white/85 hover:bg-[#12351F] hover:text-white'}>
             Columns
           </summary>
           <div className="absolute right-0 z-20 mt-2 max-h-80 w-64 overflow-y-auto rounded-xl border border-white/20 bg-[#1A1A1A] p-3 text-white shadow-2xl">
@@ -227,7 +227,7 @@ export function ReportTableToolbar({
         </button>
 
         <details className={tableExpanded ? 'hidden' : 'relative'}>
-          <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-xl border border-white/20 bg-[#1A1A1A] px-4 text-sm font-bold text-white hover:bg-[#252525]">
+          <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-xl border border-white/15 bg-[#0F2B1A] px-4 text-sm font-bold text-white/85 hover:bg-[#12351F] hover:text-white">
             Lainnya
           </summary>
           <div className="absolute right-0 z-30 mt-2 flex min-w-[200px] flex-col gap-1 rounded-xl border border-white/15 bg-[#0b1018] p-2 shadow-2xl">
