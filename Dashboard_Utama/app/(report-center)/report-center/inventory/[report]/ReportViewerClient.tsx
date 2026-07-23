@@ -75,6 +75,7 @@ import {
 } from '@/lib/reports/inventory/viewer-profiles'
 import type { ReportFilterAction } from '@/lib/reports/report-experience'
 import { actualToAccountingPeriod } from '@/lib/reports/accounting-period'
+import { saveReportPdfPreview } from '@/lib/reports/export-pdf-preview'
 import { formatCurrency, formatKpiValue, formatMetric, inferMetricKind } from '@/utils/format'
 
 type DbRow = Record<string, unknown>
@@ -2052,28 +2053,20 @@ async function exportExcel(report: InventoryReport, source: ReportSource, filter
   window.alert(`Excel: ${rows.length.toLocaleString('id-ID')} baris (bukan sampel AI; batas sistem ${ceiling.toLocaleString('id-ID')}).`)
 }
 
-async function exportPdf(report: InventoryReport, rows: DbRow[], columns: string[]) {
-  const { default: JsPDF } = await import('jspdf')
-  const doc = new JsPDF({ orientation: 'landscape', unit: 'pt' })
-  let y = 40
-  const visible = columns.slice(0, 7)
-  const previewRows = rows.slice(0, 34)
-  doc.setFontSize(14)
-  doc.text(report.title, 40, y)
-  y += 16
-  doc.setFontSize(9)
-  doc.setTextColor(120, 40, 40)
-  doc.text('PRATINJAU PDF — maks 34 baris × 7 kolom. Bukan laporan resmi penuh.', 40, y)
-  doc.setTextColor(0, 0, 0)
-  y += 14
-  doc.setFontSize(8)
-  doc.text(visible.join(' | '), 40, y)
-  y += 14
-  previewRows.forEach((row) => {
-    doc.text(visible.map((column) => formatValue(row[column])).join(' | ').slice(0, 165), 40, y)
-    y += 12
+async function exportPdf(report: InventoryReport, source: ReportSource, filters: ReportFilterInput, rows: DbRow[], columns: string[]) {
+  return saveReportPdfPreview({
+    reportId: report.id,
+    reportTitle: report.title,
+    reportCode: report.code,
+    description: report.description,
+    sourceLabel: sourceLabel(source),
+    periodLabel: String(filters.period ?? filters.accYear ?? 'Current'),
+    filters: filters as Record<string, unknown>,
+    rows,
+    columns,
+    formatValue,
+    displayColumnLabel,
   })
-  doc.save(`${report.id}-pratinjau.pdf`)
 }
 
 async function runConfirmedExport(
@@ -2086,7 +2079,7 @@ async function runConfirmedExport(
 ) {
   if (kind === 'csv') return downloadCsv(report, source, filters)
   if (kind === 'excel') return exportExcel(report, source, filters, { skipConfirm: true })
-  return exportPdf(report, rows, columns)
+  return exportPdf(report, source, filters, rows, columns)
 }
 
 export default function ReportViewerClient({ reportId }: { reportId: string }) {

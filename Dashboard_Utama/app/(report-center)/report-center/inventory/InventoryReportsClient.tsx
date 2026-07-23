@@ -39,6 +39,7 @@ import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
 import type { AiDashboardDefinition } from '@/lib/reports/ai-dashboard'
 import { useReportStore } from '@/store/reportStore'
 import type { ReportFilterInput } from '@/lib/reports/report-filtering'
+import { saveReportPdfPreview } from '@/lib/reports/export-pdf-preview'
 
 type DbRow = Record<string, unknown>
 
@@ -927,24 +928,19 @@ async function exportExcel(report: InventoryReport, source: ReportSource, filter
 
 async function exportPdf(report: InventoryReport, source: ReportSource, filters: ReportFilterInput = {}) {
   const payload = await fetchReport(report, source, 80, filters)
-  const { default: JsPDF } = await import('jspdf')
-  const doc = new JsPDF({ orientation: 'landscape', unit: 'pt' })
-  const columns = payload.columns.slice(0, 6)
-  let y = 48
-  doc.setFontSize(16)
-  doc.text(report.title, 40, y)
-  y += 20
-  doc.setFontSize(9)
-  doc.text(payload.description, 40, y)
-  y += 28
-  doc.setFontSize(8)
-  doc.text(columns.join(' | '), 40, y)
-  y += 16
-  payload.rows.slice(0, 28).forEach((row) => {
-    doc.text(columns.map((column) => formatValue(row[column])).join(' | ').slice(0, 150), 40, y)
-    y += 14
+  return saveReportPdfPreview({
+    reportId: report.id,
+    reportTitle: report.title,
+    reportCode: report.code,
+    description: payload.description,
+    sourceLabel: sourceLabel(source),
+    periodLabel: String(filters.period ?? 'Current'),
+    filters: filters as Record<string, unknown>,
+    rows: payload.rows,
+    columns: payload.columns,
+    formatValue,
+    displayColumnLabel: (column) => column,
   })
-  doc.save(`${report.id}.pdf`)
 }
 
 function TileShell({
