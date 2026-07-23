@@ -44,15 +44,237 @@ export type MonthlyStockRingkasanProps = {
   compactMetric: (value: unknown, field?: string, label?: string) => string
   formatValue: (value: unknown, field?: string) => string
   displayColumnLabel: (field: string) => string
+  activePeriodLabels: { actual?: string; accounting?: string; summary: string }
   openKpiSqlDebug: (event: { preventDefault: () => void; stopPropagation: () => void }, kpi: any) => void
   applyKpiFilter: (label: string) => void
   applySubKpiCardFilter: (kpi: any) => void
   applyMonthlyAnalysisGroup: (groupBy: string) => void
   applyMonthlyMovementWindow: (window: string) => void
+  applyMonthlyItemType?: (itemType: 'inventory' | 'gudang' | 'workshop') => void
   commitReportFilters: (filters: ReportFilterInput, message: string | null) => void
   setReportInfoVisible: (value: boolean) => void
   setReportInfoManuallyOpened: (value: boolean) => void
   setManualFilterOpen: (value: boolean) => void
+}
+
+function toNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/[^\d.-]/g, ''))
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+function metricValue(kpi: ReportKpiCardLike | undefined, pattern: RegExp) {
+  const metric = kpi?.metrics?.find((item) => pattern.test(`${item.key} ${item.label}`))
+  return metric?.value ?? kpi?.value ?? 0
+}
+
+function findKpi(cards: ReportKpiCardLike[], label: string) {
+  return cards.find((card) => card.label.toLowerCase() === label.toLowerCase())
+}
+
+function flowSectionTone(section?: string) {
+  if (section === 'opening') return 'border-sky-300/35 bg-sky-400/12 text-sky-50 shadow-[0_16px_48px_rgba(14,165,233,0.12)]'
+  if (section === 'inventory') return 'border-lime-300/35 bg-lime-400/12 text-lime-50 shadow-[0_16px_48px_rgba(132,204,22,0.12)]'
+  if (section === 'issued') return 'border-amber-300/40 bg-amber-400/14 text-amber-50 shadow-[0_16px_48px_rgba(245,158,11,0.16)]'
+  if (section === 'purchasing') return 'border-cyan-300/35 bg-cyan-400/12 text-cyan-50 shadow-[0_16px_48px_rgba(34,211,238,0.12)]'
+  if (section === 'closing') return 'border-yellow-200/45 bg-yellow-300/14 text-yellow-50 shadow-[0_18px_54px_rgba(250,204,21,0.18)]'
+  return 'border-emerald-300/35 bg-emerald-400/12 text-emerald-50 shadow-[0_16px_48px_rgba(16,185,129,0.12)]'
+}
+
+function analysisGroupLabel(options: ReadonlyArray<{ field: string; label: string }>, value: string) {
+  return options.find((option) => option.field === value)?.label ?? value
+}
+
+function SectionBar({
+  title,
+  note,
+  tone = 'lime',
+}: {
+  title: string
+  note?: string
+  tone?: 'lime' | 'emerald' | 'amber' | 'sky'
+}) {
+  const toneClass = {
+    lime: 'border-lime-300/35 bg-lime-300/10 text-lime-50 before:bg-lime-300',
+    emerald: 'border-emerald-300/35 bg-emerald-300/10 text-emerald-50 before:bg-emerald-300',
+    amber: 'border-amber-300/35 bg-amber-300/10 text-amber-50 before:bg-amber-300',
+    sky: 'border-sky-300/35 bg-sky-300/10 text-sky-50 before:bg-sky-300',
+  }[tone]
+
+  return (
+    <div className={`relative flex flex-wrap items-center gap-2 overflow-hidden rounded-2xl border px-4 py-3 pl-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] before:absolute before:left-0 before:top-0 before:h-full before:w-1.5 ${toneClass}`}>
+      <span className="text-sm font-black uppercase tracking-[0.18em] sm:text-base">{title}</span>
+      {note && (
+        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/70">
+          {note}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function firstMetric(kpi: ReportKpiCardLike, pattern: RegExp) {
+  return kpi.metrics?.find((item) => pattern.test(`${item.key} ${item.label}`)) ?? kpi.metrics?.[0]
+}
+
+function cardChartValue(kpi: ReportKpiCardLike) {
+  const metric = firstMetric(kpi, /ClosingAmount|AmountItem|IssuedTotalAmount|StockIssueMovementAmount|MovementIssueAmount|Amount|TotalItem|Count/i)
+  return toNumber(metric?.value ?? kpi.value)
+}
+
+function KpiBarCard({
+  kpi,
+  max,
+  compactMetric,
+  label,
+  caption,
+  tone = 'sky',
+  onClick,
+}: {
+  kpi: ReportKpiCardLike
+  max: number
+  compactMetric: (value: unknown, field?: string, label?: string) => string
+  label: string
+  caption?: string
+  tone?: 'sky' | 'emerald'
+  onClick?: () => void
+}) {
+  const headMetric = firstMetric(kpi, /ClosingAmount|AmountItem|IssuedTotalAmount|StockIssueMovementAmount|MovementIssueAmount|Amount|TotalItem|Count/i)
+  const qtyMetric = firstMetric(kpi, /Qty|Quantity/i)
+  const value = cardChartValue(kpi)
+  const width = Math.max(5, Math.min(100, (Math.abs(value) / Math.max(max, 1)) * 100))
+  const fill = tone === 'emerald' ? 'from-emerald-300 via-lime-300 to-yellow-200' : 'from-sky-300 via-cyan-300 to-lime-200'
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group rounded-3xl border-2 border-white/10 bg-white/[0.055] p-4 text-left text-white shadow-[0_12px_42px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:-translate-y-1 hover:border-lime-300/45 hover:bg-white/[0.075] focus:outline-none focus:ring-2 focus:ring-lime-300/50"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className="flex items-center gap-1 truncate text-[11px] font-black uppercase tracking-[0.14em] text-white/60">
+            {label}
+            <ChevronRight size={12} className="transition group-hover:translate-x-0.5" />
+          </span>
+          <strong className="mt-1 block truncate text-lg font-black leading-tight text-white">{kpi.label}</strong>
+        </div>
+        <span className="shrink-0 rounded-2xl border border-lime-200/20 bg-lime-300/10 px-2.5 py-1 text-sm font-black tabular-nums text-lime-100">
+          {compactMetric(value, headMetric?.key, kpi.label)}
+        </span>
+      </div>
+      <div className="mt-4 h-4 overflow-hidden rounded-full bg-black/30 shadow-inner">
+        <div className={`h-full rounded-full bg-gradient-to-r ${fill} shadow-[0_0_22px_rgba(190,242,100,0.28)]`} style={{ width: `${width}%` }} />
+      </div>
+      {caption && (
+        <p className="mt-2 text-[11px] font-bold leading-4 text-white/55">{caption}</p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <span className="rounded-full border border-white/10 bg-black/25 px-2 py-1 text-[10px] font-bold text-white/60">
+          {kpi.description}
+        </span>
+        {qtyMetric && (
+          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[10px] font-black text-cyan-100">
+            Qty {compactMetric(qtyMetric.value, qtyMetric.key, qtyMetric.label)}
+          </span>
+        )}
+      </div>
+    </button>
+  )
+}
+
+function MonthlyMovementVisuals({
+  flowKpiCards,
+  activeMonthlyMovementWindow,
+  compactMetric,
+}: {
+  flowKpiCards: ReportKpiCardLike[]
+  activeMonthlyMovementWindow: string
+  compactMetric: (value: unknown, field?: string, label?: string) => string
+}) {
+  const opening = findKpi(flowKpiCards, 'Opening')
+  const issuedLedger = findKpi(flowKpiCards, 'Issued - Ledger')
+  const issuedStation = findKpi(flowKpiCards, 'Issued - Station')
+  const issuedVehicle = findKpi(flowKpiCards, 'Issued - Vehicle')
+  const issuedTotal = findKpi(flowKpiCards, 'Issued - Total')
+  const goodsReceive = findKpi(flowKpiCards, 'Purchasing - Goods Receive')
+  const returnKpi = findKpi(flowKpiCards, 'Purchasing - Return')
+  const closing = findKpi(flowKpiCards, 'Closing')
+  const issueParts = [
+    { label: 'Ledger', kpi: issuedLedger, className: 'bg-amber-300' },
+    { label: 'Station', kpi: issuedStation, className: 'bg-orange-400' },
+    { label: 'Vehicle', kpi: issuedVehicle, className: 'bg-red-400' },
+  ].map((item) => ({ ...item, amount: toNumber(metricValue(item.kpi, /Amount/i)), qty: toNumber(metricValue(item.kpi, /Qty/i)) }))
+  const issueTotalAmount = Math.max(toNumber(metricValue(issuedTotal, /Amount/i)), issueParts.reduce((sum, item) => sum + item.amount, 0), 1)
+  const bridge = [
+    { label: 'Opening', kpi: opening, className: 'bg-sky-300' },
+    { label: 'Issued', kpi: issuedTotal, className: 'bg-amber-300' },
+    { label: 'Goods receive', kpi: goodsReceive, className: 'bg-emerald-300' },
+    { label: 'Return', kpi: returnKpi, className: 'bg-cyan-300' },
+    { label: 'Closing', kpi: closing, className: 'bg-yellow-200' },
+  ].map((item) => ({ ...item, amount: toNumber(metricValue(item.kpi, /Amount|TotalItem/i)), qty: toNumber(metricValue(item.kpi, /Qty/i)) }))
+  const bridgeMax = Math.max(...bridge.map((item) => Math.abs(item.amount)), 1)
+
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(250,204,21,0.18),transparent_28%),linear-gradient(135deg,rgba(5,35,23,0.92),rgba(7,20,38,0.9))] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.26em] text-yellow-100/80">Movement visual analysis</p>
+          <h3 className="mt-1 text-2xl font-black tracking-[-0.05em] text-white sm:text-3xl">Quantity, issue, receive, closing terbaca sekilas.</h3>
+        </div>
+        <span className="w-fit rounded-2xl border border-yellow-200/30 bg-yellow-300/12 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-yellow-50">
+          MC window {activeMonthlyMovementWindow}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+          <p className="text-sm font-black uppercase tracking-[0.14em] text-amber-50">Issue composition</p>
+          <p className="mt-1 text-[11px] font-bold leading-5 text-white/55">Bar length = issue amount share. Qty line = physical issue quantity.</p>
+          <div className="mt-4 space-y-3">
+            {issueParts.map((item) => {
+              const width = Math.max(4, Math.min(100, (item.amount / issueTotalAmount) * 100))
+              return (
+                <div key={item.label} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3 text-xs font-bold text-white/80">
+                    <span className="text-white">{item.label}</span>
+                    <span className="tabular-nums text-yellow-50">{compactMetric(item.amount, 'IssuedTotalAmount', item.label)}</span>
+                  </div>
+                  <div className="h-3 overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full rounded-full ${item.className}`} style={{ width: `${width}%` }} />
+                  </div>
+                  <p className="text-[11px] font-semibold text-white/55">Qty {compactMetric(item.qty, 'IssuedTotalQty', item.label)}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+          <p className="text-sm font-black uppercase tracking-[0.14em] text-emerald-50">Opening → issue → receive → closing</p>
+          <p className="mt-1 text-[11px] font-bold leading-5 text-white/55">Amount = IDR value in period flow. Qty = physical movement quantity.</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-5">
+            {bridge.map((item) => {
+              const width = Math.max(8, Math.min(100, (Math.abs(item.amount) / bridgeMax) * 100))
+              return (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.045] p-3">
+                  <span className="block text-[11px] font-black uppercase tracking-[0.12em] text-white">{item.label}</span>
+                  <strong className="mt-2 block min-h-[2.1rem] text-sm font-black leading-tight text-yellow-50">{compactMetric(item.amount, 'Amount', item.label)}</strong>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full rounded-full ${item.className}`} style={{ width: `${width}%` }} />
+                  </div>
+                  <span className="mt-2 block text-[10px] font-bold text-white/55">Qty {compactMetric(item.qty, 'Qty', item.label)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
 }
 
 export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
@@ -79,11 +301,13 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
     compactMetric,
     formatValue,
     displayColumnLabel,
+    activePeriodLabels,
     openKpiSqlDebug,
     applyKpiFilter,
     applySubKpiCardFilter,
     applyMonthlyAnalysisGroup,
     applyMonthlyMovementWindow,
+    applyMonthlyItemType,
     commitReportFilters,
     setReportInfoVisible,
     setReportInfoManuallyOpened,
@@ -92,67 +316,207 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
 
   const MONTHLY_ANALYSIS_GROUP_OPTIONS = analysisGroupOptions
   const MONTHLY_MOVEMENT_WINDOW_OPTIONS = movementWindowOptions
+  const activeAnalysisLabel = analysisGroupLabel(MONTHLY_ANALYSIS_GROUP_OPTIONS, resolvedMonthlyAnalysisGroup)
+  const subCategoryMax = Math.max(...subKpiCards.map(cardChartValue), 1)
+  const movementCategoryMax = Math.max(...movementCategoryKpiCards.map(cardChartValue), 1)
 
   return (
-        <div className="rc-ringkasan sticky top-0 z-30 mt-4 space-y-2 rounded-xl border border-lime-400/15 bg-[#071426]/95 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)] backdrop-blur-md">
+        <div className="rc-ringkasan sticky top-0 z-30 mt-5 space-y-5 rounded-[34px] border border-lime-300/25 bg-[#04111f]/97 p-4 shadow-[0_24px_90px_rgba(0,0,0,0.50),0_0_0_1px_rgba(255,255,255,0.06),0_0_120px_rgba(132,204,22,0.08)] backdrop-blur-xl sm:p-5">
           {/* Hide sticky grand strip when official flow cards already carry open→close story (avoids double totals). */}
           {stickyGrandTotals.length > 0 && !(isMonthlyStockMovement && flowKpiCards.length > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 border-b border-white/10 px-1 pb-2">
+            <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-1 pb-2.5">
               <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.14em] text-lime-300/80">Ringkasan cepat</span>
               {stickyGrandTotals.slice(0, 6).map((item) => (
                 <div
                   key={item.key}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-lime-400/20 bg-lime-400/10 px-2 py-1"
+                  className="inline-flex max-w-full items-center gap-2 rounded-xl border border-lime-400/25 bg-lime-400/10 px-3 py-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.25)]"
                   title={String(item.label)}
                 >
-                  <span className="rc-kpi-label truncate text-lime-100/70">{item.label}</span>
-                  <span className="rc-kpi-value text-xs font-semibold text-lime-100">{compactMetric(item.value, item.key, item.label)}</span>
+                  <span className="rc-kpi-label truncate text-[10px] font-bold uppercase tracking-wide text-lime-200/70">{item.label}</span>
+                  <span className="rc-kpi-value text-sm font-black text-lime-100">{compactMetric(item.value, item.key, item.label)}</span>
                 </div>
               ))}
             </div>
           )}
           {isMonthlyStockMovement && (
-            <ReportControlBar
-              periodValue={String(requestFilters.period ?? payload?.metadata?.actualPeriod ?? '')}
-              analysisGroupValue={resolvedMonthlyAnalysisGroup}
-              movementWindowValue={activeMonthlyMovementWindow}
-              analysisGroupOptions={MONTHLY_ANALYSIS_GROUP_OPTIONS}
-              movementWindowOptions={MONTHLY_MOVEMENT_WINDOW_OPTIONS}
-              appliedFilters={appliedFilters}
-              onPeriodChange={(period) => {
-                commitReportFilters({
-                  ...appliedFilters,
-                  period,
-                  accYear: undefined,
-                  accMonth: undefined,
-                  actualYear: undefined,
-                  actualMonth: undefined,
-                }, period ? `Actual period ${period} diterapkan dari KPI card rail.` : 'Current period diterapkan dari KPI card rail.')
-              }}
-              onAnalysisGroupChange={applyMonthlyAnalysisGroup}
-              onMovementWindowChange={applyMonthlyMovementWindow}
-              onMoreFilters={() => {
-                setReportInfoVisible(true)
-                setReportInfoManuallyOpened(true)
-                setManualFilterOpen(true)
-              }}
-            />
+            <section className="relative overflow-hidden rounded-[30px] border border-emerald-300/25 bg-[radial-gradient(circle_at_14%_0%,rgba(250,204,21,0.20),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(20,184,166,0.18),transparent_30%),linear-gradient(135deg,rgba(6,38,25,0.94),rgba(6,20,37,0.92))] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.12)] sm:p-5">
+              <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full border border-yellow-200/20 bg-yellow-300/10 blur-3xl" aria-hidden="true" />
+              <div className="relative z-10 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div className="min-w-0">
+                  <p className="inline-flex items-center gap-2 rounded-full border border-yellow-200/35 bg-yellow-300/12 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-yellow-50">
+                    Palm estate movement detail
+                  </p>
+                  <h2 className="mt-3 max-w-5xl text-3xl font-black leading-[0.98] tracking-[-0.06em] text-white sm:text-5xl">
+                    RPTIN1000015 Movement Estate View
+                  </h2>
+                  <p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-emerald-50/72">
+                    Opening, issue, purchasing, quantity, dan closing dibuat tebal supaya mutasi stok kebun sawit mudah dibaca cepat.
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3 xl:w-[520px]">
+                  <div className="rounded-2xl border border-emerald-200/25 bg-emerald-300/10 p-3">
+                    <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/70">Actual</span>
+                    <strong className="mt-1 block text-base font-black text-emerald-50">{activePeriodLabels.actual ?? 'Current'}</strong>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200/25 bg-amber-300/10 p-3">
+                    <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/70">Accounting</span>
+                    <strong className="mt-1 block text-base font-black text-amber-50">{activePeriodLabels.accounting ?? 'Auto'}</strong>
+                  </div>
+                  <div className="rounded-2xl border border-cyan-200/25 bg-cyan-300/10 p-3">
+                    <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-cyan-100/70">Analysis</span>
+                    <strong className="mt-1 block truncate text-base font-black text-cyan-50">{activeAnalysisLabel}</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+          {isMonthlyStockMovement && (
+            <>
+              <ReportControlBar
+                periodValue={String(requestFilters.period ?? payload?.metadata?.actualPeriod ?? '')}
+                analysisGroupValue={resolvedMonthlyAnalysisGroup}
+                movementWindowValue={activeMonthlyMovementWindow}
+                itemTypeValue={
+                  requestFilters.itemType === 'gudang' || requestFilters.itemType === '1'
+                    ? 'gudang'
+                    : requestFilters.itemType === 'workshop' || requestFilters.itemType === '4'
+                      ? 'workshop'
+                      : 'inventory'
+                }
+                analysisGroupOptions={MONTHLY_ANALYSIS_GROUP_OPTIONS}
+                movementWindowOptions={MONTHLY_MOVEMENT_WINDOW_OPTIONS}
+                appliedFilters={appliedFilters}
+                onPeriodChange={(period) => {
+                  commitReportFilters({
+                    ...appliedFilters,
+                    period,
+                    accYear: undefined,
+                    accMonth: undefined,
+                    actualYear: undefined,
+                    actualMonth: undefined,
+                  }, period ? `Actual period ${period} diterapkan dari KPI card rail.` : 'Current period diterapkan dari KPI card rail.')
+                }}
+                onAnalysisGroupChange={applyMonthlyAnalysisGroup}
+                onMovementWindowChange={applyMonthlyMovementWindow}
+                onItemTypeChange={(itemType) => {
+                  if (applyMonthlyItemType) {
+                    applyMonthlyItemType(itemType)
+                    return
+                  }
+                  const nextItemType = itemType === 'inventory' ? undefined : itemType
+                  commitReportFilters({
+                    ...appliedFilters,
+                    itemType: nextItemType,
+                    includeWorkshopItem: itemType === 'gudang' ? 'no' : itemType === 'workshop' ? 'yes' : undefined,
+                  }, itemType === 'inventory'
+                    ? 'Item type: Gudang + Workshop (1+4).'
+                    : itemType === 'gudang'
+                      ? 'Item type: Gudang only (1).'
+                      : 'Item type: Workshop only (4).')
+                }}
+                onMoreFilters={() => {
+                  setReportInfoVisible(true)
+                  setReportInfoManuallyOpened(true)
+                  setManualFilterOpen(true)
+                }}
+              />
+              <div className="grid gap-3 border-b border-white/10 px-1 pb-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/12 px-4 py-3">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/75">Actual month aktif</span>
+                  <span className="mt-1 block text-lg font-black tabular-nums text-emerald-50">{activePeriodLabels.actual ?? 'Current'}</span>
+                </div>
+                <div className="rounded-2xl border border-amber-300/30 bg-amber-300/12 px-4 py-3">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/75">Acc month aktif</span>
+                  <span className="mt-1 block text-lg font-black tabular-nums text-amber-50">{activePeriodLabels.accounting ?? 'Auto dari server'}</span>
+                </div>
+                <div className="rounded-2xl border border-cyan-300/30 bg-cyan-300/12 px-4 py-3">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/75">Kategori analisis</span>
+                  <span className="mt-1 block truncate text-lg font-black text-cyan-50">{activeAnalysisLabel}</span>
+                </div>
+              </div>
+              {flowKpiCards.length > 0 && (
+                <MonthlyMovementVisuals
+                  flowKpiCards={flowKpiCards}
+                  activeMonthlyMovementWindow={activeMonthlyMovementWindow}
+                  compactMetric={compactMetric}
+                />
+              )}
+              <section className="rounded-[30px] border border-sky-300/25 bg-[radial-gradient(circle_at_100%_0%,rgba(56,189,248,0.18),transparent_30%),linear-gradient(135deg,rgba(8,34,52,0.92),rgba(4,20,34,0.92))] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-5">
+                <SectionBar
+                  title={`Sub-category analysis · ${displayColumnLabel(subKpiCards[0]?.groupField ?? activeTableGroupColumn ?? resolvedMonthlyAnalysisGroup)}`}
+                  note={`${subKpiCards.length} grup · sync Actual ${activePeriodLabels.actual ?? 'current'}`}
+                  tone="sky"
+                />
+                {subKpiCards.length > 0 ? (
+                  <div className="rc-breakdown-scroll mt-4 grid max-h-[34rem] grid-cols-1 gap-3 pr-1 lg:grid-cols-2 2xl:grid-cols-3">
+                    {subKpiCards.slice(0, 24).map((kpi) => (
+                      <KpiBarCard
+                        key={`sub-chart-${kpi.groupField}-${kpi.groupKey}`}
+                        kpi={kpi}
+                        max={subCategoryMax}
+                        compactMetric={compactMetric}
+                        label="Sub category"
+                        caption="Bar length = primary amount/count for active analysis group."
+                        tone="sky"
+                        onClick={() => applySubKpiCardFilter(kpi)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-3xl border border-sky-300/20 bg-black/20 p-5 text-sm font-semibold text-sky-50/70">
+                    Tidak ada sub-category untuk kategori aktif. Pilih Product Type / Brand / Model / Material untuk grafik grup.
+                  </div>
+                )}
+              </section>
+              <section className="rounded-[30px] border border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(132,204,22,0.20),transparent_30%),linear-gradient(135deg,rgba(5,40,25,0.94),rgba(4,24,20,0.92))] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-5">
+                <SectionBar
+                  title="Movement category analysis"
+                  note={`${movementCategoryKpiCards.length} kategori · window ${activeMonthlyMovementWindow} · Actual ${activePeriodLabels.actual ?? 'current'}`}
+                  tone="emerald"
+                />
+                {movementCategoryKpiCards.length > 0 ? (
+                  <div className="rc-breakdown-scroll mt-4 grid max-h-[38rem] grid-cols-1 gap-3 pr-1 lg:grid-cols-2 2xl:grid-cols-3">
+                    {movementCategoryKpiCards.slice(0, 24).map((kpi) => (
+                      <div key={`mc-chart-${kpi.groupField}-${kpi.groupKey}`} className="relative">
+                        <button
+                          type="button"
+                          onClick={(event) => openKpiSqlDebug(event, kpi)}
+                          title="SQL sederhana KPI ini"
+                          className="rc-sql-debug absolute right-4 top-4 z-10 rounded-xl border border-white/15 bg-white/5 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white/50 opacity-0 transition-all hover:bg-white/10 hover:text-white/80 focus-visible:opacity-100"
+                        >
+                          SQL
+                        </button>
+                        <KpiBarCard
+                          kpi={kpi}
+                          max={movementCategoryMax}
+                          compactMetric={compactMetric}
+                          label={`Movement · ${activeMonthlyMovementWindow}`}
+                          caption="Bar length = issue movement metric for active movement window."
+                          tone="emerald"
+                          onClick={() => applySubKpiCardFilter(kpi)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-3xl border border-emerald-300/20 bg-black/20 p-5 text-sm font-semibold text-emerald-50/70">
+                    Movement Category kosong untuk periode/window ini. Panel tetap tampil supaya sinkronisasi periode terlihat.
+                  </div>
+                )}
+              </section>
+            </>
           )}
           {kpiCards.length > 0 && (
             <div className="space-y-2">
               {flowKpiCards.length > 0 && (
-                <div className="space-y-3">
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-lime-200/75">
-                    <span>Ringkasan</span>
-                    <span className="rc-scope-chip text-[10px] text-lime-100/80">
-                      {isMonthlyStockMovement
-                        ? '14 kolom resmi PDF · Opening → Inventory → Issued → Purchasing → Closing'
-                        : 'Alur stok'}
-                    </span>
-                    {isMonthlyStockMovement && (
-                      <span className="rc-scope-chip">Ringkasan server (terfilter) · bukan sampel</span>
-                    )}
-                  </p>
+                <div className="space-y-4">
+                  <SectionBar
+                    title="Ringkasan"
+                    note={isMonthlyStockMovement
+                      ? '14 kolom resmi PDF · Opening → Inventory → Issued → Purchasing → Closing · server filtered'
+                      : 'Alur stok'}
+                    tone="lime"
+                  />
                   {(isMonthlyStockMovement
                     ? [
                         { id: 'opening', title: 'Opening', sections: ['opening'] },
@@ -167,11 +531,15 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                     const cards = flowKpiCards.filter((kpi) => sectionSet.has(kpi.flowSection ?? 'opening'))
                     if (cards.length === 0) return null
                     return (
-                      <div key={group.id} className="space-y-1.5">
+                      <div key={group.id} className="space-y-3">
                         {isMonthlyStockMovement && (
-                          <p className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">{group.title}</p>
+                          <SectionBar
+                            title={group.title}
+                            note={group.id === 'issued' ? 'amount + qty split' : group.id === 'closing' ? 'saldo akhir + jumlah item' : undefined}
+                            tone={group.id === 'issued' || group.id === 'purchasing' ? 'amber' : group.id === 'inventory' ? 'emerald' : group.id === 'opening' ? 'sky' : 'lime'}
+                          />
                         )}
-                        <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${isMonthlyStockMovement ? 'md:grid-cols-3 xl:grid-cols-4' : 'xl:grid-cols-5'}`}>
+                        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${isMonthlyStockMovement ? 'lg:grid-cols-2 2xl:grid-cols-4' : 'xl:grid-cols-5'}`}>
                           {cards.map((kpi) => {
                             const amountMetric = (kpi.metrics ?? []).find((m) => /Amount|TotalItem/i.test(m.key)) ?? kpi.metrics?.[0]
                             const qtyMetric = (kpi.metrics ?? []).find((m) => /Qty/i.test(m.key))
@@ -181,44 +549,49 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                             return (
                               <div
                                 key={`flow-${kpi.sourceField ?? kpi.label}`}
-                                className={`group relative min-h-[96px] rounded-xl border p-3 pr-12 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] ${kpi.tone}`}
+                                className={`group relative min-h-[120px] rounded-2xl border-2 p-4 pr-12 text-left text-white shadow-[0_8px_32px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.1)] ${kpi.tone}`}
                                 title={[kpi.sourceTable, kpi.sourceField].filter(Boolean).join(' · ')}
                               >
                                 <button
                                   type="button"
                                   onClick={(event) => openKpiSqlDebug(event, kpi)}
                                   title="SQL sederhana KPI ini"
-                                  className="rc-sql-debug absolute right-2 top-2 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                                  className="rc-sql-debug absolute right-3 top-3 z-10 rounded-xl border border-white/15 bg-white/5 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white/50 opacity-0 transition-all group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/10 hover:text-white/80"
                                 >
                                   SQL
                                 </button>
-                                <span className="rc-kpi-label block truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/55">
+                                <span className="rc-kpi-label block truncate text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/60">
                                   {kpi.label}
                                 </span>
-                                <span className="rc-kpi-value mt-1 block text-xl font-black tracking-tight text-lime-100 whitespace-normal break-all">
+                                <span className="rc-kpi-value mt-2 block text-3xl font-black tracking-tight text-lime-100 whitespace-normal break-all leading-tight">
                                   {compactMetric(kpi.value, amountMetric?.key ?? kpi.sourceField, kpi.label)}
                                 </span>
                                 {isMonthlyStockMovement && qtyMetric && kpi.sourceField !== 'TotalItem' ? (
-                                  <span className="mt-1 block text-[11px] font-bold tabular-nums text-white/70">
-                                    Qty {compactMetric(qtyMetric.value, qtyMetric.key, qtyMetric.label)}
-                                  </span>
+                                  <>
+                                    <span className="mt-2 block text-[12px] font-bold tabular-nums text-white/70">
+                                      Qty {compactMetric(qtyMetric.value, qtyMetric.key, qtyMetric.label)}
+                                    </span>
+                                    <span className="mt-1 block text-[11px] font-semibold leading-snug text-white/55">
+                                      {kpi.description}
+                                    </span>
+                                  </>
                                 ) : (
-                                  <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-white/60">
+                                  <span className="mt-1 block text-[12px] font-semibold leading-snug text-white/55">
                                     {kpi.description}
                                   </span>
                                 )}
                                 {nested.length > 0 && (
-                                  <div className="mt-2 grid grid-cols-2 gap-1">
+                                  <div className="mt-3 grid grid-cols-2 gap-2">
                                     {nested.slice(0, 4).map((metric) => (
                                       <div
                                         key={metric.key}
-                                        className="rounded-md border border-white/10 bg-black/20 px-1.5 py-1"
+                                        className="rounded-xl border border-white/10 bg-black/25 px-2.5 py-1.5 shadow-inner"
                                         title={`${metric.label}: ${formatValue(metric.value, metric.key)}`}
                                       >
-                                        <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/50">
+                                        <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/45">
                                           {metric.label}
                                         </span>
-                                        <span className="block text-[11px] font-black text-white/90 whitespace-normal break-all">
+                                        <span className="block text-[12px] font-black text-white/90 whitespace-normal break-all leading-tight">
                                           {compactMetric(metric.value, metric.key, metric.label)}
                                         </span>
                                       </div>
@@ -237,22 +610,37 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
 
               {/* Secondary rails: open by default for non-monthly; monthly keeps collapsed to cut noise. */}
               {isMonthlyStockMovement && (globalKpiCards.length > 0 || breakdownKpiCards.length > 0 || subKpiCards.length > 0 || movementCategoryKpiCards.length > 0) && (
-                <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-1 pt-2">
+                <div className="border-t border-white/10 pt-4">
                   <button
                     type="button"
                     onClick={() => setMonthlySecondaryOpen((open) => !open)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-bold text-white/70 hover:bg-white/10 hover:text-white"
+                    className="group flex w-full flex-col gap-3 rounded-[26px] border border-yellow-200/25 bg-[linear-gradient(135deg,rgba(250,204,21,0.16),rgba(16,185,129,0.10),rgba(14,165,233,0.08))] p-4 text-left text-white shadow-[0_16px_56px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.12)] transition-all hover:-translate-y-0.5 hover:border-lime-200/45 hover:bg-yellow-300/18 focus:outline-none focus:ring-2 focus:ring-lime-300/50 sm:flex-row sm:items-center sm:justify-between"
                     aria-expanded={monthlySecondaryOpen}
                   >
-                    {monthlySecondaryOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    {monthlySecondaryOpen ? 'Sembunyikan analisis lanjutan' : 'Tampilkan analisis lanjutan'}
-                    <span className="rc-scope-chip">
+                    <span className="flex min-w-0 items-start gap-3">
+                      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-2xl border border-yellow-100/25 bg-yellow-300/15 text-yellow-50 shadow-[0_0_24px_rgba(250,204,21,0.18)]">
+                        {monthlySecondaryOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-base font-black uppercase tracking-[0.14em] text-yellow-50 sm:text-lg">
+                          {monthlySecondaryOpen ? 'Sembunyikan analisis lanjutan' : 'Tampilkan analisis lanjutan'}
+                        </span>
+                        <span className="mt-1 block text-sm font-semibold leading-5 text-emerald-50/72">
+                          Ganti kategori analisis untuk lihat sub-kategori, Gudang vs Workshop, dan Movement Actual tanpa mengubah angka resmi flow.
+                        </span>
+                      </span>
+                    </span>
+                    <span className="flex flex-wrap gap-1.5 sm:justify-end">
                       {[
                         globalKpiCards.filter((c) => c.label !== 'Global totals').length > 0 ? 'context' : null,
                         breakdownKpiCards.length > 0 ? 'gudang/workshop' : null,
                         subKpiCards.length > 0 ? 'sub-kategori' : null,
                         movementCategoryKpiCards.length > 0 ? 'movement' : null,
-                      ].filter(Boolean).join(' · ')}
+                      ].filter(Boolean).map((label) => (
+                        <span key={label} className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-lime-100/80">
+                          {label}
+                        </span>
+                      ))}
                     </span>
                   </button>
                 </div>
@@ -260,8 +648,8 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
 
               {(!isMonthlyStockMovement || monthlySecondaryOpen) && globalKpiCards.filter((c) => c.label !== 'Global totals').length > 0 && (
               <div>
-                <p className="mb-1 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">Context · full scope</p>
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
+                <p className="mb-1 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/45">Context · full scope</p>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
                   {globalKpiCards.filter((c) => c.label !== 'Global totals').slice(0, isMonthlyStockMovement ? 6 : 10).map((kpi) => {
                     const canFilter = Boolean(viewerProfile.kpiPresetByLabel?.[kpi.label])
                     return (
@@ -276,19 +664,19 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                           if (!canFilter) return
                           if (event.key === 'Enter' || event.key === ' ') applyKpiFilter(kpi.label)
                         }}
-                        className={`group relative min-h-[82px] rounded-xl border border-emerald-400/20 bg-white/[0.04] p-3 pr-12 text-left text-white transition ${canFilter ? 'cursor-pointer hover:-translate-y-0.5 hover:border-lime-300/40 hover:bg-emerald-400/10' : 'cursor-default'}`}
+                        className={`group relative min-h-[108px] rounded-2xl border-2 border-emerald-400/25 bg-white/[0.06] p-4 pr-12 text-left text-white shadow-[0_8px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all ${canFilter ? 'cursor-pointer hover:-translate-y-1 hover:border-lime-300/50 hover:bg-emerald-400/12 hover:shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_20px_rgba(16,185,129,0.15)]' : 'cursor-default'}`}
                       >
                         <button
                           type="button"
                           onClick={(event) => openKpiSqlDebug(event, kpi)}
                           title="SQL sederhana KPI ini"
-                          className="rc-sql-debug absolute right-2 top-2 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                          className="rc-sql-debug absolute right-3 top-3 z-10 rounded-xl border border-white/15 bg-white/5 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white/50 opacity-0 transition-all group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/10 hover:text-white/80"
                         >
                           SQL
                         </button>
-                        <span className="block text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">{kpi.label}</span>
-                        <span className="mt-1 block text-xl font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
-                        <span className="mt-0.5 block text-[11px] font-semibold text-white/55">{kpi.description}</span>
+                        <span className="block text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/50">{kpi.label}</span>
+                        <span className="mt-2 block text-3xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                        <span className="mt-1 block text-[12px] font-semibold text-white/50">{kpi.description}</span>
                         {kpi.metrics && kpi.metrics.length > 1 && (
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {kpi.metrics.slice(0, 8).map((metric) => (
@@ -307,7 +695,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
 
               {(!isMonthlyStockMovement || monthlySecondaryOpen) && breakdownKpiCards.length > 0 && (
                 <div>
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200/80">
+                  <p className="mb-2 flex flex-wrap items-center gap-2 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-amber-200/85">
                     <span>Breakdown</span>
                     <span className="rc-scope-chip text-amber-100/90">
                       Gudang vs Workshop
@@ -319,25 +707,25 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                         key={`b-${kpi.groupField}-${kpi.groupKey}`}
                         type="button"
                         onClick={() => applySubKpiCardFilter(kpi)}
-                        className="group rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-left text-white transition hover:-translate-y-0.5 hover:border-lime-300/45 hover:bg-amber-400/15 focus:outline-none focus:ring-2 focus:ring-lime-300/50"
+                        className="group rounded-2xl border-2 border-amber-400/35 bg-amber-500/12 p-4 text-left text-white shadow-[0_8px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:-translate-y-1 hover:border-lime-300/50 hover:bg-amber-400/18 hover:shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_20px_rgba(245,158,11,0.12)] focus:outline-none focus:ring-2 focus:ring-lime-300/50"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <span className="flex items-center gap-1 truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-200/75">
+                            <span className="flex items-center gap-1 truncate text-[11px] font-extrabold uppercase tracking-[0.14em] text-amber-200/75">
                               ItemType split
                               <ChevronRight size={12} className="transition group-hover:translate-x-0.5" />
                             </span>
-                            <span className="mt-0.5 block truncate text-sm font-black text-amber-50">{kpi.label}</span>
-                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-white/55">{kpi.description}</span>
+                            <span className="mt-1 block truncate text-lg font-black text-amber-50 leading-tight">{kpi.label}</span>
+                            <span className="mt-1 block truncate text-[12px] font-semibold text-white/50">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                          <span className="shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
                         {kpi.metrics && kpi.metrics.length > 0 && (
-                          <div className="mt-2 grid grid-cols-3 gap-1">
+                          <div className="mt-3 grid grid-cols-3 gap-2">
                             {kpi.metrics.map((metric) => (
-                              <div key={metric.key} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
+                              <div key={metric.key} className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 shadow-inner">
                                 <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/45">{metric.label}</span>
-                                <span className="block text-xs font-black text-lime-100 whitespace-normal break-all">{compactMetric(metric.value, metric.key, metric.label)}</span>
+                                <span className="mt-0.5 block text-sm font-black text-lime-100 whitespace-normal break-all leading-tight">{compactMetric(metric.value, metric.key, metric.label)}</span>
                               </div>
                             ))}
                           </div>
@@ -348,9 +736,9 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                 </div>
               )}
 
-              {(!isMonthlyStockMovement || monthlySecondaryOpen) && subKpiCards.length > 0 && (
+              {!isMonthlyStockMovement && subKpiCards.length > 0 && (
                 <div>
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-300/75">
+                  <p className="mb-2 flex flex-wrap items-center gap-2 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-sky-300/80">
                     <span>
                       Sub-category · {displayColumnLabel(subKpiCards[0]?.groupField ?? activeTableGroupColumn ?? 'group')}
                     </span>
@@ -364,30 +752,30 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                         key={`s-${kpi.groupField}-${kpi.groupKey}`}
                         type="button"
                         onClick={() => applySubKpiCardFilter(kpi)}
-                        className="group rounded-xl border border-sky-400/25 bg-sky-500/10 p-3 text-left text-white transition hover:-translate-y-0.5 hover:border-lime-300/45 hover:bg-sky-400/15 focus:outline-none focus:ring-2 focus:ring-lime-300/50"
+                        className="group rounded-2xl border-2 border-sky-400/30 bg-sky-500/12 p-4 text-left text-white shadow-[0_8px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:-translate-y-1 hover:border-lime-300/50 hover:bg-sky-400/18 hover:shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_20px_rgba(14,165,233,0.12)] focus:outline-none focus:ring-2 focus:ring-lime-300/50"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <span className="flex items-center gap-1 truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-200/70">
+                            <span className="flex items-center gap-1 truncate text-[11px] font-extrabold uppercase tracking-[0.14em] text-sky-200/70">
                               Sub filter
                               <ChevronRight size={12} className="transition group-hover:translate-x-0.5" />
                             </span>
-                            <span className="mt-0.5 block truncate text-sm font-black text-sky-50">{kpi.label}</span>
-                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-white/55">{kpi.description}</span>
+                            <span className="mt-1 block truncate text-lg font-black text-sky-50 leading-tight">{kpi.label}</span>
+                            <span className="mt-1 block truncate text-[12px] font-semibold text-white/50">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                          <span className="shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          <span className="rounded border border-sky-300/25 bg-sky-300/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-sky-100/75">
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <span className="rounded-xl border border-sky-300/25 bg-sky-300/10 px-2 py-1 text-[9px] font-black uppercase text-sky-100/75">
                             group={kpi.groupField}
                           </span>
                         </div>
                         {kpi.metrics && kpi.metrics.length > 0 && (
-                          <div className="mt-2 grid grid-cols-2 gap-1">
+                          <div className="mt-3 grid grid-cols-2 gap-2">
                             {kpi.metrics.map((metric) => (
-                              <div key={metric.key} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
+                              <div key={metric.key} className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 shadow-inner">
                                 <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/45">{metric.label}</span>
-                                <span className="block text-xs font-black text-lime-100 whitespace-normal break-all">{compactMetric(metric.value, metric.key, metric.label)}</span>
+                                <span className="mt-0.5 block text-sm font-black text-lime-100 whitespace-normal break-all leading-tight">{compactMetric(metric.value, metric.key, metric.label)}</span>
                               </div>
                             ))}
                           </div>
@@ -398,9 +786,9 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                 </div>
               )}
 
-              {(!isMonthlyStockMovement || monthlySecondaryOpen) && movementCategoryKpiCards.length > 0 && (
-                <div className="border-t border-emerald-400/15 pt-3">
-                  <p className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/85">
+              {!isMonthlyStockMovement && movementCategoryKpiCards.length > 0 && (
+                <div className="border-t border-emerald-400/20 pt-3">
+                  <p className="mb-2 flex flex-wrap items-center gap-2 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-200/90">
                     <span>Movement category</span>
                     <span className="rc-scope-chip text-emerald-100/85">
                       {movementCategoryKpiCards.length} · window {activeMonthlyMovementWindow}
@@ -410,13 +798,13 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                     {(isMonthlyStockMovement ? movementCategoryKpiCards.slice(0, 12) : movementCategoryKpiCards).map((kpi) => (
                       <div
                         key={`mc-${kpi.groupField}-${kpi.groupKey}`}
-                        className="group relative rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 pr-12 text-left text-white transition hover:-translate-y-0.5 hover:border-lime-300/45 hover:bg-emerald-400/15"
+                        className="group relative rounded-2xl border-2 border-emerald-400/35 bg-emerald-500/12 p-4 pr-12 text-left text-white shadow-[0_8px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all hover:-translate-y-1 hover:border-lime-300/50 hover:bg-emerald-400/18 hover:shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_20px_rgba(16,185,129,0.15)]"
                       >
                         <button
                           type="button"
                           onClick={(event) => openKpiSqlDebug(event, kpi)}
                           title="SQL sederhana KPI ini"
-                          className="rc-sql-debug absolute right-2 top-2 z-10 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                          className="rc-sql-debug absolute right-3 top-3 z-10 rounded-xl border border-white/15 bg-white/5 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white/50 opacity-0 transition-all group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/10 hover:text-white/80"
                         >
                           SQL
                         </button>
@@ -427,29 +815,29 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                         >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <span className="flex items-center gap-1 truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-emerald-200/75">
+                            <span className="flex items-center gap-1 truncate text-[11px] font-extrabold uppercase tracking-[0.14em] text-emerald-200/75">
                               Actual movement
                               <ChevronRight size={12} className="transition group-hover:translate-x-0.5" />
                             </span>
-                            <span className="mt-0.5 block truncate text-sm font-black text-emerald-50">{kpi.label}</span>
-                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-white/55">{kpi.description}</span>
+                            <span className="mt-1 block truncate text-lg font-black text-emerald-50 leading-tight">{kpi.label}</span>
+                            <span className="mt-1 block truncate text-[12px] font-semibold text-white/50">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-lg font-black tracking-tight text-lime-200 whitespace-normal break-all">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                          <span className="shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          <span className="rounded border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-emerald-100/80">
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <span className="rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-2 py-1 text-[9px] font-black uppercase text-emerald-100/80">
                             MovementCategory
                           </span>
-                          <span className="rounded border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-amber-100/75">
+                          <span className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase text-amber-100/75">
                             window={activeMonthlyMovementWindow}
                           </span>
                         </div>
                         {kpi.metrics && kpi.metrics.length > 0 && (
-                          <div className="mt-2 grid grid-cols-2 gap-1">
+                          <div className="mt-3 grid grid-cols-2 gap-2">
                             {kpi.metrics.map((metric) => (
-                              <div key={metric.key} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
+                              <div key={metric.key} className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 shadow-inner">
                                 <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-white/45">{metric.label}</span>
-                                <span className="block text-xs font-black text-lime-100 whitespace-normal break-all">{compactMetric(metric.value, metric.key, metric.label)}</span>
+                                <span className="mt-0.5 block text-sm font-black text-lime-100 whitespace-normal break-all leading-tight">{compactMetric(metric.value, metric.key, metric.label)}</span>
                               </div>
                             ))}
                           </div>
