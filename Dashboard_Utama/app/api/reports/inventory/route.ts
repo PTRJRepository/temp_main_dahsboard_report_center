@@ -107,6 +107,8 @@ type ReportPayload = {
     costCenters?: DbRow[]
     vehicles?: DbRow[]
   }
+  /** Trend bulanan opsional (misal issue command deck) — satu baris per bulan: qty/amount/events. */
+  trend?: DbRow[]
 }
 
 type ReportHandlerOptions = { limit: number; limitAll?: boolean; search: string; ctx: QueryContext; stale: string; filters?: ReportFilterInput }
@@ -3439,6 +3441,21 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     ORDER BY SUM(ISNULL(Amount, 0)) DESC
   `)
 
+  // Trend bulanan (mengikuti filter periode yang sama dengan issue_rows) —
+  // additive; satu baris per bulan untuk area chart di KPI Command Deck.
+  const trend = await rows(ctx, `
+    ${issueRowsCte}
+    SELECT
+      CONVERT(varchar(7), Tanggal, 120) AS month,
+      COUNT(*) AS events,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+    FROM issue_rows
+    WHERE Tanggal IS NOT NULL
+    GROUP BY CONVERT(varchar(7), Tanggal, 120)
+    ORDER BY month
+  `)
+
   return {
     title: 'Pengeluaran Barang Operasional',
     description: 'Audit pemakaian barang ke operasional, cost center, blok, kendaraan, dan status posting.',
@@ -3451,6 +3468,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       costCenters: topCostCenters,
       vehicles: topVehicles,
     },
+    trend,
     metadata: metadata(ctx, {
       sourceTables: 'IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK, WS_JOB, IN_STOCKISSUELN_ACC',
       issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType = 1.',

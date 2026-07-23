@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
 import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, TrendingDown, TrendingUp, Truck, Wrench } from 'lucide-react'
 import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageIntensity } from '@/lib/reports/procurement-kpi-math'
+import KpiCarousel from './KpiCarousel'
+import UsageTrendChart from './UsageTrendChart'
+import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
 type DeckSection = 'valuasi' | 'proses' | 'movement'
@@ -20,6 +23,13 @@ type TopListItem = {
   amount?: number
 }
 
+type TrendPoint = {
+  month?: string
+  events?: number
+  qty?: number
+  amount?: number
+}
+
 type Snapshot = {
   ok: boolean
   summary: DbRow
@@ -29,6 +39,7 @@ type Snapshot = {
     costCenters?: TopListItem[]
     vehicles?: TopListItem[]
   }
+  trend?: TrendPoint[]
   updatedAt?: string
 }
 
@@ -570,6 +581,51 @@ export default function ProcurementKpiStrip({
     { id: 'costCenters', label: 'Dept' },
     { id: 'vehicles', label: 'Kendaraan' },
   ]
+  const usageTrend = snapshots.usage?.trend ?? []
+  const flowStages: FlowStage[] = [
+    {
+      id: 'pr',
+      label: 'PR',
+      value: loading ? '…' : formatNumber(prCount),
+      hint: `Req ${formatQuantity(prQtyRequest)} · Out ${formatQuantity(prQtyOutstanding)}`,
+      tone: 'pr',
+    },
+    {
+      id: 'po',
+      label: 'PO',
+      value: loading ? '…' : formatNumber(poCount),
+      hint: `Order ${formatQuantity(poQtyOrder)} · Fill ${formatPercent(poFillRate(poQtyReceive, poQtyOrder) * 100)}`,
+      tone: 'po',
+    },
+    {
+      id: 'gr',
+      label: 'Receive',
+      value: loading ? '…' : formatNumber(receiveDocs),
+      hint: `Qty ${formatQuantity(receiveQty)} · ${formatCurrencyCompact(receiveAmount)}`,
+      tone: 'gr',
+    },
+    {
+      id: 'issue',
+      label: 'Issue',
+      value: loading ? '…' : formatNumber(usageDocuments),
+      hint: `Qty ${formatQuantity(usageQty)} · ${formatCurrencyCompact(usageAmount)}`,
+      tone: 'issue',
+    },
+    {
+      id: 'return',
+      label: 'Return',
+      value: loading ? '…' : formatCurrencyCompact(returnAmount),
+      hint: `Rate ${formatPercent(returnRateValue * 100)} (all-time)`,
+      tone: 'return',
+    },
+  ]
+  const flowLinks: Record<string, string> = {
+    pr: filteredLinks.process,
+    po: filteredLinks.process,
+    gr: filteredLinks.receive,
+    issue: filteredLinks.usage,
+    return: filteredLinks.return,
+  }
 
   const valuationCards: ProcurementKpiCard[] = [
     {
@@ -773,9 +829,8 @@ export default function ProcurementKpiStrip({
   const gudangShare = Math.min(Math.max(percentOf(gudangValue, inventoryValue), 0), 100)
   const workshopShare = Math.min(Math.max(percentOf(workshopValue, inventoryValue), 0), 100)
 
-  const renderCardGrid = (cards: ProcurementKpiCard[]) => (
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-      {cards.map((card) => {
+  const renderCardItems = (cards: ProcurementKpiCard[]) =>
+    cards.map((card, cardIndex) => {
         const Icon = card.icon
         const tone = cardTitleTone(card.id)
         const exact = card.valueExact ?? card.value
@@ -785,7 +840,8 @@ export default function ProcurementKpiStrip({
             href={card.href}
             title={exact}
             aria-label={`${card.label}: ${exact}`}
-            className="group relative min-h-[150px] overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.025))] p-3 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.085]"
+            className="rc-kpi-surface rc-reveal group relative min-h-[150px] overflow-hidden rounded-[22px] p-3"
+            style={{ '--reveal-order': cardIndex } as React.CSSProperties}
           >
             <span className="pointer-events-none absolute -right-10 -top-12 h-24 w-24 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
             <span className="relative z-10 flex items-start justify-between gap-2">
@@ -795,7 +851,7 @@ export default function ProcurementKpiStrip({
                   <span className="truncate">{card.label}</span>
                 </span>
                 <strong
-                  className="mt-2 block truncate text-[1.45rem] font-black leading-none tracking-[-0.06em] text-[var(--rc-text)]"
+                  className="rc-metric mt-2 block truncate text-[1.45rem] font-bold text-[var(--rc-text)]"
                   title={exact}
                 >
                   {loading ? '...' : card.value}
@@ -810,19 +866,23 @@ export default function ProcurementKpiStrip({
             </span>
             <span className="relative z-10 mt-2 flex flex-wrap gap-1.5">
               {card.breakdown.map((item) => (
-                <span key={item.label} className="max-w-full rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-[10px] font-bold text-[var(--rc-text-faint)]">
+                <span key={item.label} className="rc-chip max-w-full truncate">
                   <span>{item.label}: </span>
-                  <strong className="text-[var(--rc-text)]">{loading ? '...' : item.value}</strong>
+                  <strong>{loading ? '...' : item.value}</strong>
                 </span>
               ))}
             </span>
-            <span className="relative z-10 mt-2 flex items-center justify-between gap-2 border-t border-white/10 pt-2 text-[10px] font-bold text-[var(--rc-text-faint)]">
+            <span className="rc-hairline rc-data relative z-10 mt-2 flex items-center justify-between gap-2 pt-2 text-[10px] text-[var(--rc-text-faint)]">
               {loading ? 'Loading' : card.source}
               <ArrowRight size={13} className="text-[var(--rc-forest-accent)]" />
             </span>
           </Link>
         )
-      })}
+      })
+
+  const renderCardGrid = (cards: ProcurementKpiCard[]) => (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {renderCardItems(cards)}
     </div>
   )
 
@@ -836,8 +896,8 @@ export default function ProcurementKpiStrip({
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,rgba(255,255,255,.08),transparent_18%,transparent_72%,rgba(155,226,61,.08))]" aria-hidden="true" />
       <div className="relative z-10 flex flex-col gap-2 border-b border-[var(--rc-border)] bg-black/10 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[var(--rc-forest-accent)]">Procurement command deck</p>
-          <h2 className="mt-1 text-xl font-black tracking-[-0.05em] text-[var(--rc-text)] sm:text-2xl">KPI dikelompokkan per konteks.</h2>
+          <p className="rc-eyebrow text-[var(--rc-forest-accent)]">Procurement command deck</p>
+          <h2 className="rc-display mt-1 text-xl font-bold text-[var(--rc-text)] sm:text-2xl">KPI dikelompokkan per konteks.</h2>
           <p className="mt-1 max-w-4xl text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">
             Hero always on: Total Valuasi · Arus Bersih · Total Usage. Tab secondary: Valuasi · Proses · Movement.
           </p>
@@ -944,22 +1004,33 @@ export default function ProcurementKpiStrip({
         </div>
       </div>
 
-      <div className="relative z-10 grid gap-3 p-3 lg:grid-cols-[minmax(340px,.95fr)_minmax(0,1.55fr)]">
+      <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">
+        <p className="rc-eyebrow mb-2 text-[var(--rc-text-faint)]">Alur proses · klik tahap untuk buka detail</p>
+        <ProcurementFlowStrip
+          stages={flowStages}
+          onSelect={(stageId) => {
+            const href = flowLinks[stageId]
+            if (href) window.location.href = href
+          }}
+        />
+      </div>
+
+      <div className="relative z-10 grid gap-3 p-3 lg:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.7fr)]">
         {headlineCard ? (
           <Link
             href={headlineCard.href}
             title={headlineCard.valueExact ?? headlineCard.value}
             aria-label={`${headlineCard.label}: ${headlineCard.valueExact ?? headlineCard.value}`}
-            className="group relative min-h-[222px] overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[linear-gradient(145deg,rgba(24,185,107,.2),rgba(4,18,12,.72)_52%,rgba(214,184,92,.13))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)]"
+            className="rc-reveal group relative min-h-[222px] overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[linear-gradient(145deg,rgba(24,185,107,.2),rgba(4,18,12,.72)_52%,rgba(214,184,92,.13))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)]"
           >
             <span className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-emerald-300/20 blur-3xl transition group-hover:bg-lime-300/25" aria-hidden="true" />
             <span className="pointer-events-none absolute bottom-0 left-0 h-20 w-full bg-[linear-gradient(90deg,rgba(155,226,61,.14),transparent)]" aria-hidden="true" />
 
             <span className="relative z-10 flex items-start justify-between gap-3">
               <span>
-                <span className="block text-[10px] font-black uppercase tracking-[0.28em] text-emerald-100/70">Master valuation</span>
+                <span className="rc-eyebrow block text-emerald-100/70">Master valuation</span>
                 <strong
-                  className="mt-2 block text-[2.35rem] font-black leading-none tracking-[-0.08em] text-[var(--rc-text)] sm:text-5xl"
+                  className="rc-metric mt-2 block text-[2.35rem] font-bold text-[var(--rc-text)] sm:text-5xl"
                   title={headlineCard.valueExact ?? headlineCard.value}
                 >
                   {loading ? '...' : headlineCard.value}
@@ -1021,8 +1092,18 @@ export default function ProcurementKpiStrip({
               ))}
             </div>
             <div role="tabpanel" aria-label={`Section ${openSection}`}>
-              {renderCardGrid(sectionCards)}
+              <KpiCarousel ariaLabel={`KPI section ${openSection}`}>
+                {renderCardItems(sectionCards)}
+              </KpiCarousel>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
+        <div className="rc-reveal rounded-[28px] border-[var(--rc-forest-border)] bg-black/20 p-4" style={{ '--reveal-order': 2 } as React.CSSProperties}>
+          <div className="h-[220px]">
+            <UsageTrendChart data={usageTrend} loading={loading} />
           </div>
         </div>
       </div>

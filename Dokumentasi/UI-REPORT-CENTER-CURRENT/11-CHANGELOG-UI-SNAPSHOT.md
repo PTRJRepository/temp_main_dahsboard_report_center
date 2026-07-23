@@ -111,3 +111,14 @@ Bukan git log otomatis.
 - **LIVE:** Pilihan periode diperluas dari 8 → **18 bulan**.
 - **PLANNED:** smoke-test live DB untuk memastikan `topLists` benar terisi saat runtime; split monolit `ProcurementKpiStrip.tsx` masih planned.
 
+## 2026-07-23 (lanjut) — Visual overhaul: flow strip, trend chart, KPI carousel, display font
+
+- **LIVE:** Font baru: **Sora** (display, `--font-display`) untuk angka KPI + **JetBrains Mono** (data, `--font-data`) untuk chip/eyebrow/label teknis. Inter tetap sebagai body.
+- **LIVE:** Utility CSS baru di `globals.css`: `.rc-display`, `.rc-data`, `.rc-eyebrow`, `.rc-metric`, `.rc-chip`, `.rc-hairline`, `.rc-kpi-surface`, `.rc-reveal` (staggered rise), `.rc-carousel-track`.
+- **LIVE:** **ProcurementFlowStrip** — alur PR → PO → Receive → Issue → Return dengan konektor animasi (framer-motion), klik tahap = navigasi ke report terkait. Nilai per tahap live dari summary (PR count/outstanding, PO count/fill, receive docs/qty, issue docs/qty, return amount/rate).
+- **LIVE:** **UsageTrendChart** — area chart bulanan (recharts) dari `trend` baru di payload `pengeluaran-barang` (GROUP BY bulan, mengikuti filter periode). Gradient forest, tooltip mono, label puncak.
+- **LIVE:** **KpiCarousel** — kartu KPI section sekarang snap-scroll horizontal (dynamic slide cards): auto-col grid + scroll-snap native + tombol prev/next + dot indicator. Hero cards tetap grid.
+- **LIVE:** Composite command-deck meneruskan `trend` ke client (additive).
+- **CHANGED:** `renderCardGrid` dipecah — `renderCardItems` (elemen) dipakai carousel & grid wrapper.
+- **PLANNED:** smoke-test visual di browser (butuh login manual); sparkline per kartu; density pass untuk tabel report detail.
+

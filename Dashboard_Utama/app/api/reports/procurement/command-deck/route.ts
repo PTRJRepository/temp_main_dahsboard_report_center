@@ -26,6 +26,7 @@ type Snapshot = {
     costCenters?: DbRow[]
     vehicles?: DbRow[]
   }
+  trend?: DbRow[]
   updatedAt?: string
 }
 
@@ -159,7 +160,7 @@ async function fetchSnapshot(
     })
     const data = (await response.json().catch(() => ({}))) as {
       success?: boolean
-      data?: { summary?: DbRow; chart?: DbRow[]; topLists?: Snapshot['topLists'] }
+      data?: { summary?: DbRow; chart?: DbRow[]; topLists?: Snapshot['topLists']; trend?: DbRow[] }
     }
     if (!response.ok || data.success !== true || !data.data?.summary) {
       return [spec.key, { ok: false, summary: {} }] as const
@@ -170,6 +171,7 @@ async function fetchSnapshot(
       summary,
       chart: data.data.chart ?? [],
       topLists: data.data.topLists,
+      trend: data.data.trend,
       updatedAt: firstText(summary, ['TerakhirUpdate', 'LastMovementDate', 'LastUsageDate', 'LastRunningUpdate']),
     }] as const
   } catch {
