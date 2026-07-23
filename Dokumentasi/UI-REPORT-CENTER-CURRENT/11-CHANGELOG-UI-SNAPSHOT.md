@@ -93,3 +93,10 @@ Bukan git log otomatis.
 - **LIVE:** Phase 7 role-token cleanup committed.
 - **PLANNED:** official/full server PDF remains not implemented. Client PDF stays preview only.
 
+## 2026-07-23 (lanjut) — Composite command-deck API + insight deck
+
+- **LIVE:** `GET /api/reports/procurement/command-deck` — composite endpoint menjalankan 8 report KPI secara server-side (paralel, loopback ke `/api/reports/inventory`) dan menggabungkan `summary`+`chart` dalam satu payload. In-memory TTL cache 30s per filter+source untuk meredam beban SQL Server.
+- **LIVE:** `ProcurementKpiStrip` kini memakai SATU fetch ke composite; fallback otomatis ke jalur 8-fetch paralel lama bila endpoint gagal (kontrak `Snapshot` identik). Mengatasi "8 parallel fetch storm" dari audit.
+- **LIVE:** Insight deck ditambah tanpa menambah kartu: **Fill rate** (Qty Receive / Qty Order) di kartu PO Outstanding, **Intensitas usage** (Usage Amount / Total Valuasi) di kartu Total Usage.
+- **PLANNED:** composite endpoint belum di-smoke-test terhadap gateway SQL live di sesi ini (tsc + contract test lulus). Dept/vehicle toggle & server PDF resmi tetap planned.
+
