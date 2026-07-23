@@ -67,6 +67,7 @@ import {
   MOVEMENT_ANALYSIS_REPORT_IDS,
   STOCK_AGING_REPORT_IDS,
   getReportViewerProfile,
+  monthlyStockMovementKpis as buildMonthlyStockMovementKpis,
   preferredVisibleColumnsForProfile,
   type ProfileBuilders,
   type ReportPreset,
@@ -184,6 +185,13 @@ type KpiSqlPeriod = {
   actualPeriod?: string
   location?: string
   database?: string
+  /** inventory = ItemType 1+4, gudang = 1, workshop = 4 */
+  itemTypeScope?: 'inventory' | 'gudang' | 'workshop'
+  periodKeyMode?: string
+  summaryOpeningAmount?: number
+  summaryClosingAmount?: number
+  summaryIssuedAmount?: number
+  summaryGoodsReceiveAmount?: number
 }
 
 function sqlIdent(value: unknown, fallback = 'Amount') {
@@ -201,6 +209,20 @@ function previousAccPeriod(accYear: number, accMonth: number) {
   return { accYear, accMonth: accMonth - 1 }
 }
 
+function resolveItemTypeScopeForSql(filters?: ReportFilterInput, metadata?: DbRow): KpiSqlPeriod['itemTypeScope'] {
+  const raw = String(filters?.itemType ?? metadata?.itemTypeScope ?? '').trim().toLowerCase()
+  if (raw === '1' || raw === 'gudang' || raw === 'stock') return 'gudang'
+  if (raw === '4' || raw === 'workshop' || raw === 'mesin') return 'workshop'
+  return 'inventory'
+}
+
+function itemTypeSqlPredicate(alias: string, scope: KpiSqlPeriod['itemTypeScope'] = 'inventory') {
+  const col = `ISNULL(RTRIM(CONVERT(varchar(10), ${alias}.ItemType)), '')`
+  if (scope === 'gudang') return `${col} = '1'`
+  if (scope === 'workshop') return `${col} = '4'`
+  return `${col} IN ('1', '4')`
+}
+
 function resolveKpiSqlPeriod(payload?: ReportPayload | null, filters?: ReportFilterInput): KpiSqlPeriod | null {
   const summary = payload?.summary ?? {}
   const metadata = payload?.metadata ?? {}
@@ -212,17 +234,29 @@ function resolveKpiSqlPeriod(payload?: ReportPayload | null, filters?: ReportFil
     }
     return null
   }
+  // Prefer server-resolved Acc keys from payload so paste SQL matches KPI summary.
   let accYear = pickNum('AccYear', 'accYear', 'acc_year', 'ReportAccYear')
   let accMonth = pickNum('AccMonth', 'accMonth', 'acc_month', 'ReportAccMonth')
   const actualPeriod = String(
     summary.ActualPeriod ?? summary.actualPeriod ?? metadata.actualPeriod ?? metadata.period ?? filters?.period ?? '',
   ).trim()
+  // Only convert when payload Acc missing. Mill may store calendar Acc in metadata already.
   if ((!accYear || !accMonth) && actualPeriod) {
     const [y, m] = actualPeriod.split(/[-/]/)
-    const converted = actualToAccountingPeriod(y, m)
-    if (converted) {
-      accYear = converted.accYear
-      accMonth = converted.accMonth
+    const periodKeyMode = String(metadata.periodKeyMode ?? '').toLowerCase()
+    if (periodKeyMode === 'calendar') {
+      const yy = Number(y)
+      const mm = Number(m)
+      if (Number.isFinite(yy) && Number.isFinite(mm)) {
+        accYear = Math.trunc(yy)
+        accMonth = Math.trunc(mm)
+      }
+    } else {
+      const converted = actualToAccountingPeriod(y, m)
+      if (converted) {
+        accYear = converted.accYear
+        accMonth = converted.accMonth
+      }
     }
   }
   if (!accYear || !accMonth) {
@@ -234,21 +268,40 @@ function resolveKpiSqlPeriod(payload?: ReportPayload | null, filters?: ReportFil
     }
   }
   if (!accYear || !accMonth) return null
-  const openY = pickNum('OpeningAccYear', 'openingAccYear')
-  const openM = pickNum('OpeningAccMonth', 'openingAccMonth')
+
+  // Opening Acc from metadata first (server already computed prev period).
+  const openFromMeta = String(metadata.openingAccountingPeriod ?? summary.OpeningAccountingPeriod ?? '').trim()
+  const openMatch = openFromMeta.match(/^(\d{4})-(\d{1,2})$/)
+  const openY = pickNum('OpeningAccYear', 'openingAccYear') ?? (openMatch ? Number(openMatch[1]) : null)
+  const openM = pickNum('OpeningAccMonth', 'openingAccMonth') ?? (openMatch ? Number(openMatch[2]) : null)
   const prev = openY && openM ? { accYear: openY, accMonth: openM } : previousAccPeriod(accYear, accMonth)
   const location = String(
-    filters?.location ?? summary.Location ?? summary.LocCode ?? metadata.location ?? metadata.LocCode ?? '',
+    filters?.location ?? summary.Location ?? summary.LocCode ?? metadata.location ?? metadata.LocCode ?? 'PTRJ',
+  ).trim() || 'PTRJ'
+  const database = String(
+    metadata.sourceDatabase ?? metadata.database ?? metadata.Database ?? '',
   ).trim()
-  const database = String(metadata.database ?? metadata.Database ?? '').trim()
+  const toAmt = (...keys: string[]) => {
+    for (const key of keys) {
+      const n = Number(summary[key] ?? metadata[key])
+      if (Number.isFinite(n)) return n
+    }
+    return undefined
+  }
   return {
     accYear,
     accMonth,
     openingAccYear: prev.accYear,
     openingAccMonth: prev.accMonth,
     actualPeriod: actualPeriod || undefined,
-    location: location || undefined,
+    location,
     database: database || undefined,
+    itemTypeScope: resolveItemTypeScopeForSql(filters, metadata),
+    periodKeyMode: String(metadata.periodKeyMode ?? '') || undefined,
+    summaryOpeningAmount: toAmt('OpeningAmount'),
+    summaryClosingAmount: toAmt('ClosingAmount'),
+    summaryIssuedAmount: toAmt('IssuedTotalAmount'),
+    summaryGoodsReceiveAmount: toAmt('GoodsReceiveAmount'),
   }
 }
 
@@ -261,6 +314,23 @@ function locationWhere(period: KpiSqlPeriod | null | undefined, alias = '') {
   if (!period?.location) return ''
   const col = alias ? `${alias}.LocCode` : 'LocCode'
   return `\n  AND RTRIM(${col}) = '${sqlStringLiteral(period.location)}'`
+}
+
+function mthendItemTypeExistsSql(period: KpiSqlPeriod, mthAlias: string) {
+  const item = dboTable(period, 'IN_ITEM')
+  return [
+    `AND EXISTS (`,
+    `  SELECT 1 FROM ${item} i`,
+    `  WHERE i.ItemCode = ${mthAlias}.ItemCode`,
+    `    AND i.LocCode = ${mthAlias}.LocCode`,
+    `    AND ${itemTypeSqlPredicate('i', period.itemTypeScope)}`,
+    `)`,
+  ].join('\n  ')
+}
+
+/** Valuation formula aligned with report CTE: prefer stored Amount, else Qty*AverageCost. */
+function mthendAmountExpr(alias: string) {
+  return `CAST(ISNULL(${alias}.Amount, ISNULL(${alias}.Qty, 0) * ISNULL(${alias}.AverageCost, 0)) AS decimal(18,4))`
 }
 
 function simpleSqlForKpi(input: {
@@ -280,11 +350,23 @@ function simpleSqlForKpi(input: {
   const groupKey = sqlStringLiteral(input.groupKey)
   const col = sqlIdent(input.sourceField ?? input.metricKey, 'Amount')
   const period = input.period
+  const scopeLabel =
+    period?.itemTypeScope === 'gudang' ? 'ItemType=1 Gudang' :
+    period?.itemTypeScope === 'workshop' ? 'ItemType=4 Workshop' :
+    'ItemType IN (1,4) Gudang+Workshop'
   const header = [
-    '/* Paste ke SSMS — cek nilai KPI (bukan full gateway CTE) */',
+    '/* Paste ke SSMS — query debug KPI (mirror summary report) */',
+    '/* Harus ≈ nilai card KPI. Bandingkan juga ke JSON official RPTIN bila period sama. */',
     period?.actualPeriod ? `/* Actual period: ${period.actualPeriod} */` : null,
-    period ? `/* AccYear=${period.accYear} AccMonth=${period.accMonth} | Opening Acc=${period.openingAccYear}-${period.openingAccMonth} */` : null,
+    period ? `/* AccYear=${period.accYear} AccMonth=${period.accMonth} | Opening Acc=${period.openingAccYear}-${String(period.openingAccMonth).padStart(2, '0')} */` : null,
+    period?.periodKeyMode ? `/* periodKeyMode: ${period.periodKeyMode} */` : null,
     period?.location ? `/* LocCode: ${period.location} */` : null,
+    period?.database ? `/* Database: ${period.database} */` : null,
+    `/* Scope: ${scopeLabel} */`,
+    period?.summaryOpeningAmount != null ? `/* UI summary.OpeningAmount = ${period.summaryOpeningAmount} */` : null,
+    period?.summaryClosingAmount != null ? `/* UI summary.ClosingAmount = ${period.summaryClosingAmount} */` : null,
+    period?.summaryIssuedAmount != null ? `/* UI summary.IssuedTotalAmount = ${period.summaryIssuedAmount} */` : null,
+    period?.summaryGoodsReceiveAmount != null ? `/* UI summary.GoodsReceiveAmount = ${period.summaryGoodsReceiveAmount} */` : null,
   ].filter(Boolean).join('\n')
 
   if (!period) {
@@ -296,86 +378,127 @@ function simpleSqlForKpi(input: {
   const oy = period.openingAccYear
   const om = period.openingAccMonth
   const mth = dboTable(period, 'IN_MTHENDITEM')
+  const item = dboTable(period, 'IN_ITEM')
   const loc = locationWhere(period)
 
   if (flow === 'opening' || /^opening$/i.test(label)) {
     return [
       header,
+      '/* Opening = IN_MTHENDITEM previous Acc period, ItemType scope via IN_ITEM */',
       'SELECT',
-      '  CAST(SUM(CAST(Amount AS decimal(18,4))) AS decimal(18,2)) AS OpeningAmount,',
-      '  CAST(SUM(CAST(Qty AS decimal(18,4))) AS decimal(18,2)) AS OpeningQty',
-      `FROM ${mth}`,
-      `WHERE RTRIM(CONVERT(varchar(10), AccYear)) = '${oy}'`,
-      `  AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${om}'${loc};`,
+      `  CAST(SUM(${mthendAmountExpr('m')}) AS decimal(18,2)) AS OpeningAmount,`,
+      '  CAST(SUM(CAST(ISNULL(m.Qty, 0) AS decimal(18,4))) AS decimal(18,2)) AS OpeningQty,',
+      '  COUNT(*) AS OpeningRows',
+      `FROM ${mth} m`,
+      `WHERE RTRIM(CONVERT(varchar(10), m.AccYear)) = '${oy}'`,
+      `  AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${om}'${locationWhere(period, 'm')}`,
+      `  ${mthendItemTypeExistsSql(period, 'm')};`,
     ].join('\n')
   }
   if (flow === 'closing' || /^closing$/i.test(label)) {
     return [
       header,
+      '/* Closing snapshot = IN_MTHENDITEM report Acc period (same formula as Opening) */',
       'SELECT',
-      '  CAST(SUM(CAST(Amount AS decimal(18,4))) AS decimal(18,2)) AS ClosingAmount,',
-      '  CAST(SUM(CAST(Qty AS decimal(18,4))) AS decimal(18,2)) AS ClosingQty',
-      `FROM ${mth}`,
-      `WHERE RTRIM(CONVERT(varchar(10), AccYear)) = '${ay}'`,
-      `  AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${am}'${loc};`,
+      `  CAST(SUM(${mthendAmountExpr('m')}) AS decimal(18,2)) AS ClosingAmount,`,
+      '  CAST(SUM(CAST(ISNULL(m.Qty, 0) AS decimal(18,4))) AS decimal(18,2)) AS ClosingQty,',
+      '  COUNT(*) AS ClosingRows',
+      `FROM ${mth} m`,
+      `WHERE RTRIM(CONVERT(varchar(10), m.AccYear)) = '${ay}'`,
+      `  AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${am}'${locationWhere(period, 'm')}`,
+      `  ${mthendItemTypeExistsSql(period, 'm')};`,
     ].join('\n')
   }
   if (flow === 'issued' || /issued/i.test(label)) {
     return [
       header,
-      '/* Issued lines: stock issue + fuel + workshop — sum Amount in report Acc period */',
-      'SELECT CAST(SUM(LineAmount) AS decimal(18,2)) AS IssuedTotalAmount',
+      '/* Issued = stock (non-workshop) + fuel + workshop WS_JOBSTOCK TransType=1 */',
+      'SELECT',
+      '  CAST(SUM(LineAmount) AS decimal(18,2)) AS IssuedTotalAmount,',
+      "  CAST(SUM(CASE WHEN Bucket = 'ledger' THEN LineAmount ELSE 0 END) AS decimal(18,2)) AS LedgerAmount,",
+      "  CAST(SUM(CASE WHEN Bucket = 'station' THEN LineAmount ELSE 0 END) AS decimal(18,2)) AS IssuedStationAmount,",
+      "  CAST(SUM(CASE WHEN Bucket = 'vehicle' THEN LineAmount ELSE 0 END) AS decimal(18,2)) AS IssuedVehicleAmount",
       'FROM (',
-      '  SELECT CAST(COALESCE(NULLIF(l.Amount, 0), l.Qty * l.Cost, 0) AS decimal(18,4)) AS LineAmount',
+      '  /* IN_STOCKISSUE — exclude ItemType 4 (workshop uses WS_JOBSTOCK) */',
+      "  SELECT CASE",
+      "    WHEN LEN(RTRIM(ISNULL(l.BlkCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 THEN 'ledger'",
+      "    WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.BlkCode, ''))) > 0 THEN 'station'",
+      "    WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) > 0 THEN 'vehicle' ELSE 'ledger' END AS Bucket,",
+      '    CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS decimal(18,4)) AS LineAmount',
       `  FROM ${dboTable(period, 'IN_STOCKISSUE')} h`,
       `  INNER JOIN ${dboTable(period, 'IN_STOCKISSUELN')} l ON h.StockIssueID = l.StockIssueID`,
+      `  LEFT JOIN ${item} issueItem ON issueItem.ItemCode = l.ItemCode AND issueItem.LocCode = h.LocCode`,
       `  WHERE RTRIM(CONVERT(varchar(10), h.AccYear)) = '${ay}'`,
       `    AND RTRIM(CONVERT(varchar(10), h.AccMonth)) = '${am}'`,
       `    AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')${locationWhere(period, 'h')}`,
+      "    AND (issueItem.ItemCode IS NULL OR ISNULL(RTRIM(CONVERT(varchar(10), issueItem.ItemType)), '') <> '4')",
       '  UNION ALL',
-      '  SELECT CAST(COALESCE(NULLIF(l.Amount, 0), l.Qty * l.Cost, 0) AS decimal(18,4))',
+      '  /* IN_FUELISSUE */',
+      "  SELECT CASE",
+      "    WHEN LEN(RTRIM(ISNULL(l.BlkCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 THEN 'ledger'",
+      "    WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(l.BlkCode, ''))) > 0 THEN 'station'",
+      "    WHEN LEN(RTRIM(ISNULL(l.VehCode, ''))) > 0 THEN 'vehicle' ELSE 'ledger' END,",
+      '    CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS decimal(18,4))',
       `  FROM ${dboTable(period, 'IN_FUELISSUE')} h`,
       `  INNER JOIN ${dboTable(period, 'IN_FUELISSUELN')} l ON h.FuelIssueID = l.FuelIssueID`,
       `  WHERE RTRIM(CONVERT(varchar(10), h.AccYear)) = '${ay}'`,
-      `    AND RTRIM(CONVERT(varchar(10), h.AccMonth)) = '${am}'${locationWhere(period, 'h')}`,
+      `    AND RTRIM(CONVERT(varchar(10), h.AccMonth)) = '${am}'`,
+      `    AND RTRIM(ISNULL(h.Status, '')) IN ('2', '6')${locationWhere(period, 'h')}`,
+      '  UNION ALL',
+      '  /* Workshop issue TransType=1 */',
+      "  SELECT CASE",
+      "    WHEN LEN(RTRIM(ISNULL(j.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(j.BlkCode, ''))) = 0 THEN 'ledger'",
+      "    WHEN LEN(RTRIM(ISNULL(j.VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(j.BlkCode, ''))) > 0 THEN 'station'",
+      "    WHEN LEN(RTRIM(ISNULL(j.VehCode, ''))) > 0 THEN 'vehicle' ELSE 'ledger' END,",
+      '    CAST(COALESCE(s.Amount, s.PriceAmount, ISNULL(s.Qty, 0) * ISNULL(s.Price, 0), 0) AS decimal(18,4))',
+      `  FROM ${dboTable(period, 'WS_JOBSTOCK')} s`,
+      `  LEFT JOIN ${dboTable(period, 'WS_JOB')} j ON s.JobID = j.JobID`,
+      `  LEFT JOIN ${item} issueItem ON issueItem.ItemCode = s.ItemCode AND issueItem.LocCode = s.LocCode`,
+      `  WHERE RTRIM(CONVERT(varchar(10), s.AccYear)) = '${ay}'`,
+      `    AND RTRIM(CONVERT(varchar(10), s.AccMonth)) = '${am}'${locationWhere(period, 's')}`,
+      "    AND RTRIM(ISNULL(s.TransType, '')) = '1'",
+      "    AND COALESCE(NULLIF(RTRIM(CONVERT(varchar(10), issueItem.ItemType)), ''), NULLIF(RTRIM(CONVERT(varchar(10), s.ItemType)), '')) = '4'",
       ') x;',
     ].join('\n')
   }
   if (flow === 'inventory' || /^inventory$/i.test(label)) {
     return [
       header,
-      '/* Inventory block on RPTIN often 0 — verify receive/transfer/adj tables if needed */',
+      '/* Inventory block RPTIN placeholders — currently 0 in rebuild */',
       'SELECT',
       '  CAST(0 AS decimal(18,2)) AS ReceivedAmount,',
       '  CAST(0 AS decimal(18,2)) AS ReturnAdviceAmount,',
       '  CAST(0 AS decimal(18,2)) AS TransferredAmount,',
       '  CAST(0 AS decimal(18,2)) AS AdjustmentAmount,',
       '  CAST(0 AS decimal(18,2)) AS InventoryTotal;',
-      '/* Jika KPI non-zero di UI, bandingkan summary API field, bukan query ini. */',
     ].join('\n')
   }
-  if (flow === 'purchasing' || /purchasing/i.test(label)) {
+  if (flow === 'purchasing' || /purchasing|goods\s*receive/i.test(label)) {
     return [
       header,
-      'SELECT CAST(SUM(LineAmount) AS decimal(18,2)) AS GoodsReceiveAmount',
+      '/* Goods receive — mill often Status 5; include 2/5/6 like issue posted docs */',
+      'SELECT',
+      '  CAST(SUM(LineAmount) AS decimal(18,2)) AS GoodsReceiveAmount,',
+      '  COUNT(*) AS GoodsReceiveLines',
       'FROM (',
-      '  SELECT CAST(COALESCE(l.Amount, l.Qty * l.Cost, 0) AS decimal(18,4)) AS LineAmount',
-      `  FROM ${dboTable(period, 'PU_GOODSRCV')} h`,
-      `  INNER JOIN ${dboTable(period, 'PU_GOODSRCVLN')} l ON h.GoodsRcvID = l.GoodsRcvID`,
-      `  WHERE RTRIM(CONVERT(varchar(10), h.AccYear)) = '${ay}'`,
-      `    AND RTRIM(CONVERT(varchar(10), h.AccMonth)) = '${am}'${locationWhere(period, 'h')}`,
+      '  SELECT CAST(COALESCE(NULLIF(gl.Amount, 0), ISNULL(gl.StockQty, 0) * ISNULL(p.Cost, 0), 0) AS decimal(18,4)) AS LineAmount',
+      `  FROM ${dboTable(period, 'PU_GOODSRCV')} g`,
+      `  INNER JOIN ${dboTable(period, 'PU_GOODSRCVLN')} gl ON g.GoodsRcvID = gl.GoodsRcvID`,
+      `  LEFT JOIN ${dboTable(period, 'PU_POLN')} p ON gl.POLnID = p.POLnID`,
+      `  WHERE RTRIM(CONVERT(varchar(10), g.AccYear)) = '${ay}'`,
+      `    AND RTRIM(CONVERT(varchar(10), g.AccMonth)) = '${am}'`,
+      `    AND RTRIM(ISNULL(g.Status, '')) IN ('2', '5', '6')${locationWhere(period, 'g')}`,
       ') x;',
     ].join('\n')
   }
   if (input.scope === 'movement' || groupField === 'MovementCategory') {
     return [
       header,
-      '/* Movement Actual di UI dihitung di app (issue count window).',
-      '   Cek cepat: hitung baris issue per item di period, bandingkan bucket KPI. */',
+      '/* Quick issue lines by item — MovementCategory buckets dihitung di app */',
       'SELECT',
       '  RTRIM(l.ItemCode) AS ItemCode,',
       '  COUNT(DISTINCT h.StockIssueID) AS IssueDocCount,',
-      '  CAST(SUM(CAST(COALESCE(NULLIF(l.Amount, 0), l.Qty * l.Cost, 0) AS decimal(18,4))) AS decimal(18,2)) AS IssueAmount',
+      '  CAST(SUM(CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS decimal(18,4))) AS decimal(18,2)) AS IssueAmount',
       `FROM ${dboTable(period, 'IN_STOCKISSUE')} h`,
       `INNER JOIN ${dboTable(period, 'IN_STOCKISSUELN')} l ON h.StockIssueID = l.StockIssueID`,
       `WHERE RTRIM(CONVERT(varchar(10), h.AccYear)) = '${ay}'`,
@@ -390,27 +513,31 @@ function simpleSqlForKpi(input: {
     return [
       header,
       'SELECT',
-      '  RTRIM(CONVERT(varchar(10), ItemType)) AS ItemType,',
+      '  RTRIM(CONVERT(varchar(10), i.ItemType)) AS ItemType,',
       '  COUNT(*) AS ItemCount,',
-      '  CAST(SUM(CAST(Amount AS decimal(18,4))) AS decimal(18,2)) AS ClosingAmount',
-      `FROM ${mth}`,
-      `WHERE RTRIM(CONVERT(varchar(10), AccYear)) = '${ay}'`,
-      `  AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${am}'${loc}`,
-      groupKey ? `  AND RTRIM(CONVERT(varchar(10), ItemType)) = '${groupKey}'` : '',
-      'GROUP BY RTRIM(CONVERT(varchar(10), ItemType));',
+      `  CAST(SUM(${mthendAmountExpr('m')}) AS decimal(18,2)) AS ClosingAmount`,
+      `FROM ${mth} m`,
+      `INNER JOIN ${item} i ON i.ItemCode = m.ItemCode AND i.LocCode = m.LocCode`,
+      `WHERE RTRIM(CONVERT(varchar(10), m.AccYear)) = '${ay}'`,
+      `  AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${am}'${locationWhere(period, 'm')}`,
+      `  AND ${itemTypeSqlPredicate('i', period.itemTypeScope)}`,
+      groupKey ? `  AND RTRIM(CONVERT(varchar(10), i.ItemType)) = '${groupKey}'` : '',
+      'GROUP BY RTRIM(CONVERT(varchar(10), i.ItemType));',
     ].filter(Boolean).join('\n')
   }
   if (input.scope === 'sub' && groupField) {
-    const g = groupField === 'Location' ? 'LocCode' : groupField
+    const g = groupField === 'Location' ? 'm.LocCode' : groupField === 'ProductTypeCode' ? 'i.ProdTypeCode' : `m.${groupField}`
     return [
       header,
       'SELECT',
-      `  RTRIM(CONVERT(varchar(100), ${g})) AS ${g},`,
+      `  RTRIM(CONVERT(varchar(100), ${g})) AS GroupKey,`,
       '  COUNT(*) AS ItemCount,',
-      '  CAST(SUM(CAST(Amount AS decimal(18,4))) AS decimal(18,2)) AS ClosingAmount',
-      `FROM ${mth}`,
-      `WHERE RTRIM(CONVERT(varchar(10), AccYear)) = '${ay}'`,
-      `  AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${am}'${loc}`,
+      `  CAST(SUM(${mthendAmountExpr('m')}) AS decimal(18,2)) AS ClosingAmount`,
+      `FROM ${mth} m`,
+      `INNER JOIN ${item} i ON i.ItemCode = m.ItemCode AND i.LocCode = m.LocCode`,
+      `WHERE RTRIM(CONVERT(varchar(10), m.AccYear)) = '${ay}'`,
+      `  AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${am}'${locationWhere(period, 'm')}`,
+      `  AND ${itemTypeSqlPredicate('i', period.itemTypeScope)}`,
       groupKey ? `  AND RTRIM(CONVERT(varchar(100), ${g})) = '${groupKey}'` : '',
       `GROUP BY RTRIM(CONVERT(varchar(100), ${g}))`,
       'ORDER BY ClosingAmount DESC;',
@@ -419,18 +546,20 @@ function simpleSqlForKpi(input: {
   if (/amount|qty|total/i.test(col)) {
     return [
       header,
-      `SELECT CAST(SUM(CAST(${col} AS decimal(18,4))) AS decimal(18,2)) AS ${col}`,
-      `FROM ${mth}`,
-      `WHERE RTRIM(CONVERT(varchar(10), AccYear)) = '${ay}'`,
-      `  AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${am}'${loc};`,
+      `SELECT CAST(SUM(${mthendAmountExpr('m')}) AS decimal(18,2)) AS ${col}`,
+      `FROM ${mth} m`,
+      `WHERE RTRIM(CONVERT(varchar(10), m.AccYear)) = '${ay}'`,
+      `  AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${am}'${locationWhere(period, 'm')}`,
+      `  ${mthendItemTypeExistsSql(period, 'm')};`,
     ].join('\n')
   }
   return [
     header,
-    'SELECT CAST(SUM(CAST(Amount AS decimal(18,4))) AS decimal(18,2)) AS Amount',
-    `FROM ${mth}`,
-    `WHERE RTRIM(CONVERT(varchar(10), AccYear)) = '${ay}'`,
-    `  AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${am}'${loc};`,
+    `SELECT CAST(SUM(${mthendAmountExpr('m')}) AS decimal(18,2)) AS Amount`,
+    `FROM ${mth} m`,
+    `WHERE RTRIM(CONVERT(varchar(10), m.AccYear)) = '${ay}'`,
+    `  AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${am}'${locationWhere(period, 'm')}`,
+    `  ${mthendItemTypeExistsSql(period, 'm')};`,
   ].join('\n')
 }
 
@@ -609,6 +738,39 @@ function formatValue(value: unknown, field?: string) {
   return formatMetric(value, field)
 }
 
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? '').trim()
+    if (text) return text
+  }
+  return ''
+}
+
+function resolveActivePeriodLabels(payload: ReportPayload | null, filters: ReportFilterInput) {
+  const period = resolveKpiSqlPeriod(payload, filters)
+  const actual = firstText(
+    payload?.metadata?.actualPeriod,
+    payload?.summary?.ActualPeriod,
+    payload?.summary?.actualPeriod,
+    filters.period,
+    payload?.metadata?.period,
+    period?.actualPeriod,
+  )
+  const accounting = firstText(
+    payload?.metadata?.accountingPeriod,
+    payload?.summary?.AccountingPeriod,
+    payload?.summary?.accountingPeriod,
+    period ? `${period.accYear}-${String(period.accMonth).padStart(2, '0')}` : '',
+  )
+  const parts = [actual ? `Actual ${actual}` : '', accounting ? `Acc ${accounting}` : ''].filter((part): part is string => Boolean(part))
+
+  return {
+    actual: actual || undefined,
+    accounting: accounting || undefined,
+    summary: parts.join(' · ') || 'Current scope',
+  }
+}
+
 const LEGACY_COLUMN_LABELS: Record<string, string> = {
   acc_year: 'AccYear',
   acc_month: 'AccMonth',
@@ -679,17 +841,17 @@ function stockAgingKpis(summary: DbRow, rows: DbRow[] = []) {
     : summary.ItemTanpaKategori
 
   return [
-    { label: 'Total Item', value: totalItem, description: 'Total item aktif', tone: 'border-blue-100 bg-blue-50 text-blue-700' },
-    { label: 'Update <= 3 Bulan', value: itemAktif, description: 'Update terakhir <= 3 bulan', tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
-    { label: 'Update 6-12 Bulan', value: slowMoving, description: 'Update terakhir 6-12 bulan', tone: 'border-yellow-100 bg-yellow-50 text-yellow-700' },
-    { label: 'Tidak Update > 12 Bulan', value: stale, description: 'Update terakhir > 1 tahun', tone: 'border-orange-100 bg-orange-50 text-orange-700' },
-    { label: 'Tidak Update > 24 Bulan', value: dead, description: 'Update terakhir > 2 tahun', tone: 'border-red-100 bg-red-50 text-red-700' },
-    { label: 'Nilai Stok Berisiko', value: riskyValue, description: 'Nilai update aging berisiko', tone: 'border-red-100 bg-red-50 text-red-700' },
-    { label: 'Stok Nol', value: zeroStock, description: 'Quantity closing 0', tone: 'border-slate-200 bg-slate-50 text-slate-700' },
-    { label: 'Fast Moving', value: fastMovement, description: 'Movement all-period tinggi (bukan window 3/6 bulan)', tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
-    { label: 'Slow Moving Qty', value: slowMovement, description: 'Movement all-period rendah (bukan window 3/6 bulan)', tone: 'border-yellow-100 bg-yellow-50 text-yellow-700' },
-    { label: 'Dead Movement', value: deadMovement, description: 'Last movement > 24 bulan', tone: 'border-red-100 bg-red-50 text-red-700' },
-    { label: 'Tanpa Kategori', value: noCategory, description: 'Master kategori kosong', tone: 'border-purple-100 bg-purple-50 text-purple-700' },
+    { label: 'Total Item', value: totalItem, description: 'Item count in selected stock-aging scope.', tone: 'border-blue-100 bg-blue-50 text-blue-700' },
+    { label: 'Update <= 3 Bulan', value: itemAktif, description: 'Item count with last update within 3 months.', tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
+    { label: 'Update 6-12 Bulan', value: slowMoving, description: 'Item count with last update age between 6 and 12 months.', tone: 'border-yellow-100 bg-yellow-50 text-yellow-700' },
+    { label: 'Tidak Update > 12 Bulan', value: stale, description: 'Item count with no update for more than 12 months.', tone: 'border-orange-100 bg-orange-50 text-orange-700' },
+    { label: 'Tidak Update > 24 Bulan', value: dead, description: 'Item count with no update for more than 24 months.', tone: 'border-red-100 bg-red-50 text-red-700' },
+    { label: 'Nilai Stok Berisiko', value: riskyValue, description: 'Stock value in IDR for stale-risk items.', tone: 'border-red-100 bg-red-50 text-red-700' },
+    { label: 'Stok Nol', value: zeroStock, description: 'Item count where closing quantity is zero.', tone: 'border-slate-200 bg-slate-50 text-slate-700' },
+    { label: 'Fast Moving', value: fastMovement, description: 'Item count in Fast Moving category for all-period movement.', tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
+    { label: 'Slow Moving Qty', value: slowMovement, description: 'Item count in Slow Moving category for all-period movement.', tone: 'border-yellow-100 bg-yellow-50 text-yellow-700' },
+    { label: 'Dead Movement', value: deadMovement, description: 'Item count with Dead Movement / no recent usage signal.', tone: 'border-red-100 bg-red-50 text-red-700' },
+    { label: 'Tanpa Kategori', value: noCategory, description: 'Item count with empty master category.', tone: 'border-purple-100 bg-purple-50 text-purple-700' },
   ]
 }
 
@@ -705,20 +867,20 @@ function movementAnalysisKpis(summary: DbRow, rows: DbRow[] = [], groupBy?: stri
     return {
       label,
       value: amountValue,
-      description: `${formatValue(itemValue)} item | asset real-time`,
+      description: `${formatValue(itemValue)} items in ${label}. Value is real-time asset amount in IDR.`,
       tone,
     }
   }
 
   const base: ReportKpiCard[] = [
-    { label: 'Asset Amount Real Time', value: summary.TotalAssetAmount ?? summary.TotalAmount, description: `${formatValue(itemCount)} item dari IN_ITEM`, tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
-    { label: 'Total Item', value: itemCount, description: 'Semua ItemType 1 dan 4', tone: 'border-blue-100 bg-blue-50 text-blue-700' },
+    { label: 'Asset Amount Real Time', value: summary.TotalAssetAmount ?? summary.TotalAmount, description: `Current asset value in IDR for ${formatValue(itemCount)} inventory items from IN_ITEM.`, tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
+    { label: 'Total Item', value: itemCount, description: 'Item count for ItemType 1 + 4 in selected scope.', tone: 'border-blue-100 bg-blue-50 text-blue-700' },
     categoryCard('Fast Moving', 'FastMovingItem', 'FastMovingAmount', 'border-emerald-100 bg-emerald-50 text-emerald-700'),
     categoryCard('Moving', 'MovingItem', 'MovingAmount', 'border-blue-100 bg-blue-50 text-blue-700'),
     categoryCard('Slow Moving', 'SlowMovingItem', 'SlowMovingAmount', 'border-yellow-100 bg-yellow-50 text-yellow-700'),
     categoryCard('Dead Stock', 'DeadMovementItem', 'DeadMovementAmount', 'border-red-100 bg-red-50 text-red-700'),
     categoryCard('Stale', 'StaleItem', 'StaleAmount', 'border-orange-100 bg-orange-50 text-orange-700'),
-    { label: 'StockIssue Movement', value: summary.TotalStockIssueMovementCount ?? rows.reduce((sum, row) => sum + toNumber(row.StockIssueMovementCount), 0), description: 'Jumlah transaksi movement', tone: 'border-amber-100 bg-amber-50 text-amber-700' },
+    { label: 'StockIssue Movement', value: summary.TotalStockIssueMovementCount ?? rows.reduce((sum, row) => sum + toNumber(row.StockIssueMovementCount), 0), description: 'Count of StockIssue movement events in selected scope.', tone: 'border-amber-100 bg-amber-50 text-amber-700' },
   ]
 
   const dim = resolveGroupDimension(
@@ -731,7 +893,7 @@ function movementAnalysisKpis(summary: DbRow, rows: DbRow[] = [], groupBy?: stri
     const groupCards = groupedKpiCards(rows, dim, [], 6)
     if (groupCards.length) {
       return [
-        { label: `Group: ${displayColumnLabel(dim)}`, value: groupCards.length, description: 'KPI mengikuti group aktif', tone: 'border-white/10 bg-[#102b1b] text-lime-100' },
+        { label: `Group: ${displayColumnLabel(dim)}`, value: groupCards.length, description: 'Number of KPI cards grouped by active analysis field.', tone: 'border-white/10 bg-[#102b1b] text-lime-100' },
         ...groupCards,
         base[0],
         base[1],
@@ -770,13 +932,13 @@ function assetValuationKpis(summary: DbRow, metadata: DbRow = {}, rows: DbRow[] 
     summary.acc_year ?? metadata.accYear,
   ].filter((part) => part !== undefined && part !== null && part !== '').join('/')
   return [
-    { label: 'Nilai Asset', value: summary.total_amount ?? summary.TotalAmount, description: 'Valuasi stok (bukan sum movement)', tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
-    { label: 'Total Item', value: summary.total_item ?? summary.FilteredRows ?? rows.length, description: 'ItemType 1 gudang + 4 workshop', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
-    { label: 'Qty On Hand+Hold', value: summary.total_quantity ?? summary.TotalQty ?? rowTotalQty, description: 'Saldo fisik valuasi', tone: 'border-cyan-100 bg-cyan-50 text-cyan-800' },
-    { label: 'Qty On Hand', value: summary.total_quantity_on_hand ?? rowQtyOnHand, description: 'Siap pakai', tone: 'border-sky-100 bg-sky-50 text-sky-800' },
-    { label: 'Qty On Hold', value: summary.total_quantity_on_hold ?? rowQtyOnHold, description: 'Ditahan / reserved', tone: 'border-amber-100 bg-amber-50 text-amber-800' },
-    { label: 'Periode Aktual', value: periodLabel, description: 'Bulan kalender hasil konversi', tone: 'border-white/10 bg-[#0F2B1A] text-white' },
-    { label: 'Acc Period', value: accLabel || (summary.accounting_period ?? metadata.accountingPeriod), description: 'Fiscal AccMonth/AccYear', tone: 'border-white/10 bg-[#1A1A1A] text-white' },
+    { label: 'Nilai Asset', value: summary.total_amount ?? summary.TotalAmount, description: 'Stock valuation amount in IDR. This is inventory value, not movement sum.', tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
+    { label: 'Total Item', value: summary.total_item ?? summary.FilteredRows ?? rows.length, description: 'Item count for ItemType 1 Gudang + ItemType 4 Workshop/Mesin.', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
+    { label: 'Qty On Hand+Hold', value: summary.total_quantity ?? summary.TotalQty ?? rowTotalQty, description: 'Physical stock quantity: available on hand plus on hold.', tone: 'border-cyan-100 bg-cyan-50 text-cyan-800' },
+    { label: 'Qty On Hand', value: summary.total_quantity_on_hand ?? rowQtyOnHand, description: 'Physical quantity currently available for use.', tone: 'border-sky-100 bg-sky-50 text-sky-800' },
+    { label: 'Qty On Hold', value: summary.total_quantity_on_hold ?? rowQtyOnHold, description: 'Physical quantity reserved/on hold, not freely available.', tone: 'border-amber-100 bg-amber-50 text-amber-800' },
+    { label: 'Periode Aktual', value: periodLabel, description: 'Calendar month applied by report filters.', tone: 'border-white/10 bg-[#0F2B1A] text-white' },
+    { label: 'Acc Period', value: accLabel || (summary.accounting_period ?? metadata.accountingPeriod), description: 'Accounting fiscal period used by inventory tables.', tone: 'border-white/10 bg-[#1A1A1A] text-white' },
   ]
 }
 
@@ -1138,7 +1300,7 @@ function buildItemTypeBreakdownCards(
       return {
         label: pair.label,
         value: amount ?? items ?? qty ?? 0,
-        description: 'Breakdown grand total · ItemType',
+        description: `${pair.label} amount/value in IDR. Qty and item chips show physical quantity and item count.`,
         tone: KPI_TONES[index % KPI_TONES.length],
         scope: 'breakdown' as const,
         groupField: 'ItemType',
@@ -1179,7 +1341,7 @@ function buildItemTypeBreakdownCards(
     return {
       label: bucket.label,
       value: head?.value ?? matched.length,
-      description: `${matched.length} item · breakdown ItemType`,
+      description: `${matched.length} items in ItemType breakdown. Value follows primary metric for selected scope.`,
       tone: KPI_TONES[index % KPI_TONES.length],
       scope: 'breakdown' as const,
       groupField: 'ItemType',
@@ -1278,8 +1440,8 @@ function buildSubCategoryKpiCards(
       label: masterHint,
       value: head?.value ?? stats.count,
       description: stats.fromChart
-        ? `${stats.count} item · full group · ${displayColumnLabel(groupField)}`
-        : `${stats.count} item · loaded rows only · ${displayColumnLabel(groupField)}`,
+        ? `${stats.count} items in ${displayColumnLabel(groupField)}. Amount/Qty chips use full grouped summary.`
+        : `${stats.count} items in ${displayColumnLabel(groupField)} from loaded rows only.`,
       tone: KPI_TONES[index % KPI_TONES.length],
       scope: 'sub' as const,
       groupField,
@@ -1316,7 +1478,7 @@ function buildDynamicGrandTotalKpis(
     globalCards.push({
       label: displayColumnLabel(key),
       value: picked.value,
-      description: picked.source === 'summary' ? 'Global · server summary' : 'Global · sum rows loaded',
+      description: picked.source === 'summary' ? kpiMeaning(key) : `${displayColumnLabel(key)} sum from loaded rows only.`,
       tone: KPI_TONES[globalCards.length % KPI_TONES.length],
       scope: 'global',
     })
@@ -1333,7 +1495,7 @@ function buildDynamicGrandTotalKpis(
     globalCards.push({
       label: 'Actual Period',
       value: period,
-      description: 'Global · bulan aktual',
+      description: 'Actual calendar period applied by report filters.',
       tone: 'border-white/10 bg-[#0F2B1A] text-white',
       scope: 'global',
     })
@@ -1342,7 +1504,7 @@ function buildDynamicGrandTotalKpis(
     globalCards.push({
       label: 'Acc Period',
       value: acc,
-      description: 'Global · fiscal auto',
+      description: 'Accounting fiscal period used by inventory report data.',
       tone: 'border-white/10 bg-[#1A1A1A] text-white',
       scope: 'global',
     })
@@ -1378,7 +1540,7 @@ function buildDynamicGrandTotalKpis(
   ).map((card) => ({
     ...card,
     scope: 'movement' as const,
-    description: 'Movement Actual · dihitung otomatis dari StockIssue',
+    description: 'Movement Category from StockIssue activity. Value follows issue amount/count metric for active movement window.',
   }))
 
   // Structure: GLOBAL → ItemType breakdown → stored sub → computed Movement Actual.
@@ -1392,8 +1554,8 @@ function buildDynamicGrandTotalKpis(
         label: 'Global totals',
         value: metricPreview[0]?.value ?? rows.length,
         description: breakdownCards.length
-          ? `Grand total · Gudang + Workshop · ${subCards.length} taxonomy sub · MC computed ${movementRailCards.length}`
-          : `${displayColumnLabel(dim ?? 'taxonomy')} → ${subCards.length} stored sub · MC computed ${movementRailCards.length}`,
+          ? `Grand total summary for Gudang + Workshop. Also shows ${subCards.length} taxonomy groups and ${movementRailCards.length} Movement Category cards.`
+          : `${displayColumnLabel(dim ?? 'taxonomy')} grouping summary: ${subCards.length} taxonomy groups and ${movementRailCards.length} Movement Category cards.`,
         tone: 'border-white/10 bg-[#0F2B1A] text-lime-100',
         scope: 'global' as const,
         metrics: metricPreview.map((card) => ({ key: card.label, label: card.label, value: card.value })),
@@ -1405,7 +1567,7 @@ function buildDynamicGrandTotalKpis(
             {
               label: `Sub · ${displayColumnLabel(dim ?? 'group')}`,
               value: subCards.length,
-              description: 'Taxonomy tersimpan (SA / Product / Location) — bukan Movement Actual',
+              description: 'Stored taxonomy grouping such as Product, Brand, Model, Material, or Location. Not Movement Category.',
               tone: 'border-white/10 bg-[#102b1b] text-lime-100',
               scope: 'sub' as const,
               groupField: dim,
@@ -1423,151 +1585,22 @@ function buildDynamicGrandTotalKpis(
 function groupedKpiCards(rows: DbRow[], groupBy?: string, preferred: string[] = [], limit = 6): ReportKpiCard[] {
   return buildSubCategoryKpiCards(rows, resolveGroupDimension(rows, groupBy, preferred), amountKeysForRows(rows).concat(qtyKeysForRows(rows)).slice(0, 4), [], limit)
 }
-
-/** Official RPTIN1000015 — full-scope summary only (never page rows). */
-function pickSummaryOnly(summary: DbRow, keys: string[]) {
-  for (const key of keys) {
-    const raw = summary[key]
-    if (raw === undefined || raw === null || raw === '') continue
-    return { key, value: raw, source: 'summary' as const }
-  }
-  return null
-}
-
-/** Primary Ringkasan ≤6 — metric-dictionary (ID). Summary only; no page-row sums. */
-const FLOW_KPI_SURFACE = 'border-[color:var(--rc-forest-border,rgba(155,226,61,0.18))] bg-white/[0.04] text-white'
-
-/**
- * Official RPTIN1000015 KPI contract (PDF extract).
- * Every primary card = 1:1 official column from grand_total / summary.*
- * Source of truth: IN_StdRpt_MthStkAccMoveDetails_*_extracted.json columns[].
- */
-const OFFICIAL_MONTHLY_KPI_COLUMNS: Array<{
-  key: string
-  label: string
-  amountField: string
-  qtyField: string
-  flowSection: string
-  sourceTable: string
-}> = [
-  { key: 'opening', label: 'Opening', amountField: 'OpeningAmount', qtyField: 'OpeningQty', flowSection: 'opening', sourceTable: 'IN_MTHENDITEM' },
-  { key: 'received', label: 'Received', amountField: 'ReceivedAmount', qtyField: 'ReceivedQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
-  { key: 'return_advice', label: 'Return Advice', amountField: 'ReturnAdviceAmount', qtyField: 'ReturnAdviceQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
-  { key: 'transferred', label: 'Transferred', amountField: 'TransferredAmount', qtyField: 'TransferredQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
-  { key: 'adjustment', label: 'Adjustment', amountField: 'AdjustmentAmount', qtyField: 'AdjustmentQty', flowSection: 'inventory', sourceTable: 'placeholder_zero' },
-  { key: 'issued_ledger', label: 'Issued - Ledger', amountField: 'LedgerAmount', qtyField: 'LedgerQty', flowSection: 'issued', sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK' },
-  { key: 'issued_station', label: 'Issued - Station', amountField: 'IssuedStationAmount', qtyField: 'IssuedStationQty', flowSection: 'issued', sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK' },
-  { key: 'issued_vehicle', label: 'Issued - Vehicle', amountField: 'IssuedVehicleAmount', qtyField: 'IssuedVehicleQty', flowSection: 'issued', sourceTable: 'IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK' },
-  { key: 'issued_total', label: 'Issued - Total', amountField: 'IssuedTotalAmount', qtyField: 'IssuedTotalQty', flowSection: 'issued', sourceTable: 'ledger + station + vehicle' },
-  { key: 'purchasing_return', label: 'Purchasing - Return', amountField: 'ReturnAmount', qtyField: 'ReturnQty', flowSection: 'purchasing', sourceTable: 'WS_JOBSTOCK TransType 2' },
-  { key: 'purchasing_goods_receive', label: 'Purchasing - Goods Receive', amountField: 'GoodsReceiveAmount', qtyField: 'GoodsReceiveQty', flowSection: 'purchasing', sourceTable: 'PU_GOODSRCVLN' },
-  { key: 'purchasing_goods_return', label: 'Purchasing - Goods Return', amountField: 'GoodsReturnAmount', qtyField: 'GoodsReturnQty', flowSection: 'purchasing', sourceTable: 'PU_GOODSRETLN' },
-  { key: 'purchasing_dispatch_advice', label: 'Purchasing - Dispatch Advice', amountField: 'DispatchAdvAmount', qtyField: 'DispatchAdvQty', flowSection: 'purchasing', sourceTable: 'placeholder_zero' },
-  { key: 'closing', label: 'Closing', amountField: 'ClosingAmount', qtyField: 'ClosingQty', flowSection: 'closing', sourceTable: 'IN_MTHENDITEM / reconstructed' },
-]
-
-function buildOfficialMovementFlowKpis(payload: ReportPayload): ReportKpiCard[] {
-  const summary = payload.summary ?? {}
-  // GUARDRAIL(flow-kpi-summary-only): page rows = TOP N window — never sum for grand totals.
-  const amt = (keys: string[]) => pickSummaryOnly(summary, keys)
-  const qty = (keys: string[]) => pickSummaryOnly(summary, keys)
-
-  const ledgerN = toNumber(amt(['LedgerAmount'])?.value)
-  const stationN = toNumber(amt(['IssuedStationAmount'])?.value)
-  const vehicleN = toNumber(amt(['IssuedVehicleAmount'])?.value)
-  const issuedPartsSum = ledgerN + stationN + vehicleN
-  const issuedDirect = toNumber(amt(['IssuedTotalAmount'])?.value)
-  const issuedTotalValue = issuedDirect > 0 ? issuedDirect : issuedPartsSum > 0 ? issuedPartsSum : issuedDirect
-
-  const cards: ReportKpiCard[] = OFFICIAL_MONTHLY_KPI_COLUMNS.map((col) => {
-    const amountRaw = col.key === 'issued_total' ? issuedTotalValue : toNumber(amt([col.amountField])?.value)
-    const qtyRaw = toNumber(qty([col.qtyField])?.value)
-    return {
-      label: col.label,
-      value: amountRaw,
-      description: `Official column · ${col.key}`,
-      tone: col.key === 'closing' ? `${FLOW_KPI_SURFACE} ring-1 ring-lime-400/25` : FLOW_KPI_SURFACE,
-      scope: 'flow' as const,
-      flowSection: col.flowSection,
-      sourceTable: col.sourceTable,
-      sourceField: col.amountField,
-      metrics: [
-        { key: col.amountField, label: 'Amount', value: amountRaw, sourceTable: col.sourceTable, sourceField: col.amountField },
-        { key: col.qtyField, label: 'Qty', value: qtyRaw, sourceTable: col.sourceTable, sourceField: col.qtyField },
-      ],
-    }
-  })
-
-  const itemCount = toNumber(amt(['TotalItem', 'FilteredRows', 'TotalRows'])?.value)
-  cards.push({
-    label: 'Jumlah Item',
-    value: itemCount,
-    description: 'Count item · ringkasan server terfilter',
-    tone: FLOW_KPI_SURFACE,
-    scope: 'flow',
-    flowSection: 'count',
-    sourceTable: 'summary',
-    sourceField: 'TotalItem',
-    metrics: [{ key: 'TotalItem', label: 'Item', value: itemCount, sourceField: 'TotalItem' }],
-  })
-
-  return cards
-}
-
-function monthlyStockMovementKpis(payload: ReportPayload, filters?: ReportFilterInput, tableGroupField?: string): ReportKpiCard[] {
-  // Primary = official 14 columns only. Secondary group breakdown uses ProductTypeCode default.
-  const flowCards = buildOfficialMovementFlowKpis(payload)
-  const groupField = tableGroupField ?? filters?.groupBy ?? filters?.chartDimension ?? 'ProductTypeCode'
-  const rest = buildDynamicGrandTotalKpis(
-    payload,
-    {
-      ...filters,
-      groupBy: groupField === 'StockAnalysisCode' ? 'ProductTypeCode' : groupField,
-      chartDimension: groupField === 'StockAnalysisCode' ? 'ProductTypeCode' : groupField,
-      stockAnalysis: undefined,
-      category: undefined,
-    },
-    [
-      'ClosingAmount',
-      'OpeningAmount',
-      'ReceivedAmount',
-      'ReturnAdviceAmount',
-      'TransferredAmount',
-      'AdjustmentAmount',
-      'LedgerAmount',
-      'IssuedTotalAmount',
-      'IssuedStationAmount',
-      'IssuedVehicleAmount',
-      'GoodsReceiveAmount',
-      'GoodsReturnAmount',
-      'DispatchAdvAmount',
-      'ReturnAmount',
-      'ClosingQty',
-      'OpeningQty',
-      'TotalItem',
-    ],
-    20,
-    groupField === 'StockAnalysisCode' ? 'ProductTypeCode' : groupField,
-  )
-  const withoutDuplicateGlobals = rest.filter((card) => {
-    if (card.scope === 'flow') return false
-    if (card.scope !== 'global') return true
-    const label = card.label.toLowerCase()
-    return !/(opening|closing|issued|ledger|station|vehicle|received|return advice|transfer|adjustment|goods receive|goods return|dispatch|return amount)/i.test(
-      label,
-    )
-  })
-  return [...flowCards, ...withoutDuplicateGlobals]
+function kpiMeaning(field: string, label = displayColumnLabel(field)) {
+  if (/period|bulan|month/i.test(field)) return `${label} applied by report filters.`
+  if (/amount|nilai|value|cost|harga|valuation|asset/i.test(field)) return `${label} amount/value in IDR for selected report scope.`
+  if (/qty|quantity|stok|stock|saldo/i.test(field)) return `${label} physical quantity total for selected report scope.`
+  if (/count|item|rows|row|total|supplier|location|gudang/i.test(field)) return `${label} count for selected report scope.`
+  return `${label} from report summary for selected scope.`
 }
 
 const GENERIC_KPI_PRIORITY: Array<{ keys: string[]; label: string; description: string; tone: string }> = [
-  { keys: ['TotalAmount', 'total_amount', 'ClosingAmount', 'NilaiStok', 'Amount'], label: 'Total Amount', description: 'Nilai utama report', tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
-  { keys: ['TotalItem', 'total_item', 'FilteredRows', 'TotalRows'], label: 'Total Item / Rows', description: 'Jumlah baris scope', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
-  { keys: ['TotalQty', 'total_quantity', 'ClosingQty', 'Qty'], label: 'Total Qty', description: 'Kuantitas agregat', tone: 'border-cyan-100 bg-cyan-50 text-cyan-800' },
-  { keys: ['ActualPeriod', 'actualPeriod', 'period'], label: 'Periode Aktual', description: 'Bulan kalender', tone: 'border-white/10 bg-[#0F2B1A] text-white' },
-  { keys: ['AccountingPeriod', 'accountingPeriod'], label: 'Periode Acc', description: 'Fiscal period', tone: 'border-white/10 bg-[#1A1A1A] text-white' },
-  { keys: ['TotalLocation', 'LocationCount'], label: 'Lokasi', description: 'Jumlah gudang/lokasi', tone: 'border-teal-100 bg-teal-50 text-teal-800' },
-  { keys: ['TotalSupplier', 'SupplierCount'], label: 'Supplier', description: 'Jumlah supplier', tone: 'border-lime-100 bg-lime-50 text-lime-800' },
+  { keys: ['TotalAmount', 'total_amount', 'ClosingAmount', 'NilaiStok', 'Amount'], label: 'Total Amount', description: 'Main report amount/value in IDR for selected scope.', tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
+  { keys: ['TotalItem', 'total_item', 'FilteredRows', 'TotalRows'], label: 'Total Item / Rows', description: 'Item or row count in selected report scope.', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
+  { keys: ['TotalQty', 'total_quantity', 'ClosingQty', 'Qty'], label: 'Total Qty', description: 'Physical quantity total in selected report scope.', tone: 'border-cyan-100 bg-cyan-50 text-cyan-800' },
+  { keys: ['ActualPeriod', 'actualPeriod', 'period'], label: 'Actual Period', description: 'Calendar month applied by report filters.', tone: 'border-white/10 bg-[#0F2B1A] text-white' },
+  { keys: ['AccountingPeriod', 'accountingPeriod'], label: 'Acc Period', description: 'Accounting fiscal period used by report data.', tone: 'border-white/10 bg-[#1A1A1A] text-white' },
+  { keys: ['TotalLocation', 'LocationCount'], label: 'Location', description: 'Location/Gudang count in selected report scope.', tone: 'border-teal-100 bg-teal-50 text-teal-800' },
+  { keys: ['TotalSupplier', 'SupplierCount'], label: 'Supplier', description: 'Supplier count in selected report scope.', tone: 'border-lime-100 bg-lime-50 text-lime-800' },
 ]
 
 function genericKpis(payload: ReportPayload, filters?: ReportFilterInput): ReportKpiCard[] {
@@ -1617,22 +1650,22 @@ function genericKpis(payload: ReportPayload, filters?: ReportFilterInput): Repor
     cards.push({
       label: displayColumnLabel(key),
       value,
-      description: 'Agregat summary server',
+      description: kpiMeaning(key),
       tone: 'border-white/10 bg-[#1A1A1A] text-white',
     })
   }
 
   if (cards.length === 0) {
     cards.push(
-      { label: 'Rows', value: payload.rows.length, description: 'Baris payload tampil', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
-      { label: 'Columns', value: payload.columns.length, description: 'Kolom payload', tone: 'border-slate-200 bg-slate-50 text-slate-800' },
+      { label: 'Rows', value: payload.rows.length, description: 'Visible payload row count for selected report scope.', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
+      { label: 'Columns', value: payload.columns.length, description: 'Column count returned by selected report payload.', tone: 'border-slate-200 bg-slate-50 text-slate-800' },
     )
   }
 
   if (groupCards.length > 0 && (filters?.groupBy || filters?.chartDimension)) {
     const dim = filters?.groupBy ?? filters?.chartDimension
     return [
-      { label: `Group: ${displayColumnLabel(String(dim))}`, value: groupCards.length, description: 'KPI mengikuti group user', tone: 'border-white/10 bg-[#102b1b] text-lime-100' },
+      { label: `Group: ${displayColumnLabel(String(dim))}`, value: groupCards.length, description: 'Number of KPI cards grouped by user-selected analysis field.', tone: 'border-white/10 bg-[#102b1b] text-lime-100' },
       ...groupCards,
       ...cards.slice(0, 4),
     ].slice(0, 12)
@@ -2073,7 +2106,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     stockAgingQualityItems,
     stockAgingTopItems,
     assetValuationKpis,
-    monthlyStockMovementKpis,
+    monthlyStockMovementKpis: buildMonthlyStockMovementKpis,
     toNumber,
   }), [report.id])
   const [selectedSource, setSelectedSource] = useState<ReportSource>(normalizeSource(searchParams.get('source')))
@@ -2130,7 +2163,9 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const requestSeqRef = useRef(0)
   const sortColumnRef = useRef<string | null>(sortColumn)
+  const workspaceTabRef = useRef<WorkspaceTabId>(workspaceTab)
   sortColumnRef.current = sortColumn
+  workspaceTabRef.current = workspaceTab
 
   const requestFilters = useMemo<ReportFilterInput>(() => {
     const search = remoteTableSearch.trim()
@@ -2218,7 +2253,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     setReportInfoVisible(false)
     setReportInfoManuallyOpened(false)
     setAiInsightVisible(false)
-    setInsightTab('charts')
+    setInsightTab(workspaceTabRef.current === 'audit' ? 'sql' : 'charts')
     uniqueValuesCache.current.clear()
 
     const isMonthlyStream = MONTHLY_STOCK_MOVEMENT_REPORT_IDS.has(report.id)
@@ -2686,6 +2721,10 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     return Array.isArray(candidate.statements) ? (candidate as DebugSqlMetadata) : null
   }, [payload?.metadata?.debugSql])
   const debugSqlStatements = debugSql?.statements ?? []
+  const activeRequestFilterCount = useMemo(
+    () => Object.values(requestFilters).filter((value) => (Array.isArray(value) ? value.length > 0 : Boolean(value))).length,
+    [requestFilters],
+  )
   const focusedDebugSqlStatement = debugSqlStatements.find((statement) => statement.id === debugSqlFocus || statement.label === debugSqlFocus)
     ?? debugSqlStatements.find((statement) => statement.label === 'summary')
     ?? debugSqlStatements[0]
@@ -2987,6 +3026,18 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
       dateFrom: movementWindow === 'custom' ? appliedFilters.dateFrom : undefined,
       dateTo: movementWindow === 'custom' ? appliedFilters.dateTo : undefined,
     }, `Movement period ${movementWindow} diterapkan ke actual MovementCategory.`)
+  }
+
+  const applyMonthlyItemType = (itemType: 'inventory' | 'gudang' | 'workshop') => {
+    commitReportFilters({
+      ...appliedFilters,
+      itemType: itemType === 'inventory' ? undefined : itemType,
+      includeWorkshopItem: itemType === 'gudang' ? 'no' : itemType === 'workshop' ? 'yes' : undefined,
+    }, itemType === 'inventory'
+      ? 'Item type: Gudang + Workshop (1+4).'
+      : itemType === 'gudang'
+        ? 'Item type: Gudang only (1).'
+        : 'Item type: Workshop only (4).')
   }
 
   const applySubKpiCardFilter = (kpi: ReportKpiCard) => {
@@ -3333,22 +3384,57 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
       ? (payload.metadata.queryTiming as { generatedAt?: unknown }).generatedAt ?? ''
       : payload?.metadata?.generatedAt ?? '',
   )
+  const activePeriodLabels = useMemo(
+    () => resolveActivePeriodLabels(payload, requestFilters),
+    [payload, requestFilters],
+  )
+  const reportStateCards = useMemo(() => [
+    {
+      label: 'Loaded rows',
+      value: loading ? 'Loading' : formatValue(filteredRows.length),
+      detail: serverPaged && tableWindow.windowed ? `${formatValue(safeTotalTableRows)} server rows` : 'Current evidence window',
+      tone: 'border-lime-300/25 bg-lime-300/10 text-lime-50',
+    },
+    {
+      label: 'Period state',
+      value: activePeriodLabels.actual ?? 'Current',
+      detail: activePeriodLabels.accounting ? `Acc ${activePeriodLabels.accounting}` : 'Accounting auto',
+      tone: 'border-amber-300/25 bg-amber-300/10 text-amber-50',
+    },
+    {
+      label: 'Analysis group',
+      value: displayColumnLabel(resolvedMonthlyAnalysisGroup || activeTableGroupColumn || 'Report'),
+      detail: `${subKpiCards.length} groups · ${movementCategoryKpiCards.length} movement`,
+      tone: 'border-sky-300/25 bg-sky-300/10 text-sky-50',
+    },
+    {
+      label: 'Trust state',
+      value: debugSqlStatements.length > 0 ? 'Auditable' : 'Read-only',
+      detail: aiInsightVisible ? 'AI secondary visible' : 'AI secondary hidden',
+      tone: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-50',
+    },
+  ], [activePeriodLabels.accounting, activePeriodLabels.actual, activeTableGroupColumn, aiInsightVisible, debugSqlStatements.length, filteredRows.length, loading, movementCategoryKpiCards.length, resolvedMonthlyAnalysisGroup, safeTotalTableRows, serverPaged, subKpiCards.length, tableWindow.windowed])
 
   const insightTabLabels: Record<InsightTab, string> = {
-    ai: 'AI Insight',
+    ai: 'AI Insight (sampel)',
     charts: 'Charts',
     quality: 'Quality',
     metadata: 'Metadata',
     recommendations: 'Recommendations',
-    sql: 'SQL Debug',
+    sql: 'SQL (audit)',
   }
-  const analysisPanelVisible = reportInfoVisible || aiInsightVisible
+  // Analisis/Audit tabs always surface the analysis workspace; Ringkasan stays calm.
+  const analysisPanelVisible =
+    reportInfoVisible ||
+    aiInsightVisible ||
+    workspaceTab === 'analisis' ||
+    workspaceTab === 'audit'
 
   useEffect(() => {
     if (workspaceTab === 'audit') {
       setReportInfoVisible(true)
       setReportInfoManuallyOpened(true)
-      setInsightTab((tab) => (tab === 'ai' ? 'sql' : tab === 'charts' ? 'sql' : tab))
+      setInsightTab('sql')
     } else if (workspaceTab === 'analisis') {
       setInsightTab((tab) => (tab === 'sql' ? 'charts' : tab))
     }
@@ -3468,6 +3554,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           <div className="pointer-events-none absolute -right-16 top-0 h-56 w-56 rounded-full bg-lime-300/10 blur-3xl" />
           <div className="pointer-events-none absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-emerald-400/10 blur-3xl" />
           <div className="relative p-5 sm:p-6 lg:p-7">
+            {/* Hallmark · pre-emit critique: P5 H4 E4 S5 R4 V4 */}
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 max-w-4xl">
                 <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
@@ -3491,6 +3578,16 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   {report.description || 'Report inventory aktif pada scope filter server.'}
                 </p>
 
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {reportStateCards.map((card) => (
+                    <div key={card.label} className={`rounded-2xl border px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${card.tone}`}>
+                      <span className="block text-[10px] font-black uppercase tracking-[0.14em] opacity-70">{card.label}</span>
+                      <strong className="mt-1 block truncate text-base font-black tabular-nums">{card.value}</strong>
+                      <span className="mt-0.5 block truncate text-[11px] font-semibold opacity-60">{card.detail}</span>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-emerald-400/30 bg-emerald-400/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100">
                     Inventory
@@ -3513,6 +3610,10 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[11px] font-bold text-sky-100">
                     <Sparkles size={13} />
                     AI baca payload
+                  </span>
+                  <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-[11px] font-black text-amber-50" title="Periode aktif: actual month dan accounting month">
+                    <span className="text-amber-200/70">Periode aktif</span>
+                    <span className="tabular-nums">{activePeriodLabels.summary}</span>
                   </span>
                   {payload?.metadata?.filteredRows !== undefined && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-bold text-amber-100">
@@ -3588,15 +3689,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             reportTitle={report.title}
             reportCode={report.code}
             sourceLabel={sourceLabel(selectedSource)}
-            periodLabel={
-              String(
-                appliedFilters.period
-                  ?? payload?.summary?.ActualPeriod
-                  ?? payload?.metadata?.actualPeriod
-                  ?? payload?.metadata?.period
-                  ?? '',
-              ) || undefined
-            }
+            periodLabel={activePeriodLabels.summary}
             startedAt={loadStartedAt}
           />
         )}
@@ -3631,11 +3724,13 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             compactMetric={compactMetric}
             formatValue={formatValue}
             displayColumnLabel={displayColumnLabel}
+            activePeriodLabels={activePeriodLabels}
             openKpiSqlDebug={openKpiSqlDebug}
             applyKpiFilter={applyKpiFilter}
             applySubKpiCardFilter={applySubKpiCardFilter}
             applyMonthlyAnalysisGroup={applyMonthlyAnalysisGroup}
             applyMonthlyMovementWindow={applyMonthlyMovementWindow}
+            applyMonthlyItemType={applyMonthlyItemType}
             commitReportFilters={commitReportFilters}
             setReportInfoVisible={setReportInfoVisible}
             setReportInfoManuallyOpened={setReportInfoManuallyOpened}
@@ -4492,15 +4587,23 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">Analysis Workspace</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">
+                  {workspaceTab === 'audit' ? 'Audit Workspace' : 'Analysis Workspace'}
+                </p>
                 <p className="mt-1 text-xs font-semibold text-white/45">
-                  {aiInsightVisible ? 'AI insight, chart, quality, metadata, dan recommendations disiapkan setelah table.' : 'Chart, quality, metadata, dan recommendations disiapkan setelah table.'}
+                  {workspaceTab === 'audit'
+                    ? 'SQL audit, metadata, quality, dan parameter request disiapkan setelah table.'
+                    : aiInsightVisible
+                      ? 'AI insight, chart, quality, metadata, dan recommendations disiapkan setelah table.'
+                      : 'Chart, quality, metadata, dan recommendations disiapkan setelah table.'}
                 </p>
               </div>
               <Loader2 className="animate-spin text-emerald-300" size={18} />
             </div>
             <div className="mt-4 rounded-xl border border-white/10 bg-[#0F2B1A] p-4 text-sm font-semibold text-white/60">
-              Table sudah siap. Analysis Workspace sedang dimuat di background supaya table tetap ringan dulu.
+              {workspaceTab === 'audit'
+                ? 'Table sudah siap. Audit Workspace sedang menyiapkan SQL, metadata, quality, dan parameter request.'
+                : 'Table sudah siap. Analysis Workspace sedang dimuat di background supaya table tetap ringan dulu.'}
             </div>
           </section>
         )}
@@ -4508,9 +4611,15 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">Analysis Workspace</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">
+                  {workspaceTab === 'audit' ? 'Audit Workspace' : 'Analysis Workspace'}
+                </p>
                 <p className="mt-1 text-xs font-semibold text-white/45">
-                  {aiInsightVisible ? 'AI insight, chart analysis, quality, metadata, dan recommendations tetap lengkap setelah table.' : 'Chart, quality, metadata, dan recommendations tampil dulu. AI Insight menunggu tombol khusus.'}
+                  {workspaceTab === 'audit'
+                    ? 'SQL audit, metadata, quality, dan parameter request tersedia tanpa mengganggu table utama.'
+                    : aiInsightVisible
+                      ? 'AI insight, chart analysis, quality, metadata, dan recommendations tetap lengkap setelah table.'
+                      : 'Chart, quality, metadata, dan recommendations tampil dulu. AI Insight menunggu tombol khusus.'}
                 </p>
               </div>
               <button
@@ -4551,28 +4660,34 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               <div className="rounded-xl border border-white/10 bg-[#0F2B1A] p-4">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-black text-white">{aiChartPreview?.title ?? 'AI Chart Preview'}</p>
+                    <p className="text-sm font-black text-white">
+                      {workspaceTab === 'audit' ? 'SQL Audit Preview' : aiChartPreview?.title ?? 'AI Chart Preview'}
+                    </p>
                     <p className="mt-1 text-xs leading-5 text-white/45">
-                      {aiChartPreview?.reason ?? 'AI akan menentukan chart, dimensi, metric, agregasi, dan alasan analisis dari payload report.'}
+                      {workspaceTab === 'audit'
+                        ? 'Audit workspace fokus ke SQL, metadata, quality, dan parameter request untuk pemeriksaan teknis.'
+                        : aiChartPreview?.reason ?? 'AI akan menentukan chart, dimensi, metric, agregasi, dan alasan analisis dari payload report.'}
                     </p>
                   </div>
-                  <BarChart3 className="shrink-0 text-emerald-300" size={18} />
+                  {workspaceTab === 'audit'
+                    ? <ShieldCheck className="shrink-0 text-emerald-300" size={18} />
+                    : <BarChart3 className="shrink-0 text-emerald-300" size={18} />}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-white/35">Charts</p>
-                    <p className="mt-1 text-lg font-black text-emerald-300">{aiDashboard?.charts?.length ?? 0}</p>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-white/35">{workspaceTab === 'audit' ? 'SQL Statements' : 'Charts'}</p>
+                    <p className="mt-1 text-lg font-black text-emerald-300">{workspaceTab === 'audit' ? debugSqlStatements.length : aiDashboard?.charts?.length ?? 0}</p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-white/35">Primary Type</p>
-                    <p className="mt-1 truncate text-sm font-black text-white">{aiChartPreview?.type?.replace('_', ' ') ?? (aiDashboardLoading ? 'Generating' : 'Waiting')}</p>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-white/35">{workspaceTab === 'audit' ? 'Metadata' : 'Primary Type'}</p>
+                    <p className="mt-1 truncate text-sm font-black text-white">{workspaceTab === 'audit' ? `${metadataEntries.length} fields` : aiChartPreview?.type?.replace('_', ' ') ?? (aiDashboardLoading ? 'Generating' : 'Waiting')}</p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-white/35">Metric</p>
-                    <p className="mt-1 truncate text-sm font-black text-white">{aiChartPreview?.valueField ?? aiChartPreview?.yField ?? 'AI selected'}</p>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-white/35">{workspaceTab === 'audit' ? 'Request Filters' : 'Metric'}</p>
+                    <p className="mt-1 truncate text-sm font-black text-white">{workspaceTab === 'audit' ? `${activeRequestFilterCount} active` : aiChartPreview?.valueField ?? aiChartPreview?.yField ?? 'AI selected'}</p>
                   </div>
                 </div>
-                {aiChartTypes.length > 0 && (
+                {workspaceTab !== 'audit' && aiChartTypes.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {aiChartTypes.slice(0, 7).map((type) => (
                       <span key={type} className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-200">
@@ -4581,7 +4696,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                     ))}
                   </div>
                 )}
-                {aiChartPreview && (
+                {workspaceTab !== 'audit' && aiChartPreview && (
                   <p className="mt-3 text-xs leading-5 text-white/50">
                     {aiChartPreview.xField || aiChartPreview.categoryField ? `Dimension: ${aiChartPreview.xField ?? aiChartPreview.categoryField}` : 'Dimension dipilih dari payload'}
                     {aiChartPreview.aggregation ? ` - Aggregation: ${aiChartPreview.aggregation}` : ''}
@@ -4589,17 +4704,17 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 )}
                 <button
                   type="button"
-                  onClick={() => setInsightTab('charts')}
+                  onClick={() => setInsightTab(workspaceTab === 'audit' ? 'sql' : 'charts')}
                   className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/65 hover:bg-white/10 hover:text-white"
                 >
-                  Open Charts
+                  {workspaceTab === 'audit' ? 'Open SQL Audit' : 'Open Charts'}
                 </button>
               </div>
             </div>
 
             <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-[#0F2B1A] p-1 md:grid-cols-6">
               {(Object.keys(insightTabLabels) as InsightTab[])
-                .filter((tab) => (tab !== 'ai' || aiInsightVisible) && (tab !== 'sql' || debugSqlStatements.length > 0))
+                .filter((tab) => (tab !== 'ai' || aiInsightVisible) && (tab !== 'sql' || workspaceTab === 'audit' || debugSqlStatements.length > 0))
                 .map((tab) => (
                 <button
                   key={tab}
@@ -4899,7 +5014,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         </div>
       </div>
 
-      {/* Always-on simple SQL modal — not gated by analysis workspace / table expanded */}
+      {/* Always-on simple SQL modal — segmented box frames for debug */}
       {kpiSimpleSqlView ? (
         <div
           className="fixed inset-0 z-[80] flex items-end justify-center bg-black/65 p-3 sm:items-center sm:p-6"
@@ -4909,16 +5024,13 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           onClick={() => setKpiSimpleSqlView(null)}
         >
           <div
-            className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-lime-300/35 bg-[#071426] text-white shadow-[0_28px_80px_rgba(0,0,0,0.55)]"
+            className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-lime-300/35 bg-[#071426] text-white shadow-[0_28px_80px_rgba(0,0,0,0.55)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-200">SQL Server · paste SSMS</p>
                 <p className="mt-1 truncate text-base font-black text-white sm:text-lg">{kpiSimpleSqlView.label}</p>
-                <p className="mt-1 text-xs font-semibold text-white/55">
-                  Literal AccYear/AccMonth dari period report. Copy → SSMS database estate/mill yang sama.
-                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -4939,9 +5051,36 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                 </button>
               </div>
             </div>
-            <pre className="max-h-[60vh] overflow-auto p-4 text-[12px] leading-6 text-lime-100 sm:p-5 sm:text-[13px]">
-              <code>{kpiSimpleSqlView.sql}</code>
-            </pre>
+
+            <div className="space-y-3 p-4 sm:p-5">
+              {/* Segment box: how to verify */}
+              <div className="grid gap-2 sm:grid-cols-3">
+                {[
+                  { t: '1. Card KPI', d: 'Nilai di ringkasan UI' },
+                  { t: '2. Query ini', d: 'Paste SSMS → sama Acc/Loc/ItemType' },
+                  { t: '3. JSON official', d: 'RPTIN listing bila period sama' },
+                ].map((box) => (
+                  <div
+                    key={box.t}
+                    className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-lime-200/80">{box.t}</p>
+                    <p className="mt-1 text-[11px] font-semibold leading-4 text-white/55">{box.d}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Segment box: SQL body */}
+              <div className="overflow-hidden rounded-xl border border-lime-300/20 bg-[#050d18] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Query mirror summary</p>
+                  <p className="text-[10px] font-bold text-white/35">ItemType 1+4 · Acc dari payload</p>
+                </div>
+                <pre className="max-h-[52vh] overflow-auto p-3 text-[12px] leading-6 text-lime-100 sm:p-4 sm:text-[13px]">
+                  <code>{kpiSimpleSqlView.sql}</code>
+                </pre>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
