@@ -10,6 +10,7 @@ import TopMovementScatter from './TopMovementScatter'
 import StockRiverChart from './StockRiverChart'
 import AnalysisDrawer from './AnalysisDrawer'
 import PeriodScrubber from './PeriodScrubber'
+import MovementAnalytics from './MovementAnalytics'
 import Sparkline, { MomentumDelta } from './Sparkline'
 import InsightTicker from './InsightTicker'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
@@ -1257,6 +1258,25 @@ export default function ProcurementKpiStrip({
           </div>
         </div>
       ) : null}
+
+      <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
+        <div className="rc-reveal rounded-[28px] p-1" style={{ '--reveal-order': 5 } as React.CSSProperties}>
+          <MovementAnalytics
+            source={source}
+            itemType={filters.itemType}
+            active={!glance}
+            months={12}
+            top={12}
+            costCenters={topLists?.costCenters}
+            vehicles={topLists?.vehicles}
+            stationQty={monthlyIssuedStationQty}
+            ledgerQty={monthlyLedgerQty}
+            vehicleQty={monthlyIssuedVehicleQty}
+            onFocusPeriod={(period) => updateFilter('period', period)}
+            onOpenDetail={() => { window.location.href = filteredLinks.usage }}
+          />
+        </div>
+      </div>
 
       {topRows.length > 0 ? (
         <div className="relative z-10 border-t border-[var(--rc-border)] bg-black/15 px-3 py-3">

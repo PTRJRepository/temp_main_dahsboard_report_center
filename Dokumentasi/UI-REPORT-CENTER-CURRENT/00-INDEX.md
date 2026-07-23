@@ -100,6 +100,12 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **Kreativitas:** `Sparkline.tsx` baru (reusable) — sparkline SVG mini halus (smooth bezier, tanpa lib) + `MomentumDelta` (▲/▼ % vs rata-rata 3 periode). Disematkan di kartu hero Total Usage dari `usageTrend.amount`.
 - **Verifikasi:** tsc 0, eslint 0 error baru (error `set-state-in-effect` pre-existing), build exit 0.
 
+### 15. Movement jadi infografis penuh analisis (2026-07-23)
+- **Endpoint baru:** `/api/reports/inventory/movement-matrix` — agregasi GROUP BY barang x bulan atas issue gudang + workshop (read-only, ekspresi persis report asli); periods kronologis + rows {qty[],amount[],docs[]} per barang; cache 60s.
+- **Infografis baru:** `MovementMatrix` (heatmap X=periode, Y=barang, sel=jumlah movement, intensitas emerald, klik sel -> fokus periode, klik barang -> drilldown), `ChargeBreakdown` (stacked bar Blok/Vehicle/Dept + share%), `MovementTable` (pola sparkline + qty/amount/freq/momentum, sortable), `ItemDrilldown` (pop-up analisis per barang: sparkline besar, statistik, insight stagnan), dibungkus `MovementAnalytics` (satu fetch bersama, toggle Qty/Amount).
+- **Integrasi:** blok reveal-order 5 setelah StockRiverChart di strip; lazy via `active={!glance}`.
+- **Verifikasi:** tsc 0, eslint 0 error baru, build exit 0. Belum uji browser / data nyata.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.
