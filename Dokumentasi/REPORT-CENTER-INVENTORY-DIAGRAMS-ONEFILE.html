@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Report Center Inventory — Diagram Pack (One File)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --navy: #071426;
+      --navy-2: #0c1f38;
+      --green: #167A3A;
+      --green-soft: #1f9a4a;
+      --gold: #D4A574;
+      --bg: #0a1524;
+      --card: #0f2238;
+      --border: #1e3a55;
+      --text: #e8eef6;
+      --muted: #9bb0c7;
+      --danger: #DC2626;
+      --warn: #D97706;
+      --gap: 48px;
+      --pad: 28px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #123052 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #0d3a24 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+    header.hero {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 55%, #0a2a1a 100%);
+      padding: 32px 36px;
+      margin-bottom: var(--gap);
+      box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    }
+    header.hero h1 {
+      margin: 0 0 8px;
+      font-size: 1.75rem;
+      letter-spacing: .02em;
+    }
+    header.hero .sub {
+      color: var(--muted);
+      margin: 0 0 16px;
+      max-width: 70ch;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(22,122,58,.15);
+      color: #b7e0c4;
+      font-size: .85rem;
+    }
+    .chip.warn { background: rgba(217,119,6,.12); color: #f0c98a; border-color: #6b4a1a; }
+    .chip.danger { background: rgba(220,38,38,.12); color: #f0a0a0; border-color: #6b1a1a; }
+    nav.toc {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--card);
+      padding: 22px 26px;
+      margin-bottom: var(--gap);
+    }
+    nav.toc h2 {
+      margin: 0 0 12px;
+      font-size: 1.05rem;
+      color: #cfe7d8;
+    }
+    nav.toc ol {
+      margin: 0;
+      padding-left: 1.25rem;
+      columns: 2;
+      gap: 32px;
+    }
+    nav.toc a {
+      color: #9fd4b3;
+      text-decoration: none;
+    }
+    nav.toc a:hover { color: #fff; text-decoration: underline; }
+    nav.toc li { margin: 6px 0; break-inside: avoid; }
+
+    /* ===== DIAGRAM BOX ===== */
+    .diagram-stack {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap); /* jarak antar box diagram */
+    }
+    .diagram-box {
+      border: 2px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #0e1f33 0%, #0b1929 100%);
+      box-shadow:
+        0 0 0 1px rgba(22,122,58,.12),
+        0 16px 48px rgba(0,0,0,.35);
+      overflow: hidden;
+    }
+    .diagram-box .box-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, rgba(22,122,58,.18), transparent 60%);
+    }
+    .diagram-box .box-num {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      background: var(--green);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(22,122,58,.4);
+    }
+    .diagram-box .box-title-wrap { flex: 1; min-width: 0; }
+    .diagram-box h3 {
+      margin: 0 0 4px;
+      font-size: 1.15rem;
+    }
+    .diagram-box .box-desc {
+      margin: 0;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+    .diagram-box .box-tag {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--gold);
+      border: 1px solid #5a4630;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .diagram-box .box-body {
+      padding: var(--pad);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.02), transparent 40%),
+        #f4f7fb;
+      color: #0f172a;
+    }
+    .diagram-box .mermaid {
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+    .diagram-box .box-footer {
+      padding: 14px 22px 18px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,.2);
+      color: var(--muted);
+      font-size: .86rem;
+    }
+    .diagram-box .box-footer strong { color: #cfe7d8; }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      margin-top: 8px;
+    }
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .legend .crit::before { background: var(--danger); }
+    .legend .star::before { background: var(--gold); }
+    .legend .ok::before { background: var(--green); }
+    .legend .info::before { background: #3b82f6; }
+
+    footer.page-end {
+      margin-top: var(--gap);
+      padding: 20px 24px;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    @media (max-width: 800px) {
+      nav.toc ol { columns: 1; }
+      :root { --gap: 32px; --pad: 16px; }
+    }
+    @media print {
+      body { background: #fff; color: #000; }
+      .diagram-box { break-inside: avoid; page-break-inside: avoid; }
+      .diagram-box .box-body { background: #fff; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <h1>Report Center — Inventory Diagram Pack</h1>
+      <p class="sub">
+        Satu file HTML: 14 diagram terpisah, masing-masing dalam box sendiri dengan jarak antar diagram.
+        Fokus modul Inventory (Report Center PT Rebinmas Jaya). READ-ONLY SQL. Jangan CUD.
+      </p>
+      <div class="meta">
+        <span class="chip">Forest navy + green</span>
+        <span class="chip">Mermaid v11</span>
+        <span class="chip">RPTIN1000015 monthly movement</span>
+        <span class="chip warn">⚠ AccCode = dept, bukan GL</span>
+        <span class="chip danger">⚠ IN_STOCKRECEIVE kosong (estate)</span>
+        <span class="chip">★ cost GR dari PU_POLN</span>
+      </div>
+    </header>
+
+    <nav class="toc">
+      <h2>Daftar diagram (klik loncat)</h2>
+      <ol>
+        <li><a href="#d01">System Context (C4 L1)</a></li>
+        <li><a href="#d02">Container (C4 L2)</a></li>
+        <li><a href="#d03">Peta halaman Inventory</a></li>
+        <li><a href="#d04">Alur request Catalog → SQL</a></li>
+        <li><a href="#d05">ER Stock Core</a></li>
+        <li><a href="#d06">ER Goods Receive Estate</a></li>
+        <li><a href="#d07">ER Month-End</a></li>
+        <li><a href="#d08">Formula Monthly Movement</a></li>
+        <li><a href="#d09">Accounting Period vs Calendar</a></li>
+        <li><a href="#d10">Viewer IA Workspaces</a></li>
+        <li><a href="#d11">Export / AI Scope Honesty</a></li>
+        <li><a href="#d12">Report Registry Map</a></li>
+        <li><a href="#d13">Server Profile Routing</a></li>
+        <li><a href="#d14">Monolith Extraction Target</a></li>
+      </ol>
+    </nav>
+
+    <div class="diagram-stack">
+
+      <!-- ========== 01 ========== -->
+      <section class="diagram-box" id="d01">
+        <div class="box-header">
+          <div class="box-num">01</div>
+          <div class="box-title-wrap">
+            <h3>System Context — Report Center</h3>
+            <p class="box-desc">Siapa yang pakai sistem, dan sistem luar apa yang disentuh.</p>
+          </div>
+          <span class="box-tag">C4 · Context</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TB
+  CEO["👤 CEO / Manajemen"]
+  WH["👤 Gudang / Inventory"]
+  FIN["👤 Finance / Accounting"]
+  IT["👤 Engineer / Ops"]
+
+  RC["📦 Report Center Dashboard<br/>Next.js · port 3001"]
+  GW["🔀 Root Proxy Gateway<br/>server.js"]
+  SQLG["🔌 SQL Gateway<br/>localhost:8001 · READ ONLY"]
+  SP1[("🗄️ SERVER_PROFILE_1<br/>db_ptrj_mill")]
+  SP2[("🗄️ SERVER_PROFILE_2<br/>db_ptrj kebun")]
+  SP3[("🗄️ SERVER_PROFILE_3<br/>backup/mill alt")]
+
+  CEO --> RC
+  WH --> RC
+  FIN --> RC
+  IT --> RC
+  RC --> GW
+  GW --> SQLG
+  SQLG --> SP1
+  SQLG --> SP2
+  SQLG --> SP3
+
+  classDef person fill:#1B4332,stroke:#167A3A,color:#fff
+  classDef sys fill:#071426,stroke:#3b82f6,color:#e8eef6
+  classDef db fill:#0c1f38,stroke:#D4A574,color:#fff
+  class CEO,WH,FIN,IT person
+  class RC,GW,SQLG sys
+  class SP1,SP2,SP3 db
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Catatan:</strong> Semua query lewat SQL Gateway. CUD dilarang. Inventory live di Report Center.
+        </div>
+      </section>
+
+      <!-- ========== 02 ========== -->
+      <section class="diagram-box" id="d02">
+        <div class="box-header">
+          <div class="box-num">02</div>
+          <div class="box-title-wrap">
+            <h3>Container — dalam Dashboard_Utama</h3>
+            <p class="box-desc">Komponen software utama di dalam aplikasi Report Center.</p>
+          </div>
+          <span class="box-tag">C4 · Container</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart LR
+  subgraph Browser
+    UI["Inventory Catalog UI<br/>InventoryReportsClient"]
+    VIEW["Report Viewer UI<br/>ReportViewerClient"]
+  end
+
+  subgraph NextApp["Next.js App Router"]
+    PAGE["Pages<br/>/report-center/inventory/*"]
+    API["API Route<br/>/api/reports/inventory"]
+    DOM["Domain lib<br/>monthly-stock-account-movement.ts"]
+    FMT["utils/format.ts<br/>metric-dictionary"]
+    CFG["config / registry<br/>report IDs"]
+  end
+
+  subgraph Data
+    SQLG["SQL Gateway"]
+    DB[("SQL Server profiles")]
+  end
+
+  UI --> PAGE
+  VIEW --> PAGE
+  PAGE --> API
+  API --> DOM
+  API --> CFG
+  DOM --> FMT
+  DOM --> SQLG
+  API --> SQLG
+  SQLG --> DB
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Entry code:</strong> ReportViewerClient · InventoryReportsClient · route.ts · monthly-stock-account-movement.ts
+        </div>
+      </section>
+
+      <!-- ========== 03 ========== -->
+      <section class="diagram-box" id="d03">
+        <div class="box-header">
+          <div class="box-num">03</div>
+          <div class="box-title-wrap">
+            <h3>Peta halaman modul Inventory</h3>
+            <p class="box-desc">Navigasi user dari home Report Center sampai workspace detail.</p>
+          </div>
+          <span class="box-tag">Sitemap</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TD
+  HOME["/report-center<br/>Dashboard modul"]
+  CAT["/report-center/inventory<br/>Catalog laporan"]
+  DET["/report-center/inventory/[report]<br/>Detail viewer"]
+
+  subgraph Workspaces["Workspace lazy"]
+    W1["Ringkasan"]
+    W2["Analisis"]
+    W3["Detail Data"]
+    W4["Audit Data"]
+  end
+
+  HOME --> CAT
+  CAT -->|pilih report ID| DET
+  DET --> W1
+  DET --> W2
+  DET --> W3
+  DET --> W4
+
+  W1 --> KPI["≤ 6 KPI typed"]
+  W3 --> TBL["Tabel + filter"]
+  W4 --> SQL["SQL/debug hover-only"]
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>IA target:</strong> Context → Controls (1 surface) → Summary ≤6 KPI → Insight → Table → Advanced.
+        </div>
+      </section>
+
+      <!-- ========== 04 ========== -->
+      <section class="diagram-box" id="d04">
+        <div class="box-header">
+          <div class="box-num">04</div>
+          <div class="box-title-wrap">
+            <h3>Sequence — filter user sampai payload</h3>
+            <p class="box-desc">Alur request dari UI ke SQL dan kembali ke ringkasan/baris.</p>
+          </div>
+          <span class="box-tag">Sequence</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+sequenceDiagram
+  actor U as User
+  participant V as ReportViewerClient
+  participant A as API /api/reports/inventory
+  participant D as Domain builder
+  participant G as SQL Gateway
+  participant S as SQL Server
+
+  U->>V: Set period + filters
+  V->>A: GET/POST reportId + params
+  A->>D: build query / aggregate plan
+  D->>G: SELECT only (RTRIM, period map)
+  G->>S: execute read-only
+  S-->>G: recordset
+  G-->>D: rows
+  D-->>A: summary + rows + flags
+  A-->>V: JSON payload
+  V-->>U: KPI + table + stream status
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Flags penting:</strong> streamComplete · placeholder_zero · scope export/AI.
+        </div>
+      </section>
+
+      <!-- ========== 05 ========== -->
+      <section class="diagram-box" id="d05">
+        <div class="box-header">
+          <div class="box-num">05</div>
+          <div class="box-title-wrap">
+            <h3>ER — Stock Core (issue / return / transfer / adj)</h3>
+            <p class="box-desc">Relasi inti pergerakan stok inventory.</p>
+          </div>
+          <span class="box-tag">ERD</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+erDiagram
+  IN_ITEM ||--o{ IN_STOCKISSUELN : ItemCode
+  IN_ITEM ||--o{ IN_STOCKRTN : ItemCode
+  IN_ITEM ||--o{ IN_STOCKTRANSFERLN : ItemCode
+  IN_ITEM ||--o{ IN_STOCKADJ : ItemCode
+  IN_ITEM }o--|| IN_PRODTYPE : ProdTypeCode
+  IN_ITEM }o--|| IN_PRODCAT : ProdCatCode
+
+  IN_STOCKISSUE ||--|{ IN_STOCKISSUELN : StockIssueID
+  IN_STOCKRTN ||--|{ IN_STOCKRTNLN : optional
+  IN_STOCKTRANSFER ||--|{ IN_STOCKTRANSFERLN : TransferID
+
+  IN_STOCKISSUELN {
+    string ItemCode
+    string AccCode "⚠ dept/cost center BUKAN GL"
+    string VehCode "di LINE"
+    string BlkCode
+    string LocCode
+  }
+
+  IN_ITEM {
+    string ItemCode PK
+    string Description
+    string ProdTypeCode
+    string ProdCatCode
+  }
+          </pre>
+        </div>
+        <div class="box-footer">
+          <div class="legend">
+            <span class="crit">AccCode di issue line = department</span>
+            <span class="star">VehCode hanya di LINE</span>
+            <span class="ok">Selalu RTRIM char codes</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 06 ========== -->
+      <section class="diagram-box" id="d06">
+        <div class="box-header">
+          <div class="box-num">06</div>
+          <div class="box-title-wrap">
+            <h3>ER — Goods Receive Estate (★ cost)</h3>
+            <p class="box-desc">Penerimaan barang kebun: cost dari PU_POLN, bukan dari line GR.</p>
+          </div>
+          <span class="box-tag">ERD · GR</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart LR
+  EMPTY["⛔ IN_STOCKRECEIVE<br/>EMPTY di estate"]
+  H["PU_GOODSRCV<br/>header · GoodsRcvRefDate"]
+  L["PU_GOODSRCVLN<br/>line · qty · POLnID"]
+  P["★ PU_POLN<br/>Cost + Amount"]
+  S["PU_SUPPLIER"]
+  I["IN_ITEM"]
+  T["IN_PRODTYPE"]
+
+  EMPTY -.->|jangan dipakai| H
+  H -->|GoodsRcvID| L
+  L -->|POLnID ★| P
+  H --> S
+  L --> I
+  I --> T
+
+  style EMPTY fill:#4a1515,stroke:#DC2626,color:#fff
+  style P fill:#3d2e12,stroke:#D4A574,color:#fff
+  style H fill:#071426,stroke:#167A3A,color:#fff
+  style L fill:#0c1f38,stroke:#167A3A,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Server:</strong> SERVER_PROFILE_2 + db_ptrj · <strong>Tanggal:</strong> GoodsRcvRefDate (PostDate sering 1900-01-01).
+        </div>
+      </section>
+
+      <!-- ========== 07 ========== -->
+      <section class="diagram-box" id="d07">
+        <div class="box-header">
+          <div class="box-num">07</div>
+          <div class="box-title-wrap">
+            <h3>ER — Month-End / stok periodik</h3>
+            <p class="box-desc">Sumber opening/closing periodik & valuasi akhir bulan.</p>
+          </div>
+          <span class="box-tag">ERD · MthEnd</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TB
+  ITEM["IN_ITEM master"]
+  STOCK["IN_STOCK<br/>on-hand snapshot"]
+  MTH["IN_MTHEND* / period tables<br/>opening-closing period"]
+  TRX["Transaksi bulan<br/>GR · Issue · Return · Transfer · Adj"]
+
+  ITEM --> STOCK
+  ITEM --> MTH
+  ITEM --> TRX
+  MTH -->|Opening| STORY["Cerita bulanan"]
+  TRX -->|In / Out| STORY
+  STORY --> CLOSE["ClosingAmount"]
+
+  style MTH fill:#0c1f38,stroke:#D4A574,color:#fff
+  style STORY fill:#1B4332,stroke:#167A3A,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>⚠</strong> Periode future di MTHEND mungkin ada — tampilkan disclaimer data, jangan anggap “hari ini”.
+        </div>
+      </section>
+
+      <!-- ========== 08 ========== -->
+      <section class="diagram-box" id="d08">
+        <div class="box-header">
+          <div class="box-num">08</div>
+          <div class="box-title-wrap">
+            <h3>Formula — Monthly Stock Account Movement (RPTIN1000015)</h3>
+            <p class="box-desc">Alur nilai stok bulanan dan 6 KPI primer.</p>
+          </div>
+          <span class="box-tag">Formula</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart LR
+  O["OpeningAmount"]
+  GR["GoodsReceiveAmount"]
+  IS["IssuedTotalAmount"]
+  RT["ReturnAmount"]
+  C["ClosingAmount"]
+  N["TotalItem"]
+
+  O --> X["+ GR / in"]
+  X --> Y["− Issued / out"]
+  Y --> Z["+ Return"]
+  Z --> C
+  O -.-> N
+  C -.-> N
+
+  PZ["placeholder_zero<br/>jangan klaim movement palsu"]
+  PZ -.-> O
+  PZ -.-> GR
+  PZ -.-> IS
+
+  style O fill:#071426,stroke:#3b82f6,color:#fff
+  style GR fill:#1B4332,stroke:#167A3A,color:#fff
+  style IS fill:#4a1515,stroke:#DC2626,color:#fff
+  style RT fill:#3d2e12,stroke:#D4A574,color:#fff
+  style C fill:#071426,stroke:#167A3A,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Primary KPI only (default Ringkasan):</strong> Opening · GR · Issued · Return · Closing · TotalItem. Secondary wall = Advanced.
+        </div>
+      </section>
+
+      <!-- ========== 09 ========== -->
+      <section class="diagram-box" id="d09">
+        <div class="box-header">
+          <div class="box-num">09</div>
+          <div class="box-title-wrap">
+            <h3>Accounting Period vs Calendar Month</h3>
+            <p class="box-desc">Bulan kalender UI ≠ AccMonth/AccYear di database.</p>
+          </div>
+          <span class="box-tag">Period</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TB
+  UI["UI filter: Mei 2026<br/>calendar month"]
+  MAP["Accounting period mapper<br/>lib/reports/*period*"]
+  ACC["AccMonth + AccYear<br/>di tabel transaksi / mthend"]
+  Q["SQL WHERE period keys"]
+  OUT["Payload summary untuk bulan UI"]
+
+  UI --> MAP --> ACC --> Q --> OUT
+  MAP -.->|contoh historis| EX["Mei 2026 bisa map<br/>AccMonth=2 AccYear=2027<br/>cek kode live, jangan hardcode buta"]
+
+  style EX fill:#3d2e12,stroke:#D97706,color:#fff
+  style MAP fill:#1B4332,stroke:#167A3A,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Verifikasi:</strong> baca accounting-period helper + test · jangan mengarang mapping di diagram bisnis.
+        </div>
+      </section>
+
+      <!-- ========== 10 ========== -->
+      <section class="diagram-box" id="d10">
+        <div class="box-header">
+          <div class="box-num">10</div>
+          <div class="box-title-wrap">
+            <h3>Viewer IA — satu control surface</h3>
+            <p class="box-desc">Hirarki layar detail agar tidak berantakan/redundant.</p>
+          </div>
+          <span class="box-tag">UI · IA</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TB
+  CTX["1. Context<br/>judul report · server · period label"]
+  CTL["2. Controls — SINGLE surface<br/>period + filters + export"]
+  SUM["3. Summary ≤6 typed KPI"]
+  INS["4. Insight band opsional"]
+  DET["5. Detail table"]
+  ADV["6. Advanced / Audit / SQL hover"]
+
+  CTX --> CTL --> SUM --> INS --> DET --> ADV
+
+  BAD["❌ Jangan: period 3× · filter chips 2× · rainbow KPI wall · issued callout dobel"]
+  BAD -.-> CTL
+  BAD -.-> SUM
+
+  style CTL fill:#167A3A,stroke:#071426,color:#fff
+  style BAD fill:#4a1515,stroke:#DC2626,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Sudah fixed (jangan re-break):</strong> typed metrics format.ts · calm subtotals · SQL hover-only.
+        </div>
+      </section>
+
+      <!-- ========== 11 ========== -->
+      <section class="diagram-box" id="d11">
+        <div class="box-header">
+          <div class="box-num">11</div>
+          <div class="box-title-wrap">
+            <h3>Export & AI — tiga layer kejujuran</h3>
+            <p class="box-desc">Jangan samakan ringkasan server, window tabel, dan sampel AI.</p>
+          </div>
+          <span class="box-tag">Export</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TB
+  subgraph L1["Layer 1 — Ringkasan server terfilter"]
+    S["payload.summary SQL aggregates<br/>flow KPI"]
+  end
+  subgraph L2["Layer 2 — Baris termuat / stream"]
+    R["table window + monthly stream<br/>streamComplete"]
+  end
+  subgraph L3["Layer 3 — Sampel AI"]
+    A["compactReportPayloadForAi<br/>~50 baris × ~40 kolom"]
+  end
+
+  CSV["CSV: server limitAll<br/>monthly ≤100k · lain ≤20k"]
+  XLS["Excel: client fetch-all + xlsx<br/>warn memory"]
+  PDF["PDF: ≤34×7 jspdf<br/>SELALU pratinjau"]
+  AI["AI chat: sample chips<br/>bukan full export"]
+
+  L1 --> CSV
+  L2 --> XLS
+  L2 --> PDF
+  L3 --> AI
+
+  style L1 fill:#1B4332,stroke:#167A3A,color:#fff
+  style L2 fill:#0c1f38,stroke:#3b82f6,color:#fff
+  style L3 fill:#3d2e12,stroke:#D4A574,color:#fff
+  style PDF fill:#4a1515,stroke:#DC2626,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Label UI wajib jujur:</strong> PDF = pratinjau · AI = sampel · Excel = full filtered dengan ceiling.
+        </div>
+      </section>
+
+      <!-- ========== 12 ========== -->
+      <section class="diagram-box" id="d12">
+        <div class="box-header">
+          <div class="box-num">12</div>
+          <div class="box-title-wrap">
+            <h3>Report Registry Map (Inventory)</h3>
+            <p class="box-desc">Sumber kebenaran ID report = config live, bukan PRD “27 reports” usang.</p>
+          </div>
+          <span class="box-tag">Registry</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TB
+  CFG["lib/reports/config.ts<br/>+ inventory registry"]
+  SNAP["Dokumentasi snapshot<br/>INVENTORY_REPORT_REGISTRY_SNAPSHOT"]
+
+  CFG --> LIVE["LIVE reports<br/>~19 + hold"]
+  CFG --> HOLD["HOLD / stub"]
+  SNAP -.->|audit| LIVE
+
+  LIVE --> M["RPTIN1000015<br/>monthly-stock-account-movement-details"]
+  LIVE --> GR["Goods receive / stock flow reports"]
+  LIVE --> VAL["Valuation / month-end / lainnya"]
+  HOLD --> H1["Jangan dijual sebagai production"]
+
+  style M fill:#167A3A,stroke:#071426,color:#fff
+  style HOLD fill:#4a1515,stroke:#DC2626,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Saat menulis docs:</strong> tiap report = id · slug · tables · server · filters · KPI · status.
+        </div>
+      </section>
+
+      <!-- ========== 13 ========== -->
+      <section class="diagram-box" id="d13">
+        <div class="box-header">
+          <div class="box-num">13</div>
+          <div class="box-title-wrap">
+            <h3>Server Profile Routing</h3>
+            <p class="box-desc">Pilih server/database yang benar per jenis laporan.</p>
+          </div>
+          <span class="box-tag">Routing</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart TD
+  R["Jenis laporan Inventory?"]
+  R -->|Mill stock / banyak IN_* mill| SP1["SERVER_PROFILE_1<br/>db_ptrj_mill"]
+  R -->|Estate GR / PU_GOODSRCV| SP2["SERVER_PROFILE_2<br/>db_ptrj"]
+  R -->|Backup / alt mill| SP3["SERVER_PROFILE_3"]
+
+  SP2 --> OK["PU_GOODSRCV + LN + PU_POLN"]
+  SP2 --> BAD["IN_STOCKRECEIVE = 0 rows<br/>jangan diandalkan"]
+  SP1 --> MILL["Issue / fuel / mthend mill patterns"]
+
+  style BAD fill:#4a1515,stroke:#DC2626,color:#fff
+  style OK fill:#1B4332,stroke:#167A3A,color:#fff
+  style SP2 fill:#0c1f38,stroke:#D4A574,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Trap klasik:</strong> query GR ke server yang salah → 0 rows → “data hilang” palsu.
+        </div>
+      </section>
+
+      <!-- ========== 14 ========== -->
+      <section class="diagram-box" id="d14">
+        <div class="box-header">
+          <div class="box-num">14</div>
+          <div class="box-title-wrap">
+            <h3>Monolith Extraction Target</h3>
+            <p class="box-desc">Arah pecah dual monolith tanpa big-bang rewrite.</p>
+          </div>
+          <span class="box-tag">Refactor map</span>
+        </div>
+        <div class="box-body">
+          <pre class="mermaid">
+flowchart LR
+  subgraph Now["Sekarang"]
+    V["ReportViewerClient ~6k"]
+    C["InventoryReportsClient ~2.5k"]
+  end
+
+  subgraph Target["Target ekstraksi bertahap"]
+    CB["ReportControlBar"]
+    MS["MonthlyStockRingkasan"]
+    PR["viewer-profiles/*"]
+    EX["ExportMenu + preflight"]
+    SH["ReportWorkspaceFrame shell"]
+  end
+
+  V --> CB
+  V --> MS
+  V --> PR
+  V --> EX
+  C --> EX
+  SH --> CB
+  SH --> MS
+
+  style Now fill:#4a1515,stroke:#DC2626,color:#fff
+  style Target fill:#1B4332,stroke:#167A3A,color:#fff
+          </pre>
+        </div>
+        <div class="box-footer">
+          <strong>Order A→B→C:</strong> hapus period dobel → cap KPI 6 → extract workspace. Max 3–5 file baru di awal. Satu agent per monolith.
+        </div>
+      </section>
+
+    </div><!-- /diagram-stack -->
+
+    <footer class="page-end">
+      File tunggal: <code>Dokumentasi/REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html</code><br/>
+      Buka di browser (butuh internet untuk CDN Mermaid). Print-friendly: tiap box diusahakan tidak terpotong.<br/>
+      Sumber: exploration pack Jul 2026 · Monthly-Stock pack · good_receipt_correlation · skill report-center-development.<br/>
+      Konflik docs lama → prioritaskan code + tests + metric-dictionary.
+    </footer>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+      securityLevel: "loose",
+      themeVariables: {
+        primaryColor: "#1B4332",
+        primaryTextColor: "#e8eef6",
+        primaryBorderColor: "#167A3A",
+        lineColor: "#3b82f6",
+        secondaryColor: "#0c1f38",
+        tertiaryColor: "#071426",
+        fontFamily: "Segoe UI, system-ui, sans-serif"
+      },
+      flowchart: { curve: "basis", htmlLabels: true, padding: 16 },
+      sequence: { actorMargin: 24, messageMargin: 40 }
+    });
+  </script>
+</body>
+</html>

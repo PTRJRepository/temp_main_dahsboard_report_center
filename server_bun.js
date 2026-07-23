@@ -58,6 +58,7 @@ const PORT = parseInt(process.env.PORT || '3001');
 const HOST = process.env.HOST || '0.0.0.0';
 const DASHBOARD_DIR = `${ROOT_DIR}/Dashboard_Utama`;
 const DASHBOARD_PORT = parseInt(process.env.DASHBOARD_PORT || '3100');
+const DASHBOARD_HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
 const DASHBOARD_TARGET = process.env.DASHBOARD_TARGET || `http://127.0.0.1:${DASHBOARD_PORT}`;
 const FIREBIRD_QUERY_TARGET = process.env.FIREBIRD_QUERY_TARGET || 'http://localhost:8004';
 const START_DASHBOARD = process.env.START_DASHBOARD !== 'false';
@@ -3465,9 +3466,36 @@ async function isUpstreamReady(target) {
 }
 
 async function startDashboardIfNeeded() {
-    // Phase 4: removed child-process spawning — dashboard must be started externally
-    console.log('[Phase 4] startDashboardIfNeeded() stubbed — dashboard managed externally');
-    return;
+    if (await isUpstreamReady(DASHBOARD_TARGET)) {
+        console.log(`Dashboard upstream ready: ${DASHBOARD_TARGET}`);
+        return;
+    }
+
+    const bunExecutable = process.execPath;
+    console.log(`Starting dashboard dev server on ${DASHBOARD_HOST}:${DASHBOARD_PORT}...`);
+    const child = Bun.spawn({
+        cmd: [bunExecutable, 'run', 'dev', '--', '-p', String(DASHBOARD_PORT), '--hostname', DASHBOARD_HOST],
+        cwd: DASHBOARD_DIR,
+        stdout: 'inherit',
+        stderr: 'inherit',
+        env: {
+            ...process.env,
+            HOST: DASHBOARD_HOST,
+            PORT: String(DASHBOARD_PORT),
+        },
+    });
+
+    process.on('exit', () => child.kill());
+
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+        await Bun.sleep(500);
+        if (await isUpstreamReady(DASHBOARD_TARGET)) {
+            console.log(`Dashboard upstream ready: ${DASHBOARD_TARGET}`);
+            return;
+        }
+    }
+
+    console.warn(`Dashboard upstream did not become ready yet: ${DASHBOARD_TARGET}`);
 }
 async function ensureNodeDependencies(serviceDir, label) {
     if (existsSync(`${serviceDir}/node_modules`)) return true;

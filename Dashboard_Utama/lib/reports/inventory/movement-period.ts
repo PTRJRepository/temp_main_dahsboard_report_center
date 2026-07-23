@@ -199,11 +199,54 @@ export function normalizeMovementWindowPreset(value?: string | null): MovementWi
   return 'all'
 }
 
+function parsePeriodYearMonth(period?: string | null) {
+  const match = String(period ?? '').trim().match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (month < 1 || month > 12) return null
+  return { year, month }
+}
+
+/**
+ * Anchor Movement Category window to selected Actual period when present.
+ * Past month → endExclusive = first day of next month (full calendar month).
+ * Current/future month → endExclusive = tomorrow (no future PostDate).
+ */
+function resolveWindowAnchor(input: MovementWindowInput, now: Date) {
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const liveEndExclusive = addDays(todayStart, 1)
+  const period = parsePeriodYearMonth(input.period)
+  if (!period) {
+    return {
+      anchorYear: now.getFullYear(),
+      anchorMonth: now.getMonth() + 1,
+      endExclusiveDate: liveEndExclusive,
+      periodLabel: null as string | null,
+      anchoredToPeriod: false,
+    }
+  }
+
+  const next = period.month === 12
+    ? startOfMonth(period.year + 1, 1)
+    : startOfMonth(period.year, period.month + 1)
+  // Cap at live end so open month never includes future issue docs.
+  const endExclusiveDate = next.getTime() <= liveEndExclusive.getTime() ? next : liveEndExclusive
+  return {
+    anchorYear: period.year,
+    anchorMonth: period.month,
+    endExclusiveDate,
+    periodLabel: `${period.year}-${padMonth(period.month)}`,
+    anchoredToPeriod: true,
+  }
+}
+
 /** Read-only issue-count window for Movement Category. Default: all-period. */
 export function resolveMovementWindowScope(input: MovementWindowInput = {}): MovementWindowScope {
   const now = input.now ?? new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const endExclusive = ymd(addDays(todayStart, 1))
+  const anchor = resolveWindowAnchor(input, now)
+  const endExclusive = ymd(anchor.endExclusiveDate)
   const preset = normalizeMovementWindowPreset(input.movementWindow)
 
   if (preset === 'custom') {
@@ -225,18 +268,14 @@ export function resolveMovementWindowScope(input: MovementWindowInput = {}): Mov
 
   if (preset === '1m') {
     // Prefer explicit calendar month if period=YYYY-MM provided; else rolling current month-to-date.
-    const periodMatch = String(input.period ?? '').trim().match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/)
-    if (periodMatch) {
-      const year = Number(periodMatch[1])
-      const month = Number(periodMatch[2])
-      const start = startOfMonth(year, month)
-      const next = month === 12 ? startOfMonth(year + 1, 1) : startOfMonth(year, month + 1)
+    if (anchor.anchoredToPeriod && anchor.periodLabel) {
+      const start = startOfMonth(anchor.anchorYear, anchor.anchorMonth)
       return {
         preset: '1m',
         startInclusive: ymd(start),
-        endExclusive: ymd(next),
-        label: `1 bulan (${year}-${padMonth(month)})`,
-        rule: 'Single calendar month issue-count window.',
+        endExclusive,
+        label: `1 bulan (${anchor.periodLabel})`,
+        rule: 'Single calendar month issue-count window anchored to Actual period.',
       }
     }
     const start = startOfMonth(now.getFullYear(), now.getMonth() + 1)
@@ -251,13 +290,28 @@ export function resolveMovementWindowScope(input: MovementWindowInput = {}): Mov
 
   if (preset === '3m' || preset === '6m' || preset === '12m') {
     const months = preset === '3m' ? 3 : preset === '6m' ? 6 : 12
-    const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1)
+    // Roll back from Actual period month (or live month), not always from wall-clock now.
+    const start = new Date(anchor.anchorYear, anchor.anchorMonth - months, 1)
+    const labelSuffix = anchor.periodLabel ? ` s/d ${anchor.periodLabel}` : ''
     return {
       preset,
       startInclusive: ymd(start),
       endExclusive,
-      label: `${months} bulan terakhir`,
-      rule: `Rolling last ${months} calendar months through today.`,
+      label: `${months} bulan terakhir${labelSuffix}`,
+      rule: anchor.anchoredToPeriod
+        ? `Rolling last ${months} calendar months ending at Actual period ${anchor.periodLabel} (capped at today).`
+        : `Rolling last ${months} calendar months through today.`,
+    }
+  }
+
+  // all: full history up to Actual period end (or today if no/open period).
+  if (anchor.anchoredToPeriod && anchor.periodLabel) {
+    return {
+      preset: 'all',
+      startInclusive: MIN_VALID_MOVEMENT_DATE,
+      endExclusive,
+      label: `All period s/d ${anchor.periodLabel}`,
+      rule: `All valid stock-issue events from ${MIN_VALID_MOVEMENT_DATE} through Actual period ${anchor.periodLabel} (capped at today; exclude future).`,
     }
   }
 

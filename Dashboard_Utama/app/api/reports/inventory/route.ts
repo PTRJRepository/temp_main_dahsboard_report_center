@@ -307,6 +307,25 @@ function previousAccountingPeriod(accYear: number, accMonth: number) {
   return { accYear, accMonth: accMonth - 1 }
 }
 
+/**
+ * RPTIN monthly movement uses the official fiscal AccYear/AccMonth mapping
+ * for both estate and pabrik sources (May 2026 = AccMonth 2 / AccYear 2027).
+ */
+function resolveMonthlyStockReportPeriod(
+  filters: ReportFilterInput | undefined,
+  _source: ReportSource | string | undefined,
+) {
+  void _source
+  const base = resolveAssetValuationPeriod(filters)
+  return {
+    ...base,
+    periodKeyMode: 'fiscal' as const,
+    stockAccYear: base.accYear,
+    stockAccMonth: base.accMonth,
+    stockAccountingPeriod: base.accountingPeriod,
+  }
+}
+
 function resolveAssetValuationPeriod(filters?: ReportFilterInput) {
   // Prefer explicit actual calendar period (period=YYYY-MM or actualYear+actualMonth)
   // so leftover AccYear/AccMonth in URL cannot override user month picker.
@@ -508,7 +527,8 @@ function inventoryItemTypeScopeFilter(alias: string, filters?: ReportFilterInput
   const itemTypeScope = cleanWarehouseItemTypeScope(filters?.itemType)
   if (itemTypeScope === '1') return `AND ${warehouseInventoryItemTypeExpression(alias)} = '1'`
   if (itemTypeScope === '4') return `AND ${warehouseInventoryItemTypeExpression(alias)} = '4'`
-  return ''
+  // Default inventory analysis = Gudang + Workshop only.
+  return `AND ${warehouseInventoryItemTypeExpression(alias)} IN ('1', '4')`
 }
 
 function inventoryItemScopeExistsFilter(database: string, itemCodeSql: string, locCodeSql: string, filters?: ReportFilterInput) {
@@ -857,6 +877,21 @@ function monthlyStockAccountMovementCtes({
     : itemTypeScope === '4'
       ? `AND ${warehouseInventoryItemTypeExpression('i')} = '4'`
       : `AND ${warehouseInventoryItemTypeExpression('i')} IN ('1', '4')`
+  // Opening/closing mthend rows have no ItemType column — scope via IN_ITEM master.
+  // Default = Gudang(1) + Workshop(4). Prevents all-type valuation blow-up (~125B vs ~41B official).
+  const mthendItemTypeExists = (mthAlias: string) => `
+        AND EXISTS (
+          SELECT 1
+          FROM [${database}].[dbo].[IN_ITEM] i
+          WHERE i.ItemCode = ${mthAlias}.ItemCode
+            AND i.LocCode = ${mthAlias}.LocCode
+            ${itemTypeFilter}
+        )`
+  const finalItemTypeWhere = itemTypeScope === '1'
+    ? `WHERE COALESCE(b.ItemType, ${warehouseInventoryItemTypeExpression('im')}, '') = '1'`
+    : itemTypeScope === '4'
+      ? `WHERE COALESCE(b.ItemType, ${warehouseInventoryItemTypeExpression('im')}, '') = '4'`
+      : `WHERE COALESCE(b.ItemType, ${warehouseInventoryItemTypeExpression('im')}, '') IN ('1', '4')`
   const whereSearch = textSearch(search, ['i.ItemCode', 'i.Description', 'i.ProdTypeCode', "ISNULL(pt.Description, '')", 'i.ProdCatCode', 'i.ProdBrandCode'])
   const movementActivityCountExpression = `(
           CASE WHEN ABS(ISNULL(a.received_qty, 0)) > 0 OR ABS(ISNULL(a.received_amt, 0)) > 0 THEN 1 ELSE 0 END +
@@ -941,9 +976,10 @@ function monthlyStockAccountMovementCtes({
     ),
     movements AS (
       SELECT
-        RTRIM(ItemCode) AS ItemCode,
-        Qty AS opening_qty,
-        CAST(ISNULL(Amount, ISNULL(Qty, 0) * ISNULL(AverageCost, 0)) AS decimal(18, 6)) AS opening_amt,
+        RTRIM(mth_open.ItemCode) AS ItemCode,
+        mth_open.Qty AS opening_qty,
+        -- Official snapshot valuation: prefer stored Amount, then fall back to Qty * AverageCost.
+        CAST(ISNULL(mth_open.Amount, ISNULL(mth_open.Qty, 0) * ISNULL(mth_open.AverageCost, 0)) AS decimal(18, 6)) AS opening_amt,
         0.0 AS received_qty,
         0.0 AS received_amt,
         0.0 AS return_advice_qty,
@@ -966,10 +1002,11 @@ function monthlyStockAccountMovementCtes({
         0.0 AS goods_return_amt,
         0.0 AS dispatch_adv_qty,
         0.0 AS dispatch_adv_amt
-      FROM [${database}].[dbo].[IN_MTHENDITEM]
-      WHERE RTRIM(LocCode) = '${location}'
-        AND RTRIM(CONVERT(varchar(10), AccYear)) = '${openingAccYear}'
-        AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${openingAccMonth}'
+      FROM [${database}].[dbo].[IN_MTHENDITEM] mth_open
+      WHERE RTRIM(mth_open.LocCode) = '${location}'
+        AND RTRIM(CONVERT(varchar(10), mth_open.AccYear)) = '${openingAccYear}'
+        AND RTRIM(CONVERT(varchar(10), mth_open.AccMonth)) = '${openingAccMonth}'
+        ${mthendItemTypeExists('mth_open')}
 
       UNION ALL
 
@@ -1070,7 +1107,8 @@ function monthlyStockAccountMovementCtes({
         ON gl.POLnID = p.POLnID
       WHERE RTRIM(g.LocCode) = '${location}'
         ${accountingPeriodFilter('g', reportAccYear, reportAccMonth)}
-        AND RTRIM(g.Status) = '2'
+        -- Mill posted goods receive often Status 5 (not only 2).
+        AND RTRIM(ISNULL(g.Status, '')) IN ('2', '5', '6')
         ${transactionAsOfFilter('g', transactionAsOf)}
 
       UNION ALL
@@ -1129,35 +1167,38 @@ function monthlyStockAccountMovementCtes({
     -- Reconstruct only when snapshot row missing (open period / not yet closed).
     period_closing AS (
       SELECT
-        RTRIM(ItemCode) AS ItemCode,
-        CAST(ISNULL(Qty, 0) AS decimal(18, 6)) AS period_closing_qty,
-        CAST(ISNULL(Amount, ISNULL(Qty, 0) * ISNULL(AverageCost, 0)) AS decimal(18, 6)) AS period_closing_amt
-      FROM [${database}].[dbo].[IN_MTHENDITEM]
-      WHERE RTRIM(LocCode) = '${location}'
-        AND RTRIM(CONVERT(varchar(10), AccYear)) = '${reportAccYear}'
-        AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${reportAccMonth}'
+        RTRIM(mth_close.ItemCode) AS ItemCode,
+        CAST(ISNULL(mth_close.Qty, 0) AS decimal(18, 6)) AS period_closing_qty,
+        CAST(ISNULL(mth_close.Amount, ISNULL(mth_close.Qty, 0) * ISNULL(mth_close.AverageCost, 0)) AS decimal(18, 6)) AS period_closing_amt
+      FROM [${database}].[dbo].[IN_MTHENDITEM] mth_close
+      WHERE RTRIM(mth_close.LocCode) = '${location}'
+        AND RTRIM(CONVERT(varchar(10), mth_close.AccYear)) = '${reportAccYear}'
+        AND RTRIM(CONVERT(varchar(10), mth_close.AccMonth)) = '${reportAccMonth}'
+        ${mthendItemTypeExists('mth_close')}
     ),
     movement_issue_doc_sources AS (
+      -- GUARDRAIL(mc-issue-parity): MovementCategory count must use same issue universe as Issued totals.
+      -- Status 2/5/6 (not Status=2 only), LEFT JOIN master (orphan lines still count), include WS_JOBSTOCK TransType 1.
       SELECT
         RTRIM(l.ItemCode) AS ItemCode,
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS MovementDocId,
         ISNULL(l.Qty, 0) AS MovementQty,
-        ISNULL(l.Amount, 0) AS MovementAmount,
+        ${issueLineAmountExpression('l')} AS MovementAmount,
         h.PostDate AS MovementDate
       FROM [${database}].[dbo].[IN_STOCKISSUE] h
       JOIN [${database}].[dbo].[IN_STOCKISSUELN] l
         ON h.StockIssueID = l.StockIssueID
-      JOIN base b
-        ON b.ItemCode = RTRIM(l.ItemCode)
-        AND b.Location = RTRIM(h.LocCode)
-      JOIN [${database}].[dbo].[IN_ITEM] issueItem
+      LEFT JOIN [${database}].[dbo].[IN_ITEM] issueItem
         ON issueItem.ItemCode = l.ItemCode
         AND issueItem.LocCode = h.LocCode
       WHERE RTRIM(h.LocCode) = '${location}'
         AND h.PostDate >= '${movementWindow.startInclusive}'
         AND h.PostDate < '${movementWindow.endExclusive}'
-        AND RTRIM(ISNULL(h.Status, '')) = '2'
-        ${nonWorkshopItemTypeFilter('issueItem')}
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
+        AND (
+          issueItem.ItemCode IS NULL
+          OR ISNULL(RTRIM(CONVERT(varchar(10), issueItem.ItemType)), '') <> '4'
+        )
         ${transactionAsOfFilter('h', transactionAsOf)}
 
       UNION ALL
@@ -1166,23 +1207,42 @@ function monthlyStockAccountMovementCtes({
         RTRIM(l.ItemCode) AS ItemCode,
         RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS MovementDocId,
         ISNULL(l.Qty, 0) AS MovementQty,
-        ISNULL(l.Amount, 0) AS MovementAmount,
+        ${issueLineAmountExpression('l')} AS MovementAmount,
         ${fuelIssueDocumentDateExpression('h')} AS MovementDate
       FROM [${database}].[dbo].[IN_FUELISSUE] h
       JOIN [${database}].[dbo].[IN_FUELISSUELN] l
         ON h.FuelIssueID = l.FuelIssueID
-      JOIN base b
-        ON b.ItemCode = RTRIM(l.ItemCode)
-        AND b.Location = RTRIM(h.LocCode)
-      JOIN [${database}].[dbo].[IN_ITEM] issueItem
+      LEFT JOIN [${database}].[dbo].[IN_ITEM] issueItem
         ON issueItem.ItemCode = l.ItemCode
         AND issueItem.LocCode = h.LocCode
       WHERE RTRIM(h.LocCode) = '${location}'
         AND ${fuelIssueDocumentDateExpression('h')} >= '${movementWindow.startInclusive}'
         AND ${fuelIssueDocumentDateExpression('h')} < '${movementWindow.endExclusive}'
         ${fuelIssueStatusFilter('h')}
-        ${nonWorkshopItemTypeFilter('issueItem')}
+        AND (
+          issueItem.ItemCode IS NULL
+          OR ISNULL(RTRIM(CONVERT(varchar(10), issueItem.ItemType)), '') <> '4'
+        )
         ${transactionAsOfFilter('h', transactionAsOf)}
+
+      UNION ALL
+
+      SELECT
+        RTRIM(s.ItemCode) AS ItemCode,
+        ${workshopStockIssueDocumentExpression('s')} AS MovementDocId,
+        ISNULL(s.Qty, 0) AS MovementQty,
+        ${workshopStockIssueAmountExpression('s')} AS MovementAmount,
+        ${workshopStockIssueDateExpression('s')} AS MovementDate
+      FROM [${database}].[dbo].[WS_JOBSTOCK] s
+      LEFT JOIN [${database}].[dbo].[IN_ITEM] issueItem
+        ON issueItem.ItemCode = s.ItemCode
+        AND issueItem.LocCode = s.LocCode
+      WHERE RTRIM(s.LocCode) = '${location}'
+        AND RTRIM(ISNULL(s.TransType, '')) = '1'
+        AND ${workshopStockIssueDateExpression('s')} >= '${movementWindow.startInclusive}'
+        AND ${workshopStockIssueDateExpression('s')} < '${movementWindow.endExclusive}'
+        AND ${workshopStockIssueItemTypeExpression('issueItem', 's')} = '4'
+        ${transactionAsOfFilter('s', transactionAsOf)}
     ),
     movement_issue_docs AS (
       SELECT
@@ -1268,7 +1328,17 @@ function monthlyStockAccountMovementCtes({
         CAST(${movementActualQtyExpression} AS decimal(18, 6)) AS MovementIssueQtyActual,
         CAST(${movementActualAmountExpression} AS decimal(18, 6)) AS MovementIssueAmountActual,
         mi.MovementLastIssueDate,
-        ${movementCategorySqlCase(movementActualCountExpression, 'ISNULL(b.QtyOnHand, ISNULL(im.QtyOnHand, 0)) + ISNULL(b.QtyOnHold, ISNULL(im.QtyOnHold, 0))', movementThresholds)} AS MovementCategory
+        -- GUARDRAIL(mc-qty-period): Dead/Stale split uses period Closing qty, not live IN_ITEM.
+        -- Live on-hand after May reclassifies items that still hold stock today as Dead Stock vs Stale.
+        ${movementCategorySqlCase(
+          movementActualCountExpression,
+          `CASE WHEN pc.ItemCode IS NOT NULL THEN ISNULL(pc.period_closing_qty, 0)
+            ELSE ISNULL(a.opening_qty, 0) + ISNULL(a.received_qty, 0) + ISNULL(a.return_advice_qty, 0) + ISNULL(a.transferred_qty, 0) + ISNULL(a.adjustment_qty, 0)
+              - (ISNULL(a.ledger_qty, 0) + ISNULL(a.issued_station_qty, 0) + ISNULL(a.issued_vehicle_qty, 0))
+              + ISNULL(a.return_qty, 0) + ISNULL(a.goods_receive_qty, 0) - ISNULL(a.goods_return_qty, 0) - ISNULL(a.dispatch_adv_qty, 0)
+          END`,
+          movementThresholds,
+        )} AS MovementCategory
       FROM item_keys k
       LEFT JOIN base b ON b.ItemCode = k.ItemCode
       LEFT JOIN [${database}].[dbo].[IN_ITEM] im
@@ -1279,6 +1349,8 @@ function monthlyStockAccountMovementCtes({
       LEFT JOIN agg a ON a.ItemCode = k.ItemCode
       LEFT JOIN period_closing pc ON pc.ItemCode = k.ItemCode
       LEFT JOIN movement_issue_docs mi ON mi.ItemCode = k.ItemCode
+      -- GUARDRAIL(itemtype-1-4): orphan movements without master still appear only if ItemType 1/4 (or scoped).
+      ${finalItemTypeWhere}
     ),
     report_rows AS (
       SELECT
@@ -2759,7 +2831,8 @@ async function stockMovement({ limit, search, ctx }: ReportHandlerOptions): Prom
 async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   // Honor period OR accYear+accMonth from detail-page Apply control.
-  const reportPeriod = resolveAssetValuationPeriod(filters)
+  // Official RPTIN monthly movement uses fiscal AccYear/AccMonth.
+  const reportPeriod = resolveMonthlyStockReportPeriod(filters, ctx.source)
   const actualPeriod = reportPeriod.actualPeriod
   const openingPeriod = previousAccountingPeriod(reportPeriod.accYear, reportPeriod.accMonth)
   const openingActualPeriod = accountingToActualPeriod(openingPeriod.accYear, openingPeriod.accMonth)?.actualPeriod ?? ''
@@ -2930,19 +3003,37 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       ORDER BY Amount DESC
     `)
 
-  // Return ONLY the selected analysis-group chart for sub-KPI / table sync.
-  // Stock Analysis Code removed — default Product Type Code.
+  // Always keep full-scope movement-category slices so Fast/Moving/Dead KPI cards
+  // stay server-accurate even when analysis group is ProductTypeCode (not MC).
+  // Without this, UI falls back to TOP-N loaded rows → ~11M sample vs full filter total.
   const chart =
     analysisGroupKey === 'MovementCategory'
       ? movementCategoryChart
-      : analysisGroupChart
+      : [...analysisGroupChart, ...movementCategoryChart]
+
+  // Full-scope MC amount/count for KPI parity with filtered detail summary.ClosingAmount.
+  const movementCategoryAmountByLabel = Object.fromEntries(
+    movementCategoryChart.map((row) => [
+      String(row.MovementCategory ?? row.Label ?? '').trim(),
+      Number(row.ClosingAmount ?? row.Amount ?? 0) || 0,
+    ]),
+  )
+  const summaryWithMovementAmounts = {
+    ...summary,
+    FastMovingAmount: movementCategoryAmountByLabel['Fast Moving'] ?? summary.FastMovingAmount,
+    MovingAmount: movementCategoryAmountByLabel['Moving'] ?? summary.MovingAmount,
+    SlowMovingAmount: movementCategoryAmountByLabel['Slow Moving'] ?? summary.SlowMovingAmount,
+    DeadStockAmount: movementCategoryAmountByLabel['Dead Stock'] ?? summary.DeadStockAmount,
+    DeadMovementAmount: movementCategoryAmountByLabel['Dead Stock'] ?? summary.DeadMovementAmount,
+    StaleAmount: movementCategoryAmountByLabel['Stale'] ?? summary.StaleAmount,
+  }
 
   return {
     title: 'MONTHLY STOCK ACCOUNT MOVEMENT DETAILS',
     description: 'RPTIN1000015: mutasi actual per bulan (Opening/Issue/Receive/Closing dihitung SQL). Official analysis group = Product Type Code. KPI = 14 kolom resmi PDF.',
     rows: reportRows,
     columns: columnsFrom(reportRows),
-    summary,
+    summary: summaryWithMovementAmounts,
     chart,
     metadata: metadata(ctx, {
       period: actualPeriod,
@@ -2953,10 +3044,12 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       accYear: reportPeriod.accYear,
       accMonth: reportPeriod.accMonth,
       periodInputMode: reportPeriod.inputMode,
+      periodKeyMode: reportPeriod.periodKeyMode,
       periodRequested: reportPeriod.requested,
       transactionAsOf: transactionAsOf || 'live',
       openingActualPeriod,
       openingAccountingPeriod: formatPeriod(openingPeriod.accYear, openingPeriod.accMonth),
+      openingRule: 'Opening/Closing AccYear/AccMonth = official fiscal period (previous month / report month). Snapshot amount prefers IN_MTHENDITEM.Amount, fallback Qty * AverageCost.',
       location,
       stockAnalysisScope: '',
       stockAnalysisSource: 'removed',
@@ -3005,9 +3098,8 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       movementWindowEndExclusive: movementWindow.endExclusive,
       movementCategoryThresholds: movementThresholds,
       movementCategoryThresholdLabel: movementCategoryThresholdLabel(movementThresholds),
-      actualMovementRule: 'Actual movement = kolom Opening/Received/Issued*/Return/GoodsReceive/Closing qty+amount dihitung dari transaksi bulan aktual (Acc fiscal April).',
-      periodRule: 'Filter period: actual YYYY-MM (period=) preferred. AccYear/AccMonth only if actual absent. Fiscal April via accounting-period helper.',
-      openingRule: 'Opening qty dan amount diambil dari IN_MTHENDITEM accounting period sebelumnya; transaksi bulan berjalan memakai AccYear/AccMonth hasil konversi periode aktual.',
+      actualMovementRule: 'Actual movement = kolom Opening/Received/Issued*/Return/GoodsReceive/Closing qty+amount dihitung dari transaksi bulan aktual dengan mapping Acc fiscal resmi.',
+      periodRule: 'Filter period: actual YYYY-MM (period=) preferred, lalu dikonversi ke AccYear/AccMonth fiscal melalui accounting-period helper.',
       transactionAsOfRule: 'Jika dateTo dikirim, transaksi bulan berjalan dibatasi ke COALESCE(UpdateDate, CreateDate) <= dateTo agar hanya dokumen yang sudah posted/update sebelum waktu cetak yang ikut dihitung.',
       closingRule: 'Closing dihitung: opening + received + return advice + transferred + adjustment - issued total + return + goods receive - goods return - dispatch advice.',
       issueUsageRule: 'Issue non-workshop dihitung dari IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM dari IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType 1 untuk issue dan TransType 2 untuk return.',
@@ -3196,6 +3288,15 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   const itemTypeFilter = filters?.itemType?.toLowerCase()
   const includeGudang = !itemTypeFilter || itemTypeFilter === '1' || itemTypeFilter === 'gudang'
   const includeWorkshop = !itemTypeFilter || itemTypeFilter === '4' || itemTypeFilter === 'workshop'
+  const month = monthBounds(filters?.period)
+  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? '2000-01-01'
+  const dateTo = cleanSqlDate(filters?.dateTo)
+  const dateToExclusive = dateTo ? `DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))` : month.toExclusive ? `'${month.toExclusive}'` : null
+  const location = sanitizeLike(filters?.location ?? '')
+  const gudangDateSql = `h.PostDate >= '${dateFrom}'${dateToExclusive ? `\n        AND h.PostDate < ${dateToExclusive}` : ''}`
+  const workshopDateSql = `${workshopDate} >= '${dateFrom}'${dateToExclusive ? `\n        AND ${workshopDate} < ${dateToExclusive}` : ''}`
+  const gudangLocationSql = location ? `\n        AND RTRIM(h.LocCode) LIKE N'%${location}%'` : ''
+  const workshopLocationSql = location ? `\n        AND RTRIM(s.LocCode) LIKE N'%${location}%'` : ''
 
   const gudangQuery = `
       SELECT
@@ -3216,7 +3317,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       FROM [${DATABASE}].[dbo].[IN_STOCKISSUELN] l
       INNER JOIN [${DATABASE}].[dbo].[IN_STOCKISSUE] h ON l.StockIssueID = h.StockIssueID
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-      WHERE h.PostDate >= '2000-01-01'
+      WHERE ${gudangDateSql}${gudangLocationSql}
         ${nonWorkshopItemTypeFilter('i')}
   `
 
@@ -3239,7 +3340,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       FROM [${DATABASE}].[dbo].[WS_JOBSTOCK] s
       LEFT JOIN [${DATABASE}].[dbo].[WS_JOB] j ON s.JobID = j.JobID
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON s.ItemCode = i.ItemCode AND i.LocCode = s.LocCode
-      WHERE ${workshopDate} >= '2000-01-01'
+      WHERE ${workshopDateSql}${workshopLocationSql}
         AND RTRIM(ISNULL(s.TransType, '')) = '1'
         AND ${workshopStockIssueItemTypeExpression('i', 's')} = '4'
   `
@@ -3277,7 +3378,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       SUM(CASE WHEN SourceTable = 'WS_JOBSTOCK' THEN 1 ELSE 0 END) AS BarisWorkshop,
       MAX(Tanggal) AS TerakhirUpdate
     FROM issue_rows
-  `)
+  `,)
 
   const chart = await rows(ctx, `
     ${issueRowsCte}

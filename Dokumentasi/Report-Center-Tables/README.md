@@ -11,13 +11,21 @@
 ```
 Dokumentasi/Report-Center-Tables/
 ├── README.md                          ← File ini (overview + index)
+├── MODULES/
+│   └── INVENTORY/
+│       ├── README.md                  ← Inventory module reading path
+│       ├── 01_DATA_MODEL.md           ← Relasi realtime → journal → snapshot
+│       ├── 02_FIELD_DICTIONARY.md     ← Definisi field + contoh real
+│       ├── 03_BUSINESS_CASES.md       ← Case bisnis inventory
+│       └── 04_AUDIT_MONTHEND_REALTIME_2027_01.md ← Audit real 2027-1
 ├── MASTER/
 │   ├── IN_ITEM.md                     ← Master item table
 │   └── PU_SUPPLIER.md                 ← Supplier master
 ├── MONTHLY_END/
 │   ├── IN_STOCK.md                    ← Monthly snapshot
 │   ├── IN_MTHENDITEM.md               ← Month-end item balance
-│   └── IN_MTHENDTRX.md                ← Month-end transaction log
+│   ├── IN_MTHENDTRX.md                ← Month-end transaction log
+│   └── IN_MTHENDTRX_STOCKISSUE_AUDIT_2027_01.md ← Real audit: month-end snapshot/journal vs stock issue
 ├── STOCK_FLOW/
 │   ├── IN_STOCKRECEIVE.md             ← Stock receipt header
 │   ├── IN_STOCKRECEIVELN.md           ← Stock receipt line
@@ -54,6 +62,16 @@ Dokumentasi/Report-Center-Tables/
 
 ---
 
+## Dokumentasi Per Module
+
+| Module | Folder | Fokus | Status |
+|---|---|---|---|
+| Inventory | `MODULES/INVENTORY/` | realtime issue, month-end journal, snapshot closing, definisi field, case `Amount`, audit 2027-1 | Started / detailed |
+
+Baca Inventory module mulai dari `MODULES/INVENTORY/README.md`.
+
+---
+
 ## Ringkasan 33 Tabel
 
 | # | Table | Domain | Purpose |
@@ -63,6 +81,7 @@ Dokumentasi/Report-Center-Tables/
 | 3 | `IN_STOCK` | Monthly End | Snapshot stok bulanan |
 | 4 | `IN_MTHENDITEM` | Monthly End | Saldo akhir bulan per item |
 | 5 | `IN_MTHENDTRX` | Monthly End | Transaksi akhir bulan |
+| 5a | `IN_MTHENDTRX_STOCKISSUE_AUDIT_2027_01` | Monthly End | Audit real snapshot/journal month-end vs `IN_STOCKISSUE` periode 2027-1 |
 | 6 | `IN_STOCKRECEIVE` | Stock Flow | Header penerimaan barang |
 | 7 | `IN_STOCKRECEIVELN` | Stock Flow | Line penerimaan barang |
 | 8 | `IN_STOCKISSUE` | Stock Flow | Header pengeluaran barang |

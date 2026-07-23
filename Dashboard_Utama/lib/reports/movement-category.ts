@@ -131,11 +131,11 @@ export function movementAnalysisSqlCase(
 ) {
   const thresholds = normalizeMovementCategoryThresholds(thresholdsInput)
   return `CASE
-        WHEN ${issueCountExpression} >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving: StockIssue Movement >= ${thresholds.fastMinIssueCount}'
-        WHEN ${issueCountExpression} BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving: StockIssue Movement ${thresholds.movingMinIssueCount}-${thresholds.movingMaxIssueCount}'
-        WHEN ${issueCountExpression} = ${thresholds.slowIssueCount} THEN 'Slow Moving: StockIssue Movement ${thresholds.slowIssueCount}'
-        WHEN ${quantityExpression} > 0 THEN 'Dead Stock: stok ada, StockIssue Movement 0'
-        ELSE 'Stale: stok dan StockIssue Movement 0'
+        WHEN ${issueCountExpression} >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving: issue docs >= ${thresholds.fastMinIssueCount} in window'
+        WHEN ${issueCountExpression} BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving: issue docs ${thresholds.movingMinIssueCount}-${thresholds.movingMaxIssueCount} in window'
+        WHEN ${issueCountExpression} = ${thresholds.slowIssueCount} THEN 'Slow Moving: issue docs = ${thresholds.slowIssueCount} in window'
+        WHEN ${quantityExpression} > 0 THEN 'Dead Stock: no issue in window, ClosingQty > 0 (idle stock)'
+        ELSE 'Stale: no issue in window, ClosingQty = 0 (empty/inactive — not idle stock)'
       END`
 }
 

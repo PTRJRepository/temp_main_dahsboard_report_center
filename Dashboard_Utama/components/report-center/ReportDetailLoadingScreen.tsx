@@ -43,9 +43,14 @@ export default function ReportDetailLoadingScreen({
   periodLabel,
   startedAt,
 }: ReportDetailLoadingScreenProps) {
-  const [now, setNow] = useState(() => Date.now())
+  const [mounted, setMounted] = useState(false)
+  const [now, setNow] = useState(0)
   const [internalStart] = useState(() => Date.now())
   const origin = startedAt ?? internalStart
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -53,7 +58,7 @@ export default function ReportDetailLoadingScreen({
     return () => window.clearInterval(id)
   }, [open])
 
-  const elapsed = Math.max(0, now - origin)
+  const elapsed = mounted ? Math.max(0, now - origin) : 0
   // Soft phase advance — honest progress feel, not fake 100% completion.
   const phaseIndex = useMemo(() => {
     if (elapsed < 900) return 0

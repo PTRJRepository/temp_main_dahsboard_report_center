@@ -1,10 +1,25 @@
+const LAN_DEV_ORIGINS = [
+    'localhost',
+    '*.localhost',
+    '127.0.0.1',
+    '10.*.*.*',
+    '172.*.*.*',
+    '192.168.*.*',
+    ...(process.env.LAN_DEV_ORIGINS || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+]
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
     // Standalone output for Docker
     output: 'standalone',
-    // Allow HMR websocket from parent server
-    allowedDevOrigins: ['http://localhost:3001'],
+    // Allow HMR / _next requests through LAN gateway hosts during development.
+    allowedDevOrigins: LAN_DEV_ORIGINS,
+    // Keep mssql/tedious out of Next worker bundling.
+    serverExternalPackages: ['mssql'],
     // Configure Turbopack root to avoid lockfile detection issues
     turbopack: {
         root: __dirname,
@@ -18,10 +33,6 @@ const nextConfig = {
             };
         }
         return config;
-    },
-    // Disable automatic HMR to avoid conflicts
-    experimental: {
-        forceSwcTransforms: true,
     },
     images: {
         remotePatterns: [

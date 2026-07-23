@@ -4,6 +4,9 @@ import { verifyToken } from '@/utils/jwt'
 import ReportCenterShell from './ReportCenterShell'
 
 export const runtime = 'nodejs'
+// Cookie/JWT auth makes every report-center page request-time only.
+// Without this, Next's static-path worker (jest-worker) dies compiling these routes.
+export const dynamic = 'force-dynamic'
 
 export default async function ReportCenterLayout({
   children,

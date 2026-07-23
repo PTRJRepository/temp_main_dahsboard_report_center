@@ -1,0 +1,48 @@
+ROLE: Senior product design + frontend performance auditor for PT Rebinmas Jaya Report Center.
+MODE: REVIEW ONLY — FIND + REPORT. Do NOT edit files, do NOT auto-fix, do NOT commit.
+
+SCOPE (read code, score 1-10 per dimension, Indonesian output):
+1) Estetika UI overall (forest theme, hierarchy, density, consistency)
+2) KPI deck / command deck visual quality
+3) Report detail / monthly ringkasan
+4) Table design & keterbacaan (typography, alignment, zebra, sticky, grouping)
+5) PDF export design quality (jspdf pratinjau vs official)
+6) Excel/CSV export honesty & UX
+7) Performance (virtualizer, streaming, monolit size, parallel fetches)
+8) Accessibility
+9) Mobile/responsive
+10) Information architecture / cognitive load
+
+KEY FILES under D:/Gawean Rebinmas/Main Dashboard/Dashboard_Utama:
+- components/report-center/ProcurementKpiStrip.tsx
+- components/report-center/ProcurementModuleWorkspace.tsx
+- components/report-center/InventoryOverview.tsx
+- components/report-center/ReportDataTable.tsx
+- components/report-center/ReportTableToolbar.tsx
+- components/report-center/reportTableCells.tsx
+- components/report-center/ExportPreflightDialog.tsx
+- components/report-center/MonthlyStockRingkasan.tsx
+- components/report-center/ReportControlBar.tsx
+- components/report-center/AnalyticsKpiStrip.tsx
+- app/(report-center)/report-center/inventory/[report]/ReportViewerClient.tsx (exportPdf/exportExcel around 2030-2070)
+- app/(report-center)/report-center/inventory/InventoryReportsClient.tsx (exportPdf around 928-948)
+- app/globals.css
+- utils/format.ts
+Also Dokumentasi/UI-REPORT-CENTER-CURRENT/ for product context.
+
+FACTS TO VERIFY:
+- PDF viewer: landscape jspdf, max 34 rows x 7 cols, pipe-joined text, *-pratinjau.pdf
+- Catalog PDF: 28x6, no pratinjau watermark
+- Excel client xlsx; ExportPreflightDialog on detail path
+- Virtual table @tanstack/react-virtual; dual monolit
+
+OUTPUT markdown only:
+# Claude Code Audit
+## Overall score /10
+## Scorecard (dimension | score | gap severity)
+## Findings P0/P1/P2 with path:line
+## PDF redesign brief
+## Table readability brief
+## Performance risks
+## Top 10 recommendations
+## Keep (already strong)

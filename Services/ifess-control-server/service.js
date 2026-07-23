@@ -77,7 +77,10 @@ function readJsonFile(filePath, defaultValue = []) {
         if (cached && cached.mtime === mtimeMs) {
             return cached.data;
         }
-        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        // Strip BOM + refuse empty files (Bun: "Unrecognized token ''")
+        const raw = fs.readFileSync(filePath, 'utf8').replace(/^﻿/, '').trim();
+        if (!raw) return defaultValue;
+        const data = JSON.parse(raw);
         _fileCache.set(filePath, { mtime: mtimeMs, data });
         return data;
     } catch (error) {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bell, ChevronLeft, Database, Globe2, Menu, Search, Server } from 'lucide-react'
+import { Bell, CalendarDays, ChevronLeft, Database, Globe2, Menu, Search, Server } from 'lucide-react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
   SQL_GATEWAY_FALLBACK,
@@ -32,6 +32,7 @@ type UserProfile = {
 }
 
 type ReportSource = 'estate' | 'pabrik'
+type ActivePeriod = { period: string; label: string }
 
 const REPORT_SOURCE_STORAGE_KEY = 'report-center:last-source'
 const REPORT_SOURCES: Array<{ id: ReportSource; label: string; shortLabel: string; description: string }> = [
@@ -105,10 +106,12 @@ export default function Topbar() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const sourceParam = searchParams.get('source')
+  const periodParam = searchParams.get('period')
   const searchRef = useRef<HTMLInputElement>(null)
   const gatewayMenuRef = useRef<HTMLDivElement>(null)
-  const [currentUser] = useState<UserProfile | null>(() => readStoredUser())
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [reportSource, setReportSource] = useState<ReportSource>(() => normalizeSource(sourceParam))
+  const [activePeriod, setActivePeriod] = useState<ActivePeriod | null>(() => periodParam ? { period: periodParam, label: periodParam } : null)
   const [gatewayBase, setGatewayBase] = useState(SQL_GATEWAY_PRIMARY)
   const [gatewayOpen, setGatewayOpen] = useState(false)
   const [gatewayOnline, setGatewayOnline] = useState<boolean | null>(null)
@@ -118,6 +121,7 @@ export default function Topbar() {
 
   useEffect(() => {
     window.queueMicrotask(() => {
+      setCurrentUser(readStoredUser())
       const params = new URLSearchParams(window.location.search)
       setReportSource(normalizeSource(params.get('source') ?? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY)))
       setGatewayBase(readClientSqlGatewayBase())
@@ -136,14 +140,26 @@ export default function Topbar() {
     const handleGatewayChange = (event: Event) => {
       setGatewayBase(String((event as CustomEvent<string>).detail || SQL_GATEWAY_PRIMARY))
     }
+    const handlePeriodChange = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<ActivePeriod>>).detail
+      const period = String(detail?.period ?? '').trim()
+      const label = String(detail?.label ?? period).trim()
+      setActivePeriod(period ? { period, label: label || period } : null)
+    }
     window.addEventListener('report-center-source-change', handleSourceChange)
     window.addEventListener('report-center-gateway-change', handleGatewayChange)
+    window.addEventListener('report-center-period-change', handlePeriodChange)
     return () => {
       window.removeEventListener('keydown', handler)
       window.removeEventListener('report-center-source-change', handleSourceChange)
       window.removeEventListener('report-center-gateway-change', handleGatewayChange)
+      window.removeEventListener('report-center-period-change', handlePeriodChange)
     }
   }, [sourceParam])
+
+  useEffect(() => {
+    if (periodParam) setActivePeriod({ period: periodParam, label: periodParam })
+  }, [periodParam])
 
   useEffect(() => {
     if (!pathname.startsWith('/report-center')) return
@@ -323,6 +339,17 @@ export default function Topbar() {
             </button>
           ))}
         </div>
+        {pathname.startsWith('/report-center/procurement') && activePeriod ? (
+          <div
+            className="hidden h-[42px] max-w-[230px] items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 text-xs font-black text-amber-100 lg:inline-flex"
+            title={`Periode aktif procurement: ${activePeriod.label} (${activePeriod.period})`}
+          >
+            <CalendarDays size={14} />
+            <span className="text-amber-100/60">Periode</span>
+            <span className="truncate tabular-nums">{activePeriod.label}</span>
+            <span className="rounded-md bg-black/25 px-1.5 py-0.5 text-[10px] text-amber-100/70">{activePeriod.period}</span>
+          </div>
+        ) : null}
         <div className="flex h-[42px] items-center gap-3 rounded-xl border border-[var(--rc-border)] bg-white/5 px-2.5 pr-3 hover:bg-white/10">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--rc-accent)] text-xs font-bold text-slate-950">{initials(name)}</span>
           <span className="hidden text-left lg:block">

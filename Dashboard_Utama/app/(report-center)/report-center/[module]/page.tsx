@@ -4,6 +4,13 @@ import { ArrowLeft, ArrowRight, FileText, Layers3 } from 'lucide-react'
 import { getModulePanel } from '@/lib/reports/module-panel'
 import ProcurementModuleWorkspace from '@/components/report-center/ProcurementModuleWorkspace'
 
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+
+export function generateStaticParams() {
+  return []
+}
+
 type ReportSource = 'estate' | 'pabrik'
 
 type PageProps = {

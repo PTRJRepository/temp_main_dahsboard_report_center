@@ -76,4 +76,39 @@ const custom = resolveMovementWindowScope({
 assert.equal(custom.startInclusive, '2026-01-01')
 assert.equal(custom.endExclusive, '2026-03-16')
 
+// Past Actual period must anchor Movement Category end at next month start,
+// not wall-clock "today". Otherwise May report reclassifies Jun–Jul issues.
+const mayAll = resolveMovementWindowScope({
+  movementWindow: 'all',
+  period: '2026-05',
+  now: new Date('2026-07-19T00:00:00'),
+})
+assert.equal(mayAll.startInclusive, '2000-01-01')
+assert.equal(mayAll.endExclusive, '2026-06-01')
+assert.match(mayAll.label, /2026-05/)
+
+const may1m = resolveMovementWindowScope({
+  movementWindow: '1m',
+  period: '2026-05',
+  now: new Date('2026-07-19T00:00:00'),
+})
+assert.equal(may1m.startInclusive, '2026-05-01')
+assert.equal(may1m.endExclusive, '2026-06-01')
+
+const may3m = resolveMovementWindowScope({
+  movementWindow: '3m',
+  period: '2026-05',
+  now: new Date('2026-07-19T00:00:00'),
+})
+assert.equal(may3m.startInclusive, '2026-03-01')
+assert.equal(may3m.endExclusive, '2026-06-01')
+
+// Open/current month still caps at tomorrow (no future PostDate).
+const openAll = resolveMovementWindowScope({
+  movementWindow: 'all',
+  period: '2026-07',
+  now: new Date('2026-07-19T00:00:00'),
+})
+assert.equal(openAll.endExclusive, '2026-07-20')
+
 console.info('inventory movement-period tests passed')

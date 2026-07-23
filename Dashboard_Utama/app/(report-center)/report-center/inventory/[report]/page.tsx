@@ -1,6 +1,14 @@
 import { Suspense } from 'react'
 import ReportViewerClient from './ReportViewerClient'
 
+export const dynamic = 'force-dynamic'
+export const dynamicParams = true
+
+// Skip static path workers — report IDs are runtime-only.
+export function generateStaticParams() {
+  return []
+}
+
 type PageProps = {
   params: Promise<{ report: string }>
 }

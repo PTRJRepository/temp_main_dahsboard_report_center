@@ -27,4 +27,5 @@ export {
   stockAgingVisibleColumns,
 } from './constants'
 export { getReportViewerProfile } from './get-profile'
+export { monthlyStockMovementKpis } from './monthly-stock-movement'
 export { preferredVisibleColumnsForProfile } from './preferred-columns'

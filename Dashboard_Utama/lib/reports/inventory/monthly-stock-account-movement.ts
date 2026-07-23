@@ -274,7 +274,11 @@ function previousAccountingPeriod(accYear: number, accMonth: number) {
     : { accYear, accMonth: accMonth - 1 }
 }
 
-function periodFromActual(actualYear: number, actualMonth: number, inputMode: MonthlyStockMovementScope['inputMode']) {
+function periodFromActual(
+  actualYear: number,
+  actualMonth: number,
+  inputMode: MonthlyStockMovementScope['inputMode'],
+) {
   const accounting = actualToAccountingPeriod(actualYear, actualMonth)
   if (!accounting) throw new Error('Periode monthly stock movement tidak valid.')
 
@@ -308,12 +312,16 @@ export function resolveMonthlyStockMovementScope({
   search,
   limit,
   now = new Date(),
+  source: _source,
 }: {
   filters?: ReportFilterInput
   search?: string
   limit?: number
   now?: Date
+  /** Kept for caller compatibility; official report keys are fiscal for all sources. */
+  source?: string
 } = {}): MonthlyStockMovementScope {
+  void _source
   // Prefer actual calendar period so stale AccYear/AccMonth in URL cannot win.
   const rawPeriod = filters?.period?.trim()
   const actualMatch = rawPeriod?.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/)
@@ -511,9 +519,9 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
     ),
     movements AS (
       SELECT
-        RTRIM(ItemCode) AS ItemCode,
-        Qty AS opening_qty,
-        CAST(ISNULL(Amount, ISNULL(Qty, 0) * ISNULL(AverageCost, 0)) AS decimal(18, 6)) AS opening_amt,
+        RTRIM(mth_open.ItemCode) AS ItemCode,
+        mth_open.Qty AS opening_qty,
+        CAST(ISNULL(mth_open.Amount, ISNULL(mth_open.Qty, 0) * ISNULL(mth_open.AverageCost, 0)) AS decimal(18, 6)) AS opening_amt,
         0.0 AS received_qty,
         0.0 AS received_amt,
         0.0 AS return_advice_qty,
@@ -536,10 +544,16 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
         0.0 AS goods_return_amt,
         0.0 AS dispatch_adv_qty,
         0.0 AS dispatch_adv_amt
-      FROM [${database}].[dbo].[IN_MTHENDITEM]
-      WHERE RTRIM(LocCode) = '${scope.location}'
-        AND RTRIM(CONVERT(varchar(10), AccYear)) = '${scope.openingAccYear}'
-        AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${scope.openingAccMonth}'
+      FROM [${database}].[dbo].[IN_MTHENDITEM] mth_open
+      WHERE RTRIM(mth_open.LocCode) = '${scope.location}'
+        AND RTRIM(CONVERT(varchar(10), mth_open.AccYear)) = '${scope.openingAccYear}'
+        AND RTRIM(CONVERT(varchar(10), mth_open.AccMonth)) = '${scope.openingAccMonth}'
+        AND EXISTS (
+          SELECT 1 FROM [${database}].[dbo].[IN_ITEM] i
+          WHERE i.ItemCode = mth_open.ItemCode
+            AND i.LocCode = mth_open.LocCode
+            AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') IN ('1', '4')
+        )
 
       UNION ALL
 
@@ -692,13 +706,19 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
     ),
     period_closing AS (
       SELECT
-        RTRIM(ItemCode) AS ItemCode,
-        CAST(ISNULL(Qty, 0) AS decimal(18, 6)) AS period_closing_qty,
-        CAST(ISNULL(Amount, ISNULL(Qty, 0) * ISNULL(AverageCost, 0)) AS decimal(18, 6)) AS period_closing_amt
-      FROM [${database}].[dbo].[IN_MTHENDITEM]
-      WHERE RTRIM(LocCode) = '${scope.location}'
-        AND RTRIM(CONVERT(varchar(10), AccYear)) = '${scope.accYear}'
-        AND RTRIM(CONVERT(varchar(10), AccMonth)) = '${scope.accMonth}'
+        RTRIM(mth_close.ItemCode) AS ItemCode,
+        CAST(ISNULL(mth_close.Qty, 0) AS decimal(18, 6)) AS period_closing_qty,
+        CAST(ISNULL(mth_close.Amount, ISNULL(mth_close.Qty, 0) * ISNULL(mth_close.AverageCost, 0)) AS decimal(18, 6)) AS period_closing_amt
+      FROM [${database}].[dbo].[IN_MTHENDITEM] mth_close
+      WHERE RTRIM(mth_close.LocCode) = '${scope.location}'
+        AND RTRIM(CONVERT(varchar(10), mth_close.AccYear)) = '${scope.accYear}'
+        AND RTRIM(CONVERT(varchar(10), mth_close.AccMonth)) = '${scope.accMonth}'
+        AND EXISTS (
+          SELECT 1 FROM [${database}].[dbo].[IN_ITEM] i
+          WHERE i.ItemCode = mth_close.ItemCode
+            AND i.LocCode = mth_close.LocCode
+            AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') IN ('1', '4')
+        )
     ),
     final AS (
       SELECT
@@ -1053,7 +1073,8 @@ function monthlyMovementCategoryBreakdowns(chart: DbRow[]): InventoryAnalyticsCo
         id: `movement-category-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-') || index}`,
         label,
         dimensionId: 'movement-category',
-        value: firstPresentNumber(row.OnHandHoldAmount, row.Amount, row.ClosingAmount),
+        // Period Closing first — live OnHandHold diverges after month-end for past periods.
+        value: firstPresentNumber(row.ClosingAmount, row.Amount, row.OnHandHoldAmount),
         unit: 'IDR',
         format: 'currency',
         scope: 'full-scope',
@@ -1068,9 +1089,12 @@ function monthlyMovementCategoryBreakdowns(chart: DbRow[]): InventoryAnalyticsCo
           : undefined,
         evidence: {
           source: 'chart' as const,
-          valuePath: `chart.movement-category[${index}].Amount`,
+          valuePath: `chart.movement-category[${index}].ClosingAmount`,
           rowCount: 1,
-          notes: ['MovementCategory aktual dihitung dari count StockIssue valid pada movementWindow aktif; bukan StockAnalysisCode master.'],
+          notes: [
+            'MovementCategory = distinct issue docs in movementWindow (anchored to Actual period).',
+            'Amount = full-scope SUM(ClosingAmount) for that category — same as filtered detail summary.ClosingAmount.',
+          ],
         },
       }
     })
@@ -1439,12 +1463,12 @@ function buildMetadata(ctx: InventoryQueryContext, scope: MonthlyStockMovementSc
     baseDataSourceRule: scope.snapshotMode
       ? 'Base CTE memakai IN_MTHENDITEM snapshot (Qty/Amount period-end) karena periode yang diminta adalah bulan lampau.'
       : 'Base CTE memakai IN_ITEM live karena periode yang diminta adalah bulan berjalan (month-end belum ada).',
-    openingRule: 'Opening qty dan amount diambil dari IN_MTHENDITEM accounting period sebelumnya; transaksi bulan berjalan memakai AccYear/AccMonth hasil konversi periode aktual.',
+    openingRule: 'Opening qty diambil dari IN_MTHENDITEM accounting period sebelumnya; opening amount memakai Amount tersimpan dengan fallback Qty * AverageCost. Transaksi bulan berjalan memakai AccYear/AccMonth hasil konversi periode aktual.',
     transactionAsOfRule: 'Jika dateTo dikirim, transaksi bulan berjalan dibatasi ke COALESCE(UpdateDate, CreateDate) <= dateTo agar hanya dokumen yang sudah posted/update sebelum waktu cetak yang ikut dihitung.',
     closingRule: 'Closing prefer IN_MTHENDITEM AccYear/AccMonth = report period (official). Fallback reconstruct: opening + received + return advice + transferred + adjustment - issued total + return + goods receive - goods return - dispatch advice.',
     issueUsageRule: 'Issue non-workshop dihitung dari IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM dari IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType 1 untuk issue dan TransType 2 untuk return.',
     onHandHoldAmountRule: scope.snapshotMode
-      ? 'Valuasi dari IN_MTHENDITEM snapshot: Qty * AverageCost.'
+      ? 'Valuasi dari IN_MTHENDITEM snapshot: Amount tersimpan, fallback Qty * AverageCost.'
       : 'Valuasi saldo aktif dari IN_ITEM live: (QtyOnHand + QtyOnHold) * AverageCost.',
     goodsReceiveAmountRule: 'Goods receive amount = PU_GOODSRCVLN.StockQty * PU_POLN.Cost.',
     goodsReturnAmountRule: 'Goods return amount = PU_GOODSRETLN.Amount fallback ReturnStockQty * Cost; mengurangi closing.',
@@ -1481,7 +1505,7 @@ export async function createMonthlyStockAccountMovementPayload({
   now?: Date
   executeQuery?: MonthlyStockMovementQueryExecutor
 }): Promise<MonthlyStockMovementPayload> {
-  const scope = resolveMonthlyStockMovementScope({ filters, search, limit, now })
+  const scope = resolveMonthlyStockMovementScope({ filters, search, limit, now, source: ctx.source })
   const cte = buildMonthlyStockAccountMovementCte(scope, ctx.database)
   const reportRows = await executeQuery(ctx, monthlyStockMovementDetailSql(cte, scope.limit))
   const summaryRows = await executeQuery(ctx, monthlyStockMovementSummarySql(cte))

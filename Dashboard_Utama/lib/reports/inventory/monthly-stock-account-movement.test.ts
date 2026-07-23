@@ -22,12 +22,18 @@ const scope = resolveMonthlyStockMovementScope({
   search: "seal'",
   limit: 25,
   now: new Date('2026-07-19T00:00:00Z'),
+  source: 'pabrik',
 })
 
 assert.equal(scope.actualPeriod, '2026-07')
+// Official RPTIN fiscal mapping: July 2026 = Acc 2027/4.
 assert.equal(scope.accountingPeriod, '2027-04')
+assert.equal(scope.accYear, 2027)
+assert.equal(scope.accMonth, 4)
 assert.equal(scope.openingAccountingPeriod, '2027-03')
 assert.equal(scope.openingActualPeriod, '2026-06')
+assert.equal(scope.openingAccYear, 2027)
+assert.equal(scope.openingAccMonth, 3)
 // Stock Analysis Code removed — categoryCodes always empty.
 assert.deepEqual(scope.categoryCodes, [])
 assert.equal(scope.analysisGroup, 'ProductTypeCode')
@@ -40,13 +46,25 @@ assert.equal(scope.snapshotMode, false, 'current month → live IN_ITEM mode')
 const scopePast = resolveMonthlyStockMovementScope({
   filters: { period: '2026-05' },
   now: new Date('2026-07-19T00:00:00Z'),
+  source: 'pabrik',
 })
 // snapshotMode: period 2026-05 vs now 2026-07 → past → snapshot mode
 assert.equal(scopePast.snapshotMode, true, 'past month → IN_MTHENDITEM snapshot mode')
+assert.equal(scopePast.accountingPeriod, '2027-02')
 assert.equal(scopePast.accYear, 2027)
 assert.equal(scopePast.accMonth, 2)
 assert.equal(scopePast.openingAccYear, 2027)
 assert.equal(scopePast.openingAccMonth, 1)
+
+const scopeEstate = resolveMonthlyStockMovementScope({
+  filters: { period: '2026-07' },
+  now: new Date('2026-07-19T00:00:00Z'),
+  source: 'estate',
+})
+assert.equal(scopeEstate.accYear, 2027)
+assert.equal(scopeEstate.accMonth, 4)
+assert.equal(scopeEstate.openingAccYear, 2027)
+assert.equal(scopeEstate.openingAccMonth, 3)
 assert.deepEqual(normalizeMonthlyStockAnalysisCodes('unknown'), [])
 assert.deepEqual(normalizeMonthlyStockAnalysisCodes('DEADS,MEMOV'), [])
 
@@ -61,7 +79,7 @@ assert.match(cte, /IN_PRODTYPE/)
 assert.match(cte, /RTRIM\(i\.Status\) IN \('1', '2'\)/)
 assert.match(cte, /CONVERT\(varchar\(10\), i\.ItemType\)\), ''\) IN \('1', '4'\)/)
 assert.doesNotMatch(cte, /CONVERT\(varchar\(10\), i\.ItemType\)\), ''\) = '1'/)
-assert.match(cte, /ISNULL\(Amount, ISNULL\(Qty, 0\) \* ISNULL\(AverageCost, 0\)\)/)
+assert.match(cte, /ISNULL\(mth_open\.Amount, ISNULL\(mth_open\.Qty, 0\) \* ISNULL\(mth_open\.AverageCost, 0\)\)/)
 assert.match(cte, /CONVERT\(varchar\(10\), h\.AccYear\)\) = '2027'/)
 assert.match(cte, /COALESCE\(h\.UpdateDate, h\.CreateDate\) <= CONVERT\(datetime, '2026-07-16T08:59:29', 126\)/)
 assert.match(cte, /COALESCE\(s\.UpdateDate, s\.CreateDate\) <= CONVERT\(datetime, '2026-07-16T08:59:29', 126\)/)
@@ -74,12 +92,14 @@ assert.match(cte, /LIKE N'%seal''%'/)
 // Past period → snapshot mode → IN_MTHENDITEM
 const cteSnapshot = buildMonthlyStockAccountMovementCte(scopePast, 'db_ptrj_mill')
 assert.match(cteSnapshot, /IN_MTHENDITEM/, 'past period uses IN_MTHENDITEM snapshot')
-assert.match(cteSnapshot, /AccYear.*=.*'2027'/, 'filters AccYear 2027')
-assert.match(cteSnapshot, /AccMonth.*=.*'2'/, 'filters AccMonth 2')
-// Opening balance from prev month (Jan 2027)
-assert.match(cteSnapshot, /AccYear.*=.*'2027'/, 'opening AccYear 2027') // same '2027'
-assert.match(cteSnapshot, /AccMonth.*=.*'1'/, 'opening AccMonth 1 (Jan)')
+assert.match(cteSnapshot, /AccYear.*=.*'2027'/, 'filters AccYear 2027 fiscal')
+assert.match(cteSnapshot, /AccMonth.*=.*'2'/, 'filters AccMonth 2 (May)')
+// Opening balance from previous fiscal month (Acc 2027/1 = Apr 2026)
+assert.match(cteSnapshot, /AccMonth.*=.*'1'/, 'opening AccMonth 1 (Apr)')
 assert.match(cteSnapshot, /ProductTypeCode/)
+assert.match(cteSnapshot, /ISNULL\(mth_open\.Amount, ISNULL\(mth_open\.Qty, 0\) \* ISNULL\(mth_open\.AverageCost, 0\)\)/, 'opening prefers stored Amount')
+assert.match(cteSnapshot, /ISNULL\(mth_close\.Amount, ISNULL\(mth_close\.Qty, 0\) \* ISNULL\(mth_close\.AverageCost, 0\)\)/, 'closing prefers stored Amount')
+assert.match(cteSnapshot, /ItemType.*IN \('1', '4'\)/, 'opening/closing scoped ItemType 1+4')
 
 const ctx = getInventoryQueryContext('pabrik', { SQL_GATEWAY_API_KEY: 'test' })
 const calls: string[] = []
@@ -195,6 +215,7 @@ async function main() {
     },
     search: 'seal',
     limit: 25,
+    now: new Date('2026-07-19T00:00:00Z'),
     executeQuery,
   })
 

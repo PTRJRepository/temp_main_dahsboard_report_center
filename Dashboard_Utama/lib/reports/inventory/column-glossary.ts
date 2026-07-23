@@ -160,9 +160,27 @@ const entries: InventoryColumnGlossaryEntry[] = [
   {
     field: 'MovementCategory',
     label: 'Movement Category',
-    description: 'Klasifikasi frekuensi aktivitas movement aktual. Untuk RPTIN1000015 memakai movement yang muncul pada baris report. Untuk report lain mengikuti movementWindow all-period atau periode aktif. Ini bukan dasar total valuasi.',
-    formula: 'activity/issue count: >=6 Fast, 2-5 Moving, 1 Slow, 0+stok Dead, 0+0 Stale; scope = movementWindow',
-    source: 'RPTIN1000015 movement components atau IN_STOCKISSUE / WS_JOBSTOCK sesuai report',
+    description:
+      'Klasifikasi frekuensi issue aktual di movementWindow (ditambatkan ke Actual period). Bukan StockAnalysisCode master. Bukan dasar total valuasi global — nilai bucket = ClosingAmount item di kategori itu.',
+    formula:
+      'issue doc count: >=6 Fast Moving; 2-5 Moving; 1 Slow Moving; 0 + ClosingQty>0 Dead Stock; 0 + ClosingQty=0 Stale. Scope = movementWindow.',
+    source: 'IN_STOCKISSUE / IN_FUELISSUE / WS_JOBSTOCK + Closing qty period',
+  },
+  {
+    field: 'Stale',
+    label: 'Stale',
+    description:
+      'Barang tanpa issue document valid di window movement, dan ClosingQty period = 0. Artinya: tidak ada pemakaian tercatat + tidak ada sisa stok di periode itu. Bukan “barang usang di gudang” (itu Dead Stock: issue 0 tapi masih ada stok). Sering item kosong / non-aktif / sudah habis.',
+    formula: 'MovementIssueCountActual = 0 AND ClosingQty = 0',
+    source: 'MovementCategory classifier',
+  },
+  {
+    field: 'DeadStock',
+    label: 'Dead Stock',
+    description:
+      'Barang tanpa issue document valid di window movement, tapi ClosingQty period > 0. Artinya: stok masih ada di periode, tapi tidak terpakai/terbit. Risiko idle stock.',
+    formula: 'MovementIssueCountActual = 0 AND ClosingQty > 0',
+    source: 'MovementCategory classifier',
   },
   {
     field: 'MovementActivityCountActual',
