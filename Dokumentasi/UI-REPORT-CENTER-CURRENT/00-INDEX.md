@@ -2,11 +2,59 @@
 
 **Folder:** `Dokumentasi/UI-REPORT-CENTER-CURRENT/`  
 **Status:** living docs (update saat UI berubah)  
-**Snapshot kode:** 2026-07-22  
+**Snapshot kode:** 2026-07-23 (post visual overhaul + hallmark pass)  
+**Branch aktif:** `feat/report-center-technical-luxury`  
+**Commit terakhir:** `0c8aa4e` (hallmark audit pass)  
 **Runtime acuan:** production `bun run server_bun.js` · gateway **:3001** · Next dashboard **:3100**  
 **Mode auth:** `/report-center/*` butuh login (`returnTo` redirect) — browser agent tanpa session tidak bisa screenshot live; dokumentasi ini berbasis **kode UI production path** + plan terkait.
 
 **Agent entry (baca dulu):** `Dokumentasi/AGENT_INDEX_REPORT_CENTER_UI.md` — peta cepat semua pack UI/KPI/audit/prompt.
+
+---
+
+## Ringkasan terkini (post visual overhaul, 2026-07-23)
+
+State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` visual overhaul → `0c8aa4e` hallmark pass). Semua terverifikasi `tsc` 0 + `next build` exit 0.
+
+### 1. Procurement Command Deck (KPI master)
+- **Hero always-on** (3 kartu): Total Valuasi (Master valuation) · Arus Bersih · Total Usage.
+- **Chip insight** di kartu hero: Frekuensi (event/hari aktif), Intensitas (usage/valuasi), Return rate (return/usage amount, all-time — label jujur).
+- **Tab secondary**: Valuasi · Proses · Movement. Kartu KPI section di dalam tab kini **carousel slide** (`KpiCarousel.tsx`) — snap-scroll horizontal + tombol prev/next + dot indicator. Hero tetap grid.
+- **PO fill rate** (Qty Receive / Qty Order) via helper `poFillRate()` di kartu PO Outstanding.
+
+### 2. Procurement Flow Strip (interaktif)
+- `ProcurementFlowStrip.tsx` — alur **PR → PO → Receive → Issue → Return** dengan konektor animasi (framer-motion).
+- Klik tahap = navigasi ke report terkait. Nilai per tahap live dari `summary` (PR count/outstanding, PO count/fill, receive docs/qty, issue docs/qty, return amount/rate).
+
+### 3. Usage Trend Chart
+- `UsageTrendChart.tsx` — area chart bulanan (recharts) dari field `trend` baru di payload `pengeluaran-barang` (GROUP BY bulan, ikut filter periode). Gradient forest, tooltip mono, label puncak.
+
+### 4. Top usage periode (3 dimensi)
+- Footer toggle **Item | Dept | Kendaraan** dari `topLists` (Top 5 by amount); fallback ke `usage.chart` bila kosong.
+- Pilihan periode diperluas 8 → **18 bulan**.
+
+### 5. Data plumbing
+- **Composite endpoint** `GET /api/reports/procurement/command-deck` — 8 report KPI server-side paralel, in-memory TTL cache 30s. Client fetch SATU kali; fallback otomatis ke 8-fetch legacy bila gagal.
+- `stockIssue` summary diperkaya: `ActiveIssueDays` + `topLists` (`items`/`costCenters`/`vehicles`).
+- `lib/reports/procurement-kpi-math.ts` — pure helpers `frequencyPerDay`, `poFillRate`, `returnRate`, `usageIntensity` + unit test (lulus).
+
+### 6. Tipografi & surface
+- Font: **Sora** (display, `--font-display`) untuk angka KPI + **JetBrains Mono** (data, `--font-data`) untuk chip/label teknis. Inter tetap body.
+- Utility `.rc-*` baru di `globals.css`: `.rc-display`, `.rc-data`, `.rc-eyebrow`, `.rc-metric`, `.rc-chip`, `.rc-hairline`, `.rc-kpi-surface`, `.rc-reveal` (staggered rise), `.rc-carousel-track`.
+- **Hallmark audit pass** (`0c8aa4e`): eyebrow dekoratif dipurge (default OFF), elevation on dark via lightness (bukan glow berwarna), card-in-card di trend chart diredam.
+
+### Komponen baru (semua LIVE)
+| File | Peran |
+|------|-------|
+| `ProcurementFlowStrip.tsx` | Flow interaktif 5 tahap |
+| `UsageTrendChart.tsx` | Area chart bulanan |
+| `KpiCarousel.tsx` | Carousel slide kartu KPI |
+| `ProcurementKpiStrip.tsx` | Orchestrator deck (hero, tab, flow, trend, top usage) |
+
+### Gap jujur (belum terverifikasi)
+- Screenshot media browser (butuh login manual — auth gate).
+- `topLists` / `trend` belum smoke-test ke SQL Gateway live.
+- Carousel behavior di mobile belum diuji.
 
 ---
 

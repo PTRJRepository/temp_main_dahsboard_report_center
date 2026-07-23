@@ -131,3 +131,15 @@ Bukan git log otomatis.
 - **FIX:** Card-in-card di trend chart wrapper diredam (border/bg wrapper dihapus, sisa container ukuran netral).
 - **SCORE:** self-critique P4 H4 E4 S4 R4 V4 (semua >=3).
 - **PLANNED:** screenshot media tetap gap (butuh login manual); `topLists`/`trend` belum smoke-test ke SQL live; carousel di mobile belum diuji.
+
+## 2026-07-23 (ringkasan sintesis) - State LIVE post visual overhaul + hallmark pass
+Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-center-technical-luxury`; tsc 0 + build exit 0. Commit terkait: `1bef165` (visual overhaul), `0c8aa4e` (hallmark pass), plus rangkaian fase sebelumnya (`4baa9c5` drilldown, `8c6f1a6` chart a11y, `9f5c737` table a11y, `e114792` PDF preview, `ee01865` composite API, `1ca8728` insights, `086a818`/`b6075cc` enrich summary + top-lists).
+
+- **Command deck:** hero 3 kartu (Total Valuasi / Arus Bersih / Total Usage) + chip insight (Frekuensi, Intensitas, Return rate) + tab secondary (Valuasi/Proses/Movement) + PO fill rate.
+- **Flow interaktif:** `ProcurementFlowStrip` PR -> PO -> Receive -> Issue -> Return, konektor animasi, klik tahap navigasi ke report, nilai live dari summary.
+- **Trend chart:** `UsageTrendChart` area bulanan dari field `trend` (GROUP BY bulan, ikut filter periode) di payload `pengeluaran-barang`.
+- **KPI carousel:** `KpiCarousel` snap-scroll + prev/next + dot; dipakai kartu KPI section, hero tetap grid.
+- **Top usage 3 dimensi:** Item | Dept | Kendaraan dari `topLists`; fallback `usage.chart`. Periode diperluas 18 bulan.
+- **Plumbing:** composite `GET /api/reports/procurement/command-deck` (8 report server-side, TTL cache 30s, 1 fetch client + legacy fallback); summary diperkaya `ActiveIssueDays` + `topLists`; helper murni di `lib/reports/procurement-kpi-math.ts` + test.
+- **Tipografi/surface:** Sora (`--font-display`) + JetBrains Mono (`--font-data`); util `.rc-display/.rc-data/.rc-metric/.rc-chip/.rc-kpi-surface/.rc-reveal/.rc-carousel-track`; hallmark pass (eyebrow purge, elevation via lightness, card-in-card diredam).
+- **Gap jujur:** screenshot browser (auth gate), `topLists`/`trend` belum smoke-test SQL live, carousel mobile belum diuji.
