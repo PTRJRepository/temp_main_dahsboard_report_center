@@ -5,6 +5,7 @@ import { attachInventoryAnalytics, type InventoryAnalyticsContract } from '@/lib
 import { buildMonthlyStockAccountMovementAnalytics } from '@/lib/reports/inventory/monthly-stock-account-movement'
 import { buildInventoryReportAnalytics } from '@/lib/reports/inventory/report-analytics'
 import { accountingActualPeriodSelectSql, accountingToActualPeriod, actualToAccountingPeriod } from '@/lib/reports/accounting-period'
+import { persistAggregate, serveAggregate } from '@/lib/reports/inventory/monthly-aggregate'
 import {
   applyReportFilters,
   filtersFromSearchParams,
@@ -4599,9 +4600,52 @@ async function handleInventoryGet(request: NextRequest) {
   }
 
   try {
-    const rawPayload = includeDebugSql
-      ? await debugSqlStorage.run(debugSqlStatements, () => handler({ limit, limitAll, search, ctx, stale, filters }))
-      : await handler({ limit, limitAll, search, ctx, stale, filters })
+    // Lapisan agregasi bulanan: periode CLOSED (immutable) dilayani dari KPI pre-rendered
+    // bila sudah ada; periode current / tanpa period / detail-export selalu live.
+    // Detail `rows` tidak pernah disimpan — hanya KPI ringan (summary/chart/topLists/trend).
+    const aggregationAttempt = !limitAll
+      ? await serveAggregate({ handlerKey, source: ctx.source, filters }).catch(() => null)
+      : null
+    let aggregationInfo: { mode: 'pre-aggregated' | 'live'; period: string | null; builtAt?: string } = {
+      mode: 'live',
+      period: aggregationAttempt && 'resolution' in aggregationAttempt ? aggregationAttempt.resolution.period : null,
+    }
+
+    let rawPayload: ReportPayload
+    if (aggregationAttempt && aggregationAttempt.mode === 'pre-aggregated') {
+      const stored = aggregationAttempt.stored
+      rawPayload = {
+        title: report?.title ?? reportParam,
+        description: report?.description ?? '',
+        rows: [],
+        columns: [],
+        summary: stored.summary ?? {},
+        chart: stored.chart ?? [],
+        metadata: { aggregatedKpi: true },
+        topLists: stored.topLists,
+        trend: stored.trend,
+      }
+      aggregationInfo = { mode: 'pre-aggregated', period: stored.period, builtAt: stored.builtAt.toISOString() }
+    } else {
+      rawPayload = includeDebugSql
+        ? await debugSqlStorage.run(debugSqlStatements, () => handler({ limit, limitAll, search, ctx, stale, filters }))
+        : await handler({ limit, limitAll, search, ctx, stale, filters })
+      if (aggregationAttempt && aggregationAttempt.mode === 'live' && aggregationAttempt.resolution.closed) {
+        await persistAggregate({
+          handlerKey,
+          source: ctx.source,
+          resolution: aggregationAttempt.resolution,
+          filters,
+          payload: {
+            summary: rawPayload.summary ?? {},
+            chart: rawPayload.chart ?? [],
+            topLists: rawPayload.topLists,
+            trend: rawPayload.trend,
+          },
+        }).catch(() => false)
+        aggregationInfo = { mode: 'live', period: aggregationAttempt.resolution.period }
+      }
+    }
     const rawPayloadWithMovement = includeDebugSql
       ? await debugSqlStorage.run(debugSqlStatements, () => enrichPayloadWithMovementCategory(rawPayload, ctx, filters))
       : await enrichPayloadWithMovementCategory(rawPayload, ctx, filters)
@@ -4707,6 +4751,7 @@ async function handleInventoryGet(request: NextRequest) {
       reportCode: report?.code,
       reportStatus: report?.status ?? 'live',
       reportValidated: report?.validated ?? true,
+      aggregation: aggregationInfo,
       executiveQuestion: report?.executiveQuestion,
       dataGrain: report?.dataGrain,
       chartDefinitions: report?.chartDefinitions ?? [],

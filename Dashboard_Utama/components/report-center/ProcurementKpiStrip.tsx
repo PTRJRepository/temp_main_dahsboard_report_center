@@ -7,6 +7,7 @@ import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageInt
 import KpiCarousel from './KpiCarousel'
 import UsageTrendChart from './UsageTrendChart'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
+import AggregationControlPanel from './AggregationControlPanel'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
 type DeckSection = 'valuasi' | 'proses' | 'movement'
@@ -904,6 +905,7 @@ export default function ProcurementKpiStrip({
         <span className="w-fit rounded-full border border-[var(--rc-forest-border-strong)] bg-[rgba(155,226,61,.08)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--rc-forest-accent)]">
           {loading ? 'Mengambil summary live' : partial ? 'Live sebagian, fallback aktif' : 'Live dari SQL Gateway'}
         </span>
+        <AggregationControlPanel source={source} compact />
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] bg-[rgba(2,10,7,.42)] px-3 py-3">
@@ -1001,6 +1003,10 @@ export default function ProcurementKpiStrip({
           {filters.scopeCode ? <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-2.5 py-1 text-lime-100">Code {filters.scopeCode}</span> : null}
           {filters.location ? <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-cyan-100">Lokasi {filters.location}</span> : null}
         </div>
+      </div>
+
+      <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">
+        <AggregationControlPanel source={source} />
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">

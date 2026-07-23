@@ -50,6 +50,15 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 | `UsageTrendChart.tsx` | Area chart bulanan |
 | `KpiCarousel.tsx` | Carousel slide kartu KPI |
 | `ProcurementKpiStrip.tsx` | Orchestrator deck (hero, tab, flow, trend, top usage) |
+| `AggregationControlPanel.tsx` | Ruang kontrol agregasi (status closed/open, bangun agregasi) |
+
+### 7. Pre-rendered monthly aggregation + ruang kontrol (2026-07-23)
+- **Arsitektur:** KPI bulanan untuk periode CLOSED (immutable) di-render sekali & disimpan; periode CURRENT / tanpa-period / detail selalu live. KPI ringan; query berat hanya saat user minta detail.
+- **Store:** Prisma `MonthlyReportAggregate` (SQLite) — key `(handlerKey, source, period, filterHash)`, simpan `summary/chart/topLists/trend`. Detail `rows` tidak disimpan.
+- **Helper:** `isClosedActualPeriod` + `currentActualPeriodJakarta` (`accounting-period.ts`); `monthly-aggregate-store.ts` (Prisma + `filterHashFor`); `monthly-aggregate.ts` (`resolveAggregationPeriod`/`serveAggregate`/`persistAggregate`). Unit test lulus.
+- **Hook:** `handleInventoryGet` melayani periode closed dari store (hit) atau hitung live + persist (miss); pipeline post-handler tetap → kontrak identik. `metadata.aggregation.mode = pre-aggregated|live`.
+- **Control room:** `GET/POST/DELETE /api/reports/inventory/aggregation` + panel di deck (badge compact + panel penuh).
+- **Status:** tsc 0, test lulus, build exit 0. Belum smoke-test SQL gateway live; prioritas 8 KPI deck (report lain ikuti jalur yang sama).
 
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).

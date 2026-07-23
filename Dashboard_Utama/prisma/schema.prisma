@@ -47,3 +47,23 @@ model AccessControl {
   @@unique([role, serviceId]) 
   @@unique([userId, serviceId])
 }
+
+// Pre-rendered monthly KPI aggregation untuk Report Center inventory.
+// Hanya diisi untuk periode CLOSED (bulan < bulan berjalan, Asia/Jakarta) —
+// periode current selalu live dan tidak pernah disimpan di sini.
+model MonthlyReportAggregate {
+  id          String   @id @default(cuid())
+  handlerKey  String   // report handler key (mis. 'pengeluaran-barang')
+  source      String   // 'estate' | 'pabrik'
+  period      String   // actual period 'YYYY-MM'
+  filterHash  String   // sha256 subset filter SQL-relevant
+  summaryJson String   // KPI summary (JSON)
+  chartJson   String?  // KPI chart (JSON)
+  topListsJson String? // top lists (JSON)
+  trendJson   String?  // monthly trend (JSON)
+  rowCount    Int      @default(0)
+  builtAt     DateTime @default(now())
+
+  @@unique([handlerKey, source, period, filterHash])
+  @@index([handlerKey, period])
+}
