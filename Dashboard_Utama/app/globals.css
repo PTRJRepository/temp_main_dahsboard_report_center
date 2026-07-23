@@ -62,6 +62,10 @@ body {
   --rc-space-8: 32px;
   --rc-motion-fast: 140ms ease;
   --rc-motion-normal: 220ms ease;
+  --rc-workbench-header: var(--rc-forest-canvas-soft);
+  --rc-command-rail: var(--rc-forest-surface);
+  --rc-data-surface: var(--rc-forest-surface-raised);
+  --rc-focus-ring: var(--rc-focus);
   --rc-chart-emerald: #18b96b;
   --rc-chart-lime: #9be23d;
   --rc-chart-cyan: #29c7c8;
