@@ -311,3 +311,9 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Mode demo matriks: `?demo=1` di `/api/reports/inventory/movement-matrix` → matriks sintetis deterministik (mulberry32 seed tetap; 12 item dengan pola fast/reguler/slow/seasonal). Hanya aktif via param eksplisit; produksi tidak terpengaruh. Tujuan: verifikasi UI saat DB sumber tak terjangkau.
 - Terverifikasi playwright (window.fetch dipatch → demo=1): "132 dok · 6/6 periode aktif (100% konsisten) · rata 22.0 dok/periode", ritme bar 25/23/23/18/17/26, Fast 4 / Reguler 5 / Slow 3, top "NPK 12/12/17/2 + TE · 28 dok · 21%"; klik item → dialog drilldown terbuka. 0 error JS.
 - Verifikasi: tsc 0, eslint 0 (ketiga file), build exit 0.
+
+## 2026-07-24 - Restyle deck ala market/crypto
+- InsightTicker jadi ticker marquee berjalan (pill dot pulsa emerald, loop mulus, pause saat hover, hormati reduced-motion; animasi via globals.css `@keyframes rc-ticker`).
+- TopMovementScatter jadi leaderboard "Top movement barang": bar #1 gradient emerald menyala, gradasi emerald→slate, toggle aktif glow — gaya leaderboard exchange.
+- Kartu KPI di ProcurementKpiStrip kini punya badge delta ▲/▼ % (dari 2 titik spark terakhir) seperti aplikasi market.
+- Verifikasi: tsc 0 error; build exit 0; ESLint 0 pada file baru; badge delta terbukti render di halaman. Catatan jujur: saat verifikasi DB estate sedang tidak bisa dihubungi, sehingga ticker & Top movement tampil sebagai empty-state (by design) — tampilan penuhnya menunggu data nyata.

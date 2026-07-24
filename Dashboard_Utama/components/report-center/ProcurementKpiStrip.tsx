@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
-import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, SlidersHorizontal, TrendingDown, TrendingUp, Truck, Wrench } from 'lucide-react'
-import { frequencyPerDay, poFillRate, returnRate, usageIntensity as calcUsageIntensity } from '@/lib/reports/procurement-kpi-math'
+import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, SlidersHorizontal, TrendingUp, Truck, Wrench } from 'lucide-react'
+import { frequencyPerDay, poFillRate, returnRate } from '@/lib/reports/procurement-kpi-math'
 import KpiCarousel from './KpiCarousel'
 import MovementTrendChart from './MovementTrendChart'
 import TopMovementScatter from './TopMovementScatter'
@@ -109,6 +109,20 @@ type ProcurementKpiCard = {
   className: string
   /** Deret nilai tren untuk sparkline mini (opsional). */
   spark?: number[]
+  /** Native hover tooltip — penjelasan detail kartu. */
+  tooltip?: string
+}
+
+function cardTooltip(card: Pick<ProcurementKpiCard, 'label' | 'valueExact' | 'value' | 'description' | 'formula' | 'source' | 'breakdown' | 'tooltip'>) {
+  if (card.tooltip) return card.tooltip
+  const chips = (card.breakdown ?? []).map((b) => `${b.label}: ${b.value}`).join(' · ')
+  return [
+    `${card.label}: ${card.valueExact ?? card.value}`,
+    card.description,
+    `Rumus: ${card.formula}`,
+    `Sumber: ${card.source}`,
+    chips ? `Rincian: ${chips}` : '',
+  ].filter(Boolean).join('\n')
 }
 
 const DECK_SECTIONS: Array<{ id: DeckSection; label: string; tone: string }> = [
@@ -142,7 +156,10 @@ const movementWindowOptions = [
   { value: '1m', label: '1 bulan' },
   { value: '3m', label: '3 bulan' },
   { value: '6m', label: '6 bulan' },
-  { value: '12m', label: '12 bulan' },
+  { value: '12m', label: '12 bulan / 1 tahun' },
+  { value: '2y', label: '2 tahun' },
+  { value: '5y', label: '5 tahun' },
+  { value: '10y', label: '10 tahun' },
 ]
 
 function toNumber(value: unknown) {
@@ -152,14 +169,22 @@ function toNumber(value: unknown) {
 
 function firstNumber(summary: DbRow | undefined, keys: string[]) {
   if (!summary) return 0
-  const key = keys.find((item) => summary[item] !== undefined && summary[item] !== null && summary[item] !== '')
-  return key ? toNumber(summary[key]) : 0
+  const entries = Object.entries(summary)
+  for (const want of keys) {
+    const hit = entries.find(([k, v]) => k.toLowerCase() === want.toLowerCase() && v !== undefined && v !== null && v !== '')
+    if (hit) return toNumber(hit[1])
+  }
+  return 0
 }
 
 function firstText(summary: DbRow | undefined, keys: string[]) {
   if (!summary) return ''
-  const key = keys.find((item) => summary[item] !== undefined && summary[item] !== null && summary[item] !== '')
-  return key ? String(summary[key]) : ''
+  const entries = Object.entries(summary)
+  for (const want of keys) {
+    const hit = entries.find(([k, v]) => k.toLowerCase() === want.toLowerCase() && v !== undefined && v !== null && v !== '')
+    if (hit) return String(hit[1])
+  }
+  return ''
 }
 
 function formatNumber(value: number) {
@@ -332,7 +357,13 @@ async function fetchSummary(
   })
   const data = await response.json().catch(() => ({})) as {
     success?: boolean
-    data?: { summary?: DbRow; chart?: DbRow[] }
+    data?: {
+      summary?: DbRow
+      chart?: DbRow[]
+      topLists?: Snapshot['topLists']
+      trend?: Snapshot['trend']
+      issueFrequency?: Snapshot['issueFrequency']
+    }
   }
   if (!response.ok || data.success !== true || !data.data?.summary) {
     return { ok: false, summary: {} }
@@ -342,6 +373,9 @@ async function fetchSummary(
     ok: true,
     summary,
     chart: data.data.chart ?? [],
+    topLists: data.data.topLists,
+    trend: data.data.trend,
+    issueFrequency: data.data.issueFrequency,
     updatedAt: firstText(summary, ['TerakhirUpdate', 'LastMovementDate', 'LastUsageDate', 'LastRunningUpdate']),
   }
 }
@@ -364,12 +398,20 @@ async function fetchDeckLegacy(
         itemType: filters.itemType === 'gudang' ? 'gudang' : 'workshop',
       }
     } else if (request.key === 'movement') {
+      // Samakan timeline movement KPI dengan period (bukan MC all).
+      const isYear = filters.periodMode === 'year' && /^\d{4}$/.test((filters.customYear ?? '').trim())
       extra = {
         ...extra,
         ...analysisScopeParams(filters),
         groupBy: 'MovementCategory',
         chartDimension: 'MovementCategory',
-        movementWindow: filters.movementWindow || 'all',
+        movementWindow: isYear ? 'custom' : '1m',
+        ...(isYear
+          ? {
+              dateFrom: `${(filters.customYear ?? '').trim()}-01-01`,
+              dateTo: `${(filters.customYear ?? '').trim()}-12-31`,
+            }
+          : { period: filters.period }),
       }
     }
     return [request.key, await fetchSummary(source, request.report, signal, extra)] as const
@@ -396,19 +438,20 @@ async function fetchDeck(
   const params = new URLSearchParams({
     source,
     period: filters.period,
-    movementWindow: filters.movementWindow || 'all',
+    // Deck KPI: movement selalu di-lock ke period (1m / custom year), bukan MC bebas.
+    movementWindow: '1m',
     groupBy: filters.groupBy,
     scopeCode: cleanFilterValue(filters.scopeCode),
     itemType: filters.itemType,
     location: cleanFilterValue(filters.location),
   })
   // Mode tahun custom: override period dengan rentang tanggal setahun penuh
-  // (dipakai handler usage/pengeluaran-barang; snapshot valuasi bulanan tidak
-  // mendukung rentang tahun — lihat catatan plan).
+  // (usage + movement custom window; valuasi bulanan tetap period-aware di server).
   const customYear = (filters.customYear ?? '').trim()
   if (filters.periodMode === 'year' && /^\d{4}$/.test(customYear)) {
     params.set('dateFrom', `${customYear}-01-01`)
     params.set('dateTo', `${customYear}-12-31`)
+    params.set('movementWindow', 'custom')
     params.delete('period')
   }
   try {
@@ -432,7 +475,8 @@ async function fetchDeck(
 
 const DEFAULT_PROCUREMENT_KPI_FILTERS: ProcurementKpiFilters = {
   period: '', // filled at runtime via currentPeriod()
-  movementWindow: 'all',
+  // Default 1m = selaras period bulanan (bukan all-history).
+  movementWindow: '1m',
   groupBy: 'ProductTypeCode',
   scopeCode: '',
   itemType: '',
@@ -477,6 +521,22 @@ export default function ProcurementKpiStrip({
   const activePeriodLabel = isYearMode
     ? `Tahun ${(filters.customYear ?? '').trim()}`
     : formatPeriodLabel(filters.period)
+  // KPI atas = HANYA periode terpilih (bukan MC lookback multi-bulan).
+  const kpiTimelineRange = (() => {
+    if (isYearMode) {
+      const y = (filters.customYear ?? '').trim()
+      return { from: `${y}-01-01`, to: `${y}-12-31`, label: `1 Jan ${y} s/d 31 Des ${y}` }
+    }
+    const m = String(filters.period ?? '').trim().match(/^(\d{4})-(\d{1,2})/)
+    if (!m) return { from: '—', to: '—', label: 'Periode belum dipilih' }
+    const y = Number(m[1])
+    const mo = Number(m[2])
+    const last = new Date(y, mo, 0).getDate()
+    const from = `${y}-${String(mo).padStart(2, '0')}-01`
+    const to = `${y}-${String(mo).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+    return { from, to, label: `${from} s/d ${to}` }
+  })()
+  const kpiTimelineBadge = `KPI · ${activePeriodLabel} · ${kpiTimelineRange.label}`
   const filteredLinks = {
     stock: hrefWithFilters(links.stock, filters, { includeGroupBy: false }),
     receive: hrefWithFilters(links.receive, filters, { includeGroupBy: false }),
@@ -532,7 +592,12 @@ export default function ProcurementKpiStrip({
       })
       .catch(() => {
         if (controller.signal.aborted) return
-        startTransition(() => setState({ source, loading: false, snapshots: {} }))
+        // Keep previous snapshots on error — empty wipe made charts vanish mid-session.
+        startTransition(() => setState((current) => ({
+          source,
+          loading: false,
+          snapshots: current.source === source ? current.snapshots : {},
+        })))
       })
 
     return () => controller.abort()
@@ -571,6 +636,49 @@ export default function ProcurementKpiStrip({
   const totalQuantity = firstNumber(stock, ['total_quantity', 'TotalQty', 'TotalStok'])
   const totalOnHand = firstNumber(stock, ['total_quantity_on_hand'])
   const totalOnHold = firstNumber(stock, ['total_quantity_on_hold'])
+  const gudangOnHand = firstNumber(stock, ['GudangQuantityOnHand']) || (filters.itemType === 'workshop' ? 0 : totalOnHand)
+  const gudangOnHold = firstNumber(stock, ['GudangQuantityOnHold']) || (filters.itemType === 'workshop' ? 0 : totalOnHold)
+  const workshopOnHand = firstNumber(stock, ['WorkshopQuantityOnHand'])
+    || firstNumber(workshop, ['total_quantity_on_hand', 'WorkshopQuantityOnHand', 'total_quantity'])
+  const workshopOnHold = firstNumber(stock, ['WorkshopQuantityOnHold'])
+    || firstNumber(workshop, ['total_quantity_on_hold', 'WorkshopQuantityOnHold'])
+  const workshopQty = firstNumber(stock, ['WorkshopTotalQuantity'])
+    || workshopOnHand + workshopOnHold
+    || firstNumber(workshop, ['total_quantity', 'TotalQty', 'TotalStok'])
+  // Opening = previous accounting period (IN_MTHENDITEM). Current = selected/live balance.
+  const openingValue = firstNumber(stock, ['OpeningTotalAmount'])
+  const openingGudangValue = firstNumber(stock, ['OpeningGudangTotalAmount'])
+  const openingWorkshopValue = firstNumber(stock, ['OpeningWorkshopTotalAmount'])
+  const valuationDelta = Object.entries(stock ?? {}).some(([k]) => k.toLowerCase() === 'valuationdeltaamount')
+    ? firstNumber(stock, ['ValuationDeltaAmount'])
+    : (inventoryValue - openingValue)
+  const valuationDeltaPctRaw = stock?.ValuationDeltaPct
+  const valuationDeltaPct = valuationDeltaPctRaw === null || valuationDeltaPctRaw === undefined || valuationDeltaPctRaw === ''
+    ? (openingValue !== 0 ? (valuationDelta / openingValue) * 100 : null)
+    : toNumber(valuationDeltaPctRaw)
+  const openingActualPeriod = firstText(stock, ['OpeningActualPeriod'])
+  const openingAccountingPeriod = firstText(stock, ['OpeningAccountingPeriod'])
+  const currentActualPeriod = firstText(stock, ['actual_period', 'ActualPeriod'])
+  const openingPeriodLabel = openingActualPeriod || (openingAccountingPeriod ? `Acc ${openingAccountingPeriod}` : 'periode sebelumnya')
+  const currentPeriodLabel = currentActualPeriod || filters.period || 'periode terpilih'
+  // Default inventory scope = Gudang (1) + Workshop (4). Filter itemType narrows it.
+  const inventoryScope =
+    filters.itemType === 'gudang' ? 'gudang'
+      : filters.itemType === 'workshop' ? 'workshop'
+        : 'both'
+  const inventoryScopeLabel =
+    inventoryScope === 'gudang' ? 'Gudang saja (ItemType 1)'
+      : inventoryScope === 'workshop' ? 'Workshop saja (ItemType 4)'
+        : 'Gudang + Workshop (ItemType 1+4 · default)'
+  const inventoryScopeShort =
+    inventoryScope === 'gudang' ? 'Gudang'
+      : inventoryScope === 'workshop' ? 'Workshop'
+        : 'Gudang + Workshop'
+  const usageWorkshopLines = firstNumber(usage, ['BarisWorkshop'])
+  const usageScopeNote =
+    inventoryScope === 'gudang' ? 'Issue gudang (IN_STOCKISSUE)'
+      : inventoryScope === 'workshop' ? 'Issue workshop (WS_JOBSTOCK)'
+        : 'Issue gudang + workshop (default)'
   const receiveDocs = firstNumber(receive, ['TotalGoodsReceive', 'TotalBaris'])
   const receiveQty = firstNumber(receive, ['TotalQuantity'])
   const receiveAmount = firstNumber(receive, ['TotalAmount'])
@@ -587,17 +695,26 @@ export default function ProcurementKpiStrip({
   const movementQty = firstNumber(movement, ['TotalStockIssueMovementQty', 'TotalStockIssueQty'])
   const movementAmount = firstNumber(movement, ['TotalStockIssueMovementAmount', 'TotalStockIssueAmount'])
   const usageDocuments = firstNumber(usage, ['TotalDokumen', 'TotalIssueDocuments'])
-  const usageEvents = firstNumber(usage, ['TotalBaris', 'TotalIssueEvents'])
-  const usageItems = firstNumber(usage, ['TotalItem', 'TotalItemsUsed'])
-  const usageQty = firstNumber(usage, ['TotalQty', 'TotalIssueQty']) || movementQty
-  const usageAmount = firstNumber(usage, ['TotalAmount', 'TotalIssueAmount']) || movementAmount
+  // Amount/qty sudah fallback ke movement; events harus sama —
+  // kalau pengeluaran-barang gagal/timeout, kartu jangan stuck di 0.
+  // Catatan: movement.TotalItem = total item stok, BUKAN item dipakai → jangan fallback items ke situ.
+  const usageEventsRaw = firstNumber(usage, ['TotalBaris', 'TotalIssueEvents', 'totalbaris'])
+  const usageEvents = usageEventsRaw
+    || firstNumber(movement, ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'])
+  const usageItems = firstNumber(usage, ['TotalItem', 'TotalItemsUsed', 'totalitem', 'total_item'])
+  const usageQty = firstNumber(usage, ['TotalQty', 'TotalIssueQty', 'totalqty']) || movementQty
+  const usageAmount = firstNumber(usage, ['TotalAmount', 'TotalIssueAmount', 'totalamount']) || movementAmount
   const returnAmount = firstNumber(stockReturn, ['TotalAmount', 'TotalReturnAmount'])
-  const netFlowAmount = receiveAmount - usageAmount + returnAmount
   const regularMovement = firstNumber(movement, ['RegularStockIssueMovementCount'])
   const workshopMovement = firstNumber(movement, ['WorkshopStockIssueMovementCount'])
-  const usageIntensity = inventoryValue > 0 ? usageAmount / inventoryValue : 0
-  const activeIssueDays = firstNumber(usage, ['ActiveIssueDays'])
+  const activeIssueDays = firstNumber(usage, ['ActiveIssueDays', 'activeissuedays'])
   const usageFreqPerDay = frequencyPerDay(usageEvents, activeIssueDays)
+  const usageItemsLabel = usageItems > 0
+    ? formatNumber(usageItems)
+    : (snapshots.usage?.ok ? '0' : '—')
+  const usageFreqLabel = activeIssueDays > 0
+    ? `${formatNumber(usageEvents)} event · ${formatQuantity(usageFreqPerDay)}/hari`
+    : `${formatNumber(usageEvents)} event`
   const returnRateValue = returnRate(returnAmount, usageAmount)
   const topLists = snapshots.usage?.topLists
   const topDimensionRows = topLists?.[topDimension] ?? []
@@ -686,18 +803,39 @@ export default function ProcurementKpiStrip({
     return: filteredLinks.return,
   }
 
+  const valuationDeltaLabel = openingValue > 0 || inventoryValue > 0
+    ? `${valuationDelta >= 0 ? '+' : ''}${formatCurrencyCompact(valuationDelta)}${valuationDeltaPct === null ? '' : ` (${valuationDeltaPct >= 0 ? '+' : ''}${valuationDeltaPct.toFixed(1)}%)`}`
+    : '—'
   const valuationCards: ProcurementKpiCard[] = [
     {
       id: 'stock',
       label: 'Total Valuasi Inventory',
       value: formatCurrencyCompact(inventoryValue),
       valueExact: formatCurrency(inventoryValue),
-      description: 'Total inventory stock value in IDR for ItemType 1 + 4.',
-      formula: 'Stock value = SUM((Qty On Hand + Qty On Hold) × Average Cost) for Gudang + Workshop/Mesin.',
-      source: 'asset-stock-valuasi-listing',
+      description: `Current ${currentPeriodLabel} vs Opening ${openingPeriodLabel} · ${inventoryScopeLabel}. Balance, bukan pemakaian.`,
+      formula: 'Current = SUM((QtyOnHand+QtyOnHold)×AvgCost). Opening = IN_MTHENDITEM periode sebelumnya.',
+      source: `asset-stock-valuasi · ${inventoryScopeShort}`,
+      tooltip: [
+        `CURRENT (${currentPeriodLabel}) = ${formatCurrency(inventoryValue)}`,
+        `OPENING (${openingPeriodLabel}) = ${formatCurrency(openingValue)}`,
+        `DELTA = Current − Opening = ${formatCurrency(valuationDelta)}${valuationDeltaPct === null ? '' : ` (${valuationDeltaPct.toFixed(2)}%)`}`,
+        '',
+        `Scope: ${inventoryScopeLabel}`,
+        'INI SISA STOK (balance), BUKAN pemakaian.',
+        'Current: live IN_ITEM (bulan berjalan) atau IN_MTHENDITEM (histori).',
+        'Opening: snapshot IN_MTHENDITEM accounting month sebelumnya.',
+        '',
+        `Gudang current: ${formatCurrency(gudangValue)} | opening: ${formatCurrency(openingGudangValue)}`,
+        `Workshop current: ${formatCurrency(workshopValue)} | opening: ${formatCurrency(openingWorkshopValue)}`,
+        '',
+        'Beda dari Total Usage: valuasi = barang masih di rak; usage = barang sudah keluar periode.',
+      ].join('\n'),
       breakdown: [
-        { label: 'Gudang', value: `${formatCurrency(gudangValue)} · ${formatPercent(percentOf(gudangValue, inventoryValue))}` },
-        { label: 'Workshop', value: `${formatCurrency(workshopValue)} · ${formatPercent(percentOf(workshopValue, inventoryValue))}` },
+        { label: 'Current', value: `${formatCurrency(inventoryValue)} · ${currentPeriodLabel}` },
+        { label: 'Opening', value: `${formatCurrency(openingValue)} · ${openingPeriodLabel}` },
+        { label: 'Delta', value: valuationDeltaLabel },
+        { label: 'Gudang', value: `${formatCurrency(gudangValue)} · OH ${formatQuantity(gudangOnHand)} / Hold ${formatQuantity(gudangOnHold)}` },
+        { label: 'Workshop', value: `${formatCurrency(workshopValue)} · OH ${formatQuantity(workshopOnHand)} / Hold ${formatQuantity(workshopOnHold)}` },
         { label: 'Item valuasi', value: formatNumber(totalInventoryItem) },
       ],
       href: filteredLinks.stock,
@@ -708,13 +846,24 @@ export default function ProcurementKpiStrip({
       id: 'gudang-value',
       label: 'Valuasi Gudang',
       value: formatCurrency(gudangValue),
-      description: 'Gudang stock value in IDR for ItemType 1.',
-      formula: 'Stock value = SUM(total_amount) where ItemType = 1. Qty chips show on hand and on hold.',
-      source: 'asset-stock-valuasi-listing · Gudang',
+      description: 'Hanya Gudang · ItemType 1. Sisa stok gudang, bukan issue.',
+      formula: 'SUM((QtyOnHand+QtyOnHold)×AvgCost) where ItemType=1.',
+      source: 'asset-stock-valuasi · Gudang saja',
+      tooltip: [
+        `VALUASI GUDANG = ${formatCurrency(gudangValue)}`,
+        'Scope: Gudang saja (ItemType 1) — bukan workshop.',
+        '',
+        `On hand: ${formatQuantity(gudangOnHand)} = qty siap pakai di rak gudang.`,
+        `On hold: ${formatQuantity(gudangOnHold)} = qty tertahan/reserved.`,
+        `Item: ${formatNumber(gudangItem)}`,
+        '',
+        'Ini balance stok gudang. Bukan qty yang dipakai periode (itu di Total Usage).',
+      ].join('\n'),
       breakdown: [
+        { label: 'Scope', value: 'Gudang saja' },
         { label: 'Item Gudang', value: formatNumber(gudangItem) },
-        { label: 'Qty on hand', value: formatQuantity(totalOnHand) },
-        { label: 'Qty on hold', value: formatQuantity(totalOnHold) },
+        { label: 'On hand', value: formatQuantity(gudangOnHand) },
+        { label: 'On hold', value: formatQuantity(gudangOnHold) },
       ],
       href: filteredLinks.stock,
       icon: Layers3,
@@ -724,13 +873,26 @@ export default function ProcurementKpiStrip({
       id: 'workshop',
       label: 'Valuasi Workshop',
       value: formatCurrency(workshopValue),
-      description: 'Workshop/Mesin stock value in IDR for ItemType 4.',
-      formula: 'Stock value = SUM(total_amount) where ItemType = 4. Quantity chip shows physical stock scope.',
-      source: 'asset-stock-valuasi-listing · Workshop',
+      description: 'Hanya Workshop · ItemType 4. Sisa stok workshop, bukan issue.',
+      formula: 'SUM((QtyOnHand+QtyOnHold)×AvgCost) where ItemType=4.',
+      source: 'asset-stock-valuasi · Workshop saja',
+      tooltip: [
+        `VALUASI WORKSHOP = ${formatCurrency(workshopValue)}`,
+        'Scope: Workshop/Mesin saja (ItemType 4) — bukan gudang.',
+        '',
+        `On hand: ${formatQuantity(workshopOnHand)}`,
+        `On hold: ${formatQuantity(workshopOnHold)}`,
+        `Total qty: ${formatQuantity(workshopQty)} = OH + Hold workshop`,
+        `Item: ${formatNumber(workshopItem || firstNumber(workshop, ['total_item', 'WorkshopItemCount', 'TotalItem']))}`,
+        '',
+        'Sisa stok workshop. Issue workshop (pemakaian) dihitung di Total Usage via WS_JOBSTOCK.',
+      ].join('\n'),
       breakdown: [
+        { label: 'Scope', value: 'Workshop saja' },
         { label: 'Item Workshop', value: formatNumber(workshopItem || firstNumber(workshop, ['total_item', 'WorkshopItemCount', 'TotalItem'])) },
-        { label: 'Total quantity', value: formatQuantity(totalQuantity) },
-        { label: 'Lokasi', value: formatNumber(firstNumber(stock, ['total_location', 'TotalGudang'])) },
+        { label: 'On hand', value: formatQuantity(workshopOnHand) },
+        { label: 'On hold', value: formatQuantity(workshopOnHold) },
+        { label: 'Total qty', value: formatQuantity(workshopQty) },
       ],
       href: filteredLinks.workshop,
       icon: Wrench,
@@ -743,9 +905,19 @@ export default function ProcurementKpiStrip({
       id: 'receive-value',
       label: 'Nilai Goods Receive',
       value: formatCurrency(receiveAmount),
-      description: 'Goods Receive amount in IDR for selected period.',
-      formula: 'Goods Receive amount = SUM(Receive Qty × PO Cost). Qty chip shows received quantity.',
+      description: 'Nilai barang MASUK dari supplier di periode (bukan issue).',
+      formula: 'GR Amount = SUM(ReceiveQty × PO Cost).',
       source: 'goods-receiving-receipt-activity',
+      tooltip: [
+        `GOODS RECEIVE = ${formatCurrency(receiveAmount)}`,
+        'Arah: MASUK gudang dari supplier — lawan dari Usage/Issue.',
+        '',
+        `Qty receive: ${formatQuantity(receiveQty)} unit fisik diterima.`,
+        `Dokumen: ${formatNumber(receiveDocs)} · Supplier: ${formatNumber(receiveSupplier)}`,
+        '',
+        'Amount = qty × cost PO. Beda item/harga → amount & qty tidak sebanding 1:1.',
+        'Ini bukan pemakaian. Pemakaian = Total Usage / Issue Amount.',
+      ].join('\n'),
       breakdown: [
         { label: 'Dokumen receive', value: formatNumber(receiveDocs) },
         { label: 'Qty receive', value: formatQuantity(receiveQty) },
@@ -759,9 +931,18 @@ export default function ProcurementKpiStrip({
       id: 'pr-outstanding',
       label: 'PR Outstanding',
       value: formatQuantity(prQtyOutstanding),
-      description: 'Outstanding PR quantity not yet fulfilled.',
-      formula: 'PR Outstanding = SUM(Qty Outstanding) from purchase request lines.',
+      description: 'Sisa qty PR belum terpenuhi (proses, bukan stok/issue).',
+      formula: 'PR Outstanding = SUM(Qty Outstanding) PR lines.',
       source: 'purchase-request-inventory',
+      tooltip: [
+        `PR OUTSTANDING QTY = ${formatQuantity(prQtyOutstanding)}`,
+        'Antrian permintaan — belum stok, belum issue.',
+        '',
+        `Total PR: ${formatNumber(prCount)} · Qty request: ${formatQuantity(prQtyRequest)}`,
+        `Nilai PR: ${formatCurrency(prAmount)}`,
+        '',
+        'Angka utama = QTY outstanding, bukan Rupiah.',
+      ].join('\n'),
       breakdown: [
         { label: 'Total PR', value: formatNumber(prCount) },
         { label: 'Qty request', value: formatQuantity(prQtyRequest) },
@@ -775,9 +956,19 @@ export default function ProcurementKpiStrip({
       id: 'po-outstanding',
       label: 'PO Outstanding',
       value: formatQuantity(poQtyOutstanding),
-      description: 'Outstanding PO quantity not yet received.',
-      formula: 'PO Outstanding = SUM(Qty Order − Qty Receive). Fill rate = Qty Receive / Qty Order.',
+      description: 'Sisa qty PO belum diterima (proses, bukan issue).',
+      formula: 'PO Outstanding = SUM(QtyOrder − QtyReceive). Fill = Receive/Order.',
       source: 'purchase-order-history',
+      tooltip: [
+        `PO OUTSTANDING QTY = ${formatQuantity(poQtyOutstanding)}`,
+        'Sudah dipesan, belum masuk gudang.',
+        '',
+        `Order: ${formatQuantity(poQtyOrder)} · Receive: ${formatQuantity(poQtyReceive)}`,
+        `Fill rate: ${formatPercent(poFillRate(poQtyReceive, poQtyOrder) * 100)}`,
+        `Nilai PO: ${formatCurrency(poAmount)}`,
+        '',
+        'Bukan usage/issue. Setelah GR masuk, baru jadi stok on hand.',
+      ].join('\n'),
       breakdown: [
         { label: 'Total PO', value: formatNumber(poCount) },
         { label: 'Qty order', value: formatQuantity(poQtyOrder) },
@@ -795,9 +986,21 @@ export default function ProcurementKpiStrip({
       id: 'movement-total',
       label: 'Total Issue Movement',
       value: formatNumber(movementEvent),
-      description: 'Count of issue/usage movement events in selected movement window.',
-      formula: 'Event count = regular StockIssue lines + Workshop/Mesin issue lines in movement window.',
+      description: 'Jumlah EVENT/baris issue (bukan Rupiah, bukan qty fisik).',
+      formula: 'Event = SUM(StockIssueEventCount) per item di window movement.',
       source: 'all-stock-movement-analysis · total event',
+      tooltip: [
+        `TOTAL ISSUE MOVEMENT = ${formatNumber(movementEvent)} EVENT`,
+        'Ini HITUNGAN KEJADIAN, bukan amount & bukan qty.',
+        '',
+        `Regular (gudang): ${formatNumber(regularMovement)} event`,
+        `Workshop: ${formatNumber(workshopMovement)} event`,
+        `Dokumen usage: ${formatNumber(usageDocuments)}`,
+        '',
+        '1 event ≈ 1 baris/transaksi issue per item di window movement.',
+        'Beda dari Issue Qty (unit fisik) & Issue Amount (Rupiah).',
+        'Window movement filter (1m/3m/…) bisa beda dari period usage bulanan → angka bisa beda dari Total Usage.',
+      ].join('\n'),
       breakdown: [
         { label: 'Regular', value: formatNumber(regularMovement) },
         { label: 'Workshop', value: formatNumber(workshopMovement) },
@@ -811,9 +1014,22 @@ export default function ProcurementKpiStrip({
       id: 'movement-qty',
       label: 'Issue Qty',
       value: formatQuantity(movementQty),
-      description: 'Total quantity issued/used in selected period/window.',
-      formula: 'Issue Qty = SUM issued physical quantity from movement and usage reports.',
+      description: 'Qty FISIK keluar (unit). Bukan Rupiah.',
+      formula: 'Issue Qty = SUM(StockIssueMovementQty) di movement window.',
       source: 'all-stock-movement-analysis · qty',
+      tooltip: [
+        `ISSUE QTY = ${formatQuantity(movementQty)} UNIT FISIK`,
+        'Ini BERAPA BANYAK barang keluar (liter/pcs/kg), BUKAN nilai uang.',
+        '',
+        `Usage qty (pengeluaran-barang): ${formatQuantity(usageQty)}`,
+        `Event line: ${formatNumber(usageEvents)} · Docs: ${formatNumber(usageDocuments)}`,
+        '',
+        'Kenapa bisa beda dari Usage qty?',
+        '· Report beda: movement = agregat per item/window; usage = baris transaksi periode.',
+        '· Window movement (1m/3m/all) ≠ period filter usage.',
+        '',
+        'Issue Amount = nilai uang dari qty × cost. Qty kecil + cost mahal → amount besar.',
+      ].join('\n'),
       breakdown: [
         { label: 'Usage qty', value: formatQuantity(usageQty) },
         { label: 'Event line', value: formatNumber(usageEvents) },
@@ -827,9 +1043,21 @@ export default function ProcurementKpiStrip({
       id: 'movement-amount',
       label: 'Issue Amount',
       value: formatCurrency(movementAmount),
-      description: 'Total issue/usage value in IDR.',
-      formula: 'Issue Amount = SUM issued amount from movement and usage reports.',
-      source: 'all-stock-movement-analysis · amount',
+      description: 'Nilai UANG issue (Rp). Bukan qty unit.',
+      formula: 'Issue Amount = SUM(StockIssueMovementAmount). Timeline deck = period terpilih (1m / tahun).',
+      source: `all-stock-movement-analysis · amount · ${kpiTimelineRange.label}`,
+      tooltip: [
+        `ISSUE AMOUNT = ${formatCurrency(movementAmount)}`,
+        `Timeline KPI: ${kpiTimelineRange.label}`,
+        'Nilai RUPIAH issue di periode terpilih (KPI lock — bukan lookback MC analysis).',
+        '',
+        `Usage amount (pengeluaran-barang): ${formatCurrency(usageAmount)}`,
+        `Qty movement: ${formatQuantity(movementQty)} unit`,
+        '',
+        'Qty ≠ amount: amount = Σ(qty × cost).',
+        'KPI atas seperiode. Movement Category section bawah = lookback terpisah.',
+        'Sisa beda tipis = model agregasi (baris transaksi vs sum per item), bukan timeline beda.',
+      ].join('\n'),
       breakdown: [
         { label: 'Usage amount', value: formatCurrency(usageAmount) },
         { label: 'Qty issue', value: formatQuantity(movementQty) },
@@ -843,9 +1071,20 @@ export default function ProcurementKpiStrip({
       id: 'movement-frequency',
       label: 'Frekuensi Issue',
       value: formatNumber(usageDocuments),
-      description: 'Jumlah dokumen issue unik dan sebaran hari aktif issue dalam periode terpilih.',
-      formula: 'Frekuensi = COUNT(DISTINCT Dokumen) issue; intensitas = dokumen / hari aktif issue.',
+      description: 'Jumlah DOKUMEN issue unik (bukan amount, bukan qty).',
+      formula: 'Docs = COUNT(DISTINCT Dokumen); intensitas = docs / ActiveIssueDays.',
       source: 'pengeluaran-barang · issueFrequency',
+      tooltip: [
+        `FREKUENSI = ${formatNumber(usageDocuments)} DOKUMEN ISSUE`,
+        'Hitung seberapa SERING issue, bukan seberapa besar.',
+        '',
+        `Hari aktif issue: ${formatNumber(activeIssueDays)}`,
+        `Doc/hari: ${formatQuantity(activeIssueDays > 0 ? usageDocuments / activeIssueDays : 0)}`,
+        `Event line: ${formatNumber(usageEvents)} (baris, bisa > dokumen)`,
+        '',
+        '1 dokumen bisa banyak baris item → docs < events.',
+        'Amount tinggi + frekuensi rendah = issue jarang tapi nilai besar.',
+      ].join('\n'),
       breakdown: [
         { label: 'Hari aktif', value: formatNumber(activeIssueDays) },
         { label: 'Doc/hari', value: formatQuantity(activeIssueDays > 0 ? usageDocuments / activeIssueDays : 0) },
@@ -859,9 +1098,16 @@ export default function ProcurementKpiStrip({
       id: 'movement-open-close-qty',
       label: 'Opening vs Closing Qty',
       value: formatQuantity(monthlyClosingQty),
-      description: 'Quantity closing bulan berjalan dibanding opening, dari movement report bulanan.',
-      formula: 'Closing Qty = SUM(ClosingQty); Opening Qty = SUM(OpeningQty); delta = closing − opening.',
+      description: 'Saldo qty bulanan (ledger), bukan issue amount.',
+      formula: 'Delta = ClosingQty − OpeningQty (monthly stock movement).',
       source: 'monthly-stock-account-movement-details',
+      tooltip: [
+        `CLOSING QTY = ${formatQuantity(monthlyClosingQty)}`,
+        `Opening: ${formatQuantity(monthlyOpeningQty)} · Delta: ${monthlyQtyDelta >= 0 ? '+' : ''}${formatQuantity(monthlyQtyDelta)}`,
+        '',
+        'Ini saldo qty bulan (opening→closing), unit fisik.',
+        'Bukan Issue Amount (Rp) dan bukan frekuensi dokumen.',
+      ].join('\n'),
       breakdown: [
         { label: 'Opening qty', value: formatQuantity(monthlyOpeningQty) },
         { label: 'Closing qty', value: formatQuantity(monthlyClosingQty) },
@@ -875,9 +1121,16 @@ export default function ProcurementKpiStrip({
       id: 'movement-gr-qty',
       label: 'Goods Receive Qty',
       value: formatQuantity(monthlyGoodsReceiveQty),
-      description: 'Total quantity barang yang diterima (goods receive) pada periode berjalan.',
-      formula: 'Goods Receive Qty = SUM(GoodsReceiveQty) dari movement report bulanan.',
+      description: 'Qty MASUK bulanan (unit), dari ledger movement.',
+      formula: 'GoodsReceiveQty monthly; net ≈ GR − IssuedTotal.',
       source: 'monthly-stock-account-movement-details',
+      tooltip: [
+        `GR QTY (monthly) = ${formatQuantity(monthlyGoodsReceiveQty)} UNIT`,
+        `Issued total: ${formatQuantity(monthlyIssuedTotalQty)}`,
+        `Net (GR − issued): ${formatQuantity(monthlyGoodsReceiveQty - monthlyIssuedTotalQty)}`,
+        '',
+        'Qty masuk ledger bulan. Bukan nilai Rupiah receive card proses.',
+      ].join('\n'),
       breakdown: [
         { label: 'Issued total qty', value: formatQuantity(monthlyIssuedTotalQty) },
         { label: 'Net qty (GR − issued)', value: formatQuantity(monthlyGoodsReceiveQty - monthlyIssuedTotalQty) },
@@ -890,9 +1143,17 @@ export default function ProcurementKpiStrip({
       id: 'movement-issued-split',
       label: 'Issued Qty Split',
       value: formatQuantity(monthlyIssuedTotalQty),
-      description: 'Rincian quantity issue: ledger, station, dan vehicle pada periode berjalan.',
-      formula: 'Issued Total = Ledger + Issued Station + Issued Vehicle (qty), dari movement report bulanan.',
+      description: 'Pecahan qty issue: ledger / station / vehicle.',
+      formula: 'IssuedTotal = Ledger + Station + Vehicle (qty).',
       source: 'monthly-stock-account-movement-details',
+      tooltip: [
+        `ISSUED TOTAL QTY = ${formatQuantity(monthlyIssuedTotalQty)}`,
+        `Ledger: ${formatQuantity(monthlyLedgerQty)}`,
+        `Station: ${formatQuantity(monthlyIssuedStationQty)}`,
+        `Vehicle: ${formatQuantity(monthlyIssuedVehicleQty)}`,
+        '',
+        'Semua unit fisik. Untuk nilai uang lihat Issue Amount / Total Usage.',
+      ].join('\n'),
       breakdown: [
         { label: 'Ledger qty', value: formatQuantity(monthlyLedgerQty) },
         { label: 'Station qty', value: formatQuantity(monthlyIssuedStationQty) },
@@ -906,9 +1167,17 @@ export default function ProcurementKpiStrip({
       id: 'movement-top-frequency',
       label: 'Paling Sering Di-issue',
       value: topIssueFreq ? (topIssueFreq.code ?? topIssueFreq.name ?? '—') : '—',
-      description: 'Item dengan frekuensi dokumen issue tertinggi dalam periode terpilih.',
-      formula: 'Top frequency = item dengan COUNT(DISTINCT Dokumen) issue terbanyak.',
+      description: 'Item tersering by COUNT dokumen (bukan amount terbesar).',
+      formula: 'Top = item dengan COUNT(DISTINCT Dokumen) issue tertinggi.',
       source: 'pengeluaran-barang · issueFrequency.topItems',
+      tooltip: [
+        `TOP FREQUENCY = ${topIssueFreq ? (topIssueFreq.code ?? topIssueFreq.name ?? '—') : '—'}`,
+        `Nama: ${topIssueFreq?.name ?? '—'}`,
+        `Doc issue: ${formatNumber(topIssueFreqDocs)} · Event: ${formatNumber(topIssueFreq ? Number(topIssueFreq.events) || 0 : 0)}`,
+        '',
+        'Diurut frekuensi dokumen, BUKAN amount.',
+        'Item sering keluar kecil-kecil bisa kalah amount vs item jarang tapi mahal.',
+      ].join('\n'),
       breakdown: [
         { label: 'Doc issue', value: formatNumber(topIssueFreqDocs) },
         { label: 'Nama item', value: topIssueFreq?.name ?? '—' },
@@ -920,39 +1189,58 @@ export default function ProcurementKpiStrip({
     },
   ]
 
+  const usageOnHand = inventoryScope === 'gudang' ? gudangOnHand
+    : inventoryScope === 'workshop' ? workshopOnHand
+      : totalOnHand
+  const usageOnHold = inventoryScope === 'gudang' ? gudangOnHold
+    : inventoryScope === 'workshop' ? workshopOnHold
+      : totalOnHold
+
   const heroCards: ProcurementKpiCard[] = [
     valuationCards[0],
-    {
-      id: 'net-flow',
-      label: 'Arus Bersih Periode',
-      value: formatCurrencyCompact(netFlowAmount),
-      valueExact: formatCurrency(netFlowAmount),
-      description: netFlowAmount >= 0 ? 'Net flow amount in IDR: receive + return is greater than issue.' : 'Net flow amount in IDR: issue is greater than receive + return.',
-      formula: 'Net Flow = Goods Receive Amount − Issue Amount + Return Amount.',
-      source: 'receive − pengeluaran + return',
-      breakdown: [
-        { label: 'Receive', value: formatCurrency(receiveAmount) },
-        { label: 'Issue', value: formatCurrency(usageAmount) },
-        { label: 'Return', value: formatCurrency(returnAmount) },
-      ],
-      href: filteredLinks.receive,
-      icon: netFlowAmount >= 0 ? TrendingUp : TrendingDown,
-      className: netFlowAmount >= 0 ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100' : 'border-amber-300/25 bg-amber-400/10 text-amber-100',
-    },
     {
       id: 'total-usage',
       label: 'Total Usage (Issue)',
       value: formatCurrencyCompact(usageAmount),
       valueExact: formatCurrency(usageAmount),
-      description: 'Total usage/issue amount in IDR for selected period.',
-      formula: 'Total Usage = SUM issue Amount. Freq/hari = Issue Events / Hari Aktif. Return rate = Return / Issue.',
-      source: 'pengeluaran-barang',
+      description: `Nilai UANG barang KELUAR periode · ${usageScopeNote}.`,
+      formula: 'Usage Amount = SUM(issue Amount) di period terpilih. Qty = SUM(issue Qty). On hand/hold = sisa stok.',
+      source: `pengeluaran-barang · ${inventoryScopeShort} · ${kpiTimelineRange.label}`,
+      tooltip: [
+        `TOTAL USAGE (ISSUE) AMOUNT = ${formatCurrency(usageAmount)}`,
+        `Scope: ${inventoryScopeLabel}`,
+        `Timeline KPI: ${kpiTimelineRange.label}`,
+        'Sumber: pengeluaran-barang (IN_STOCKISSUE + WS_JOBSTOCK default)',
+        '',
+        '=== APA INI ===',
+        'Nilai RUPIAH barang KELUAR / dipakai di periode terpilih.',
+        'Bukan sisa stok (valuasi), bukan receive.',
+        '',
+        '=== QTY vs AMOUNT ===',
+        `Qty issue: ${formatQuantity(usageQty)} unit fisik.`,
+        `Amount: ${formatCurrency(usageAmount)} = Σ (qty × cost).`,
+        'Qty kecil bisa amount besar (item mahal).',
+        '',
+        '=== ON HAND / ON HOLD ===',
+        `On hand: ${formatQuantity(usageOnHand)} · On hold: ${formatQuantity(usageOnHold)} — sisa rak, bukan qty issue.`,
+        '',
+        '=== VS ISSUE AMOUNT ===',
+        `Issue Amount (movement, period-locked): ${formatCurrency(movementAmount)}`,
+        `Issue Qty: ${formatQuantity(movementQty)} · Events: ${formatNumber(movementEvent)}`,
+        'KPI deck samakan timeline ke period → kedua amount seperiode.',
+        '',
+        `Item dipakai: ${usageItemsLabel} · Frekuensi: ${usageFreqLabel}`,
+      ].join('\n'),
       breakdown: [
+        { label: 'Scope', value: inventoryScopeShort },
         { label: 'Qty issue', value: formatQuantity(usageQty) },
-        { label: 'Frekuensi', value: `${formatNumber(usageEvents)} event · ${formatQuantity(usageFreqPerDay)}/hari` },
-        { label: 'Item dipakai', value: formatNumber(usageItems) },
-        { label: 'Intensitas', value: formatPercent(usageIntensity * 100) },
-        { label: 'Return rate', value: formatPercent(returnRateValue * 100) },
+        { label: 'On hand stok', value: formatQuantity(usageOnHand) },
+        { label: 'On hold stok', value: formatQuantity(usageOnHold) },
+        { label: 'Item dipakai', value: usageItemsLabel },
+        { label: 'Frekuensi', value: usageFreqLabel },
+        ...(inventoryScope === 'both' && usageWorkshopLines > 0
+          ? [{ label: 'Baris workshop', value: formatNumber(usageWorkshopLines) }]
+          : []),
       ],
       href: filteredLinks.usage,
       icon: Package,
@@ -978,16 +1266,16 @@ export default function ProcurementKpiStrip({
           <Link
             key={card.id}
             href={card.href}
-            title={exact}
-            aria-label={`${card.label}: ${exact}`}
+            title={cardTooltip(card)}
+            aria-label={`${card.label}: ${exact}. ${card.description}`}
             className={isHeadline
-              ? 'rc-kpi-surface rc-reveal group relative min-h-[190px] overflow-hidden rounded-[24px] p-5'
-              : 'rc-kpi-surface rc-reveal group relative min-h-[150px] overflow-hidden rounded-[22px] p-3'}
+              ? 'rc-kpi-surface rc-reveal group relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[24px] p-5'
+              : 'rc-kpi-surface rc-reveal group relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[22px] p-3'}
             style={{ '--reveal-order': cardIndex } as React.CSSProperties}
           >
-            <span className="pointer-events-none absolute -right-10 -top-12 h-24 w-24 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
-            <span className="relative z-10 flex items-start justify-between gap-2">
-              <span className="min-w-0">
+            <span className="pointer-events-none absolute -right-8 -top-10 h-20 w-20 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
+            <span className="relative z-10 flex min-w-0 items-start justify-between gap-2">
+              <span className="min-w-0 flex-1">
                 {isHeadline ? (
                   <span className="rc-data inline-flex max-w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-[var(--rc-text-faint)]">
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClass}`} />
@@ -1001,9 +1289,9 @@ export default function ProcurementKpiStrip({
                 )}
                 <strong
                   className={isHeadline
-                    ? 'rc-display mt-3 block truncate text-[2.6rem] font-bold leading-none text-[var(--rc-text)]'
-                    : 'rc-metric mt-2 block truncate text-[1.15rem] font-semibold text-[var(--rc-text)]'}
-                  title={exact}
+                    ? 'rc-display mt-3 block min-w-0 break-words text-[2.1rem] font-bold leading-none text-[var(--rc-text)] sm:text-[2.4rem]'
+                    : 'rc-metric mt-2 block min-w-0 break-words text-[1.05rem] font-semibold leading-tight text-[var(--rc-text)] sm:text-[1.15rem]'}
+                  title={cardTooltip(card)}
                 >
                   {loading ? '...' : card.value}
                 </strong>
@@ -1015,34 +1303,57 @@ export default function ProcurementKpiStrip({
               </span>
             </span>
             <span className={isHeadline
-              ? 'relative z-10 mt-2 block truncate text-xs text-[var(--rc-text-muted)]'
-              : 'relative z-10 mt-2 block truncate text-[11px] text-[var(--rc-text-muted)]'}>
+              ? 'relative z-10 mt-2 line-clamp-2 min-w-0 text-xs leading-4 text-[var(--rc-text-muted)]'
+              : 'relative z-10 mt-2 line-clamp-2 min-w-0 text-[11px] leading-4 text-[var(--rc-text-muted)]'}>
               {loading ? 'Menunggu response gateway' : card.description}
             </span>
             {card.spark && card.spark.length > 1 ? (
-              <span className="relative z-10 mt-2 flex items-center gap-3">
-                <Sparkline values={card.spark} width={isHeadline ? 150 : 110} height={isHeadline ? 36 : 28} />
+              <span className="relative z-10 mt-2 flex min-w-0 items-center gap-2 overflow-hidden">
+                <Sparkline values={card.spark} width={isHeadline ? 140 : 96} height={isHeadline ? 32 : 24} />
+                {(() => {
+                  const last = card.spark[card.spark.length - 1]
+                  const prev = card.spark[card.spark.length - 2]
+                  if (!Number.isFinite(last) || !Number.isFinite(prev) || prev === 0) return null
+                  const pct = ((last - prev) / Math.abs(prev)) * 100
+                  const up = pct >= 0
+                  return (
+                    <span
+                      className={`rc-data inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                        up ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-400/15 text-amber-300'
+                      }`}
+                      title={`Perubahan vs periode sebelumnya (${formatPercent(Math.abs(pct))})`}
+                    >
+                      {up ? '▲' : '▼'} {Math.abs(pct).toFixed(0)}%
+                    </span>
+                  )
+                })()}
                 <MomentumDelta values={card.spark} />
               </span>
             ) : null}
-            <span className="relative z-10 mt-2 flex flex-wrap gap-1.5">
-              {(isHeadline ? card.breakdown.slice(0, 3) : card.breakdown).map((item) => (
-                <span key={item.label} className="rc-chip max-w-full truncate">
+            <span className="relative z-10 mt-2 flex min-w-0 flex-wrap content-start gap-1">
+              {(isHeadline ? card.breakdown.slice(0, 3) : card.breakdown.slice(0, 5)).map((item) => (
+                <span key={item.label} className="rc-chip max-w-full">
                   <span>{item.label}: </span>
-                  <strong>{loading ? '...' : item.value}</strong>
+                  <strong title={String(item.value)}>{loading ? '...' : item.value}</strong>
                 </span>
               ))}
             </span>
-            <span className="rc-hairline rc-data relative z-10 mt-2 flex items-center justify-between gap-2 pt-2 text-[10px] text-[var(--rc-text-faint)]">
-              {loading ? 'Loading' : card.source}
-              <ArrowRight size={13} className="text-[var(--rc-forest-accent)]" />
+            <span className="rc-hairline rc-data relative z-10 mt-auto flex min-w-0 items-center justify-between gap-2 pt-2 text-[10px] text-[var(--rc-text-faint)]">
+              <span className="min-w-0 truncate">{loading ? 'Loading' : card.source}</span>
+              <ArrowRight size={13} className="shrink-0 text-[var(--rc-forest-accent)]" />
             </span>
           </Link>
         )
       })
 
   const renderCardGrid = (cards: ProcurementKpiCard[]) => (
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+    <div className={`grid min-w-0 gap-3 ${
+      cards.length <= 1
+        ? 'grid-cols-1'
+        : cards.length === 2
+          ? 'grid-cols-1 sm:grid-cols-2'
+          : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
+    }`}>
       {renderCardItems(cards)}
     </div>
   )
@@ -1059,7 +1370,7 @@ export default function ProcurementKpiStrip({
         <div className="min-w-0">
           <h2 className="rc-display text-xl font-bold text-[var(--rc-text)] sm:text-2xl">Procurement command deck</h2>
           <p className="mt-1 max-w-4xl text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">
-            Hero always on: Total Valuasi · Arus Bersih · Total Usage. Tab secondary: Valuasi · Proses · Movement.
+            KPI atas = periode terpilih saja ({kpiTimelineRange.label}). Movement Category di bawah = lookback terpisah (bukan KPI).
           </p>
         </div>
         <span className="w-fit rounded-full border border-[var(--rc-forest-border-strong)] bg-[rgba(155,226,61,.08)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[var(--rc-forest-accent)]">
@@ -1094,13 +1405,45 @@ export default function ProcurementKpiStrip({
           </div>
         ) : null}
 
+        <div
+          className="mt-2 rounded-2xl border border-sky-300/20 bg-sky-400/[0.07] px-3 py-2"
+          role="status"
+          aria-label="Timeline KPI aktif"
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-100/80">Timeline KPI atas (wajib seperiode)</p>
+          <p className="mt-1 text-sm font-bold text-sky-50">{kpiTimelineBadge}</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-sky-100/70">
+            Total Usage · Issue Amount/Qty · Receive · PR/PO outstanding di KPI memakai rentang ini saja.
+            Movement Category (heatmap/tabel di bawah) punya lookback sendiri — jangan disamakan dengan KPI.
+          </p>
+        </div>
+
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--rc-text-faint)]" aria-label="Active filter context">
-          <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-amber-100" title="Periode usage/receive">
+          <span
+            className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-amber-100"
+            title={`KPI period: ${kpiTimelineRange.label}`}
+          >
             Period {activePeriodLabel}{isYearMode ? '' : ` · ${filters.period}`}
           </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">MC {filters.movementWindow}</span>
+          <span
+            className="rounded-full border border-sky-300/25 bg-sky-400/10 px-2.5 py-1 text-sky-100"
+            title={`KPI timeline locked: ${kpiTimelineRange.from} → ${kpiTimelineRange.to}`}
+          >
+            KPI {kpiTimelineRange.from} → {kpiTimelineRange.to}
+          </span>
+          <span
+            className="rounded-full border border-violet-300/25 bg-violet-400/10 px-2.5 py-1 text-violet-100"
+            title="Movement Category analysis di section bawah — lookback multi-bulan terpisah dari KPI."
+          >
+            MC analysis · lookback terpisah
+          </span>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Group {selectedGroup.label}</span>
-          <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{filters.itemType ? `Scope ${filters.itemType}` : 'Scope Inventory 1+4'}</span>
+          <span
+            className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2.5 py-1 text-emerald-100"
+            title="Default analisis = Gudang + Workshop. Filter itemType mempersempit ke salah satu."
+          >
+            {inventoryScopeLabel}
+          </span>
           {filters.scopeCode ? <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Code {filters.scopeCode}</span> : null}
           {filters.location ? <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">Lokasi {filters.location}</span> : null}
         </div>
@@ -1123,26 +1466,29 @@ export default function ProcurementKpiStrip({
         />
       </div>
 
-      <div className="relative z-10 grid gap-3 p-3 lg:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.7fr)]">
+      <div className="relative z-10 grid min-w-0 gap-3 p-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
         {headlineCard ? (
           <Link
             href={headlineCard.href}
-            title={headlineCard.valueExact ?? headlineCard.value}
-            aria-label={`${headlineCard.label}: ${headlineCard.valueExact ?? headlineCard.value}`}
-            className="rc-reveal group relative min-h-[222px] overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[linear-gradient(145deg,rgba(24,185,107,.2),rgba(4,18,12,.72)_52%,rgba(214,184,92,.13))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)]"
+            title={cardTooltip(headlineCard)}
+            aria-label={`${headlineCard.label}: ${headlineCard.valueExact ?? headlineCard.value}. ${headlineCard.description}`}
+            className="rc-reveal group relative isolate min-h-0 min-w-0 overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[linear-gradient(145deg,rgba(24,185,107,.2),rgba(4,18,12,.72)_52%,rgba(214,184,92,.13))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:border-[var(--rc-forest-border-strong)]"
           >
             <span className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-emerald-300/20 blur-3xl transition group-hover:bg-lime-300/25" aria-hidden="true" />
             <span className="pointer-events-none absolute bottom-0 left-0 h-20 w-full bg-[linear-gradient(90deg,rgba(155,226,61,.14),transparent)]" aria-hidden="true" />
 
             <span className="relative z-10 flex items-start justify-between gap-3">
-              <span>
-                <span className="rc-data block text-[10px] uppercase tracking-[0.22em] text-[var(--rc-text-faint)]">Master valuation</span>
+              <span className="min-w-0">
+                <span className="rc-data block text-[10px] uppercase tracking-[0.22em] text-[var(--rc-text-faint)]">Master valuation · {inventoryScopeShort} · {kpiTimelineRange.label}</span>
                 <strong
-                  className="rc-display mt-3 block text-[2.8rem] font-bold leading-none text-[var(--rc-text)] sm:text-[3.4rem]"
-                  title={headlineCard.valueExact ?? headlineCard.value}
+                  className="rc-display mt-3 block min-w-0 break-words text-[2.2rem] font-bold leading-none text-[var(--rc-text)] sm:text-[2.8rem]"
+                  title={cardTooltip(headlineCard)}
                 >
                   {loading ? '...' : headlineCard.value}
                 </strong>
+                <span className="mt-2 inline-flex rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">
+                  {inventoryScopeLabel}
+                </span>
               </span>
               <span className="grid h-12 w-12 place-items-center rounded-2xl border border-emerald-200/25 bg-emerald-300/10 text-emerald-100">
                 <Package size={22} />
@@ -1153,17 +1499,41 @@ export default function ProcurementKpiStrip({
               {headlineCard.formula}
             </span>
 
+            <span className="relative z-10 mt-3 grid gap-1.5 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
+                <span>Current · {currentPeriodLabel}</span>
+                <span title={formatCurrency(inventoryValue)}>{loading ? '...' : formatCurrencyCompact(inventoryValue)}</span>
+              </span>
+              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
+                <span>Opening · {openingPeriodLabel}</span>
+                <span title={formatCurrency(openingValue)}>{loading ? '...' : formatCurrencyCompact(openingValue)}</span>
+              </span>
+              <span className="flex items-center justify-between gap-3 border-t border-white/10 pt-1.5 text-[11px] font-bold">
+                <span className="text-[var(--rc-text-faint)]">Delta (Current − Opening)</span>
+                <span
+                  className={valuationDelta > 0 ? 'text-emerald-200' : valuationDelta < 0 ? 'text-rose-200' : 'text-[var(--rc-text-muted)]'}
+                  title={formatCurrency(valuationDelta)}
+                >
+                  {loading ? '...' : valuationDeltaLabel}
+                </span>
+              </span>
+            </span>
+
             <span className="relative z-10 mt-4 grid gap-2">
               <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
                 <span>Gudang</span>
-                <span title={formatCurrency(gudangValue)}>{loading ? '...' : `${formatCurrencyCompact(gudangValue)} · ${formatPercent(gudangShare)}`}</span>
+                <span title={`Current ${formatCurrency(gudangValue)} · Opening ${formatCurrency(openingGudangValue)}`}>
+                  {loading ? '...' : `${formatCurrencyCompact(gudangValue)} · ${formatPercent(gudangShare)}`}
+                </span>
               </span>
               <span className="h-2 overflow-hidden rounded-full bg-white/10">
                 <span className="block h-full rounded-full bg-[linear-gradient(90deg,#18b96b,#9be23d)]" style={{ width: `${gudangShare}%` }} />
               </span>
               <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
                 <span>Workshop/Mesin</span>
-                <span title={formatCurrency(workshopValue)}>{loading ? '...' : `${formatCurrencyCompact(workshopValue)} · ${formatPercent(workshopShare)}`}</span>
+                <span title={`Current ${formatCurrency(workshopValue)} · Opening ${formatCurrency(openingWorkshopValue)}`}>
+                  {loading ? '...' : `${formatCurrencyCompact(workshopValue)} · ${formatPercent(workshopShare)}`}
+                </span>
               </span>
               <span className="h-2 overflow-hidden rounded-full bg-white/10">
                 <span className="block h-full rounded-full bg-[linear-gradient(90deg,#f59e0b,#d6b85c)]" style={{ width: `${workshopShare}%` }} />
@@ -1177,13 +1547,15 @@ export default function ProcurementKpiStrip({
           </Link>
         ) : null}
 
-        <div className="space-y-3">
-          <div>
-            <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">Always visible · Arus Bersih + Total Usage</p>
+        <div className="min-w-0 space-y-3">
+          <div className="min-w-0">
+            <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">
+              Always visible · Total Usage · {inventoryScopeShort} · {kpiTimelineRange.label}
+            </p>
             {renderCardGrid(heroSideCards)}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="KPI secondary sections">
               {DECK_SECTIONS.map((section) => (
                 <button
@@ -1260,6 +1632,15 @@ export default function ProcurementKpiStrip({
       ) : null}
 
       <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
+        <div className="mb-2 rounded-2xl border border-violet-300/20 bg-violet-400/[0.07] px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-100/80">
+            Section terpisah · Movement Category analysis
+          </p>
+          <p className="mt-1 text-[11px] font-semibold leading-4 text-violet-100/75">
+            Lookback multi-bulan di sini (6/12/24/… bln) hanya untuk pola Movement Category.
+            Tidak mengubah angka KPI atas. KPI atas tetap: <strong className="text-violet-50">{kpiTimelineRange.label}</strong>.
+          </p>
+        </div>
         <div className="rc-reveal rounded-[28px] p-1" style={{ '--reveal-order': 5 } as React.CSSProperties}>
           <MovementAnalytics
             source={source}

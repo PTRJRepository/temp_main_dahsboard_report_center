@@ -218,6 +218,9 @@ ritme 25/23/23/18/17/26, sebaran Fast 4 Reguler 5 Slow 3, top list "NPK
 12/12/17/2 + TE · 28 dok · 21%"; klik top item membuka dialog drilldown barang
 itu. 0 error JS. tsc 0, eslint 0, build exit 0.
 
+### 26. 2026-07-24 - Restyle deck ala market/crypto
+- Ticker insight marquee + leaderboard Top movement (gradient emerald) + badge delta ▲/▼ pada kartu KPI.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

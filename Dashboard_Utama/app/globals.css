@@ -1134,6 +1134,28 @@ body {
   }
 }
 
+/* Insight ticker — market-ticker marquee; konten digandakan, geser -50% lalu ulang. */
+@keyframes rc-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.rc-ticker-track {
+  animation: rc-ticker 30s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-ticker-track {
+    animation: none;
+    width: auto;
+    overflow-x: auto;
+  }
+}
+
 /* Snap-scroll carousel — hide scrollbar, keep scroll affordance */
 .report-center-dark .rc-carousel-track {
   scrollbar-width: none;
@@ -1147,19 +1169,21 @@ body {
 /* KPI card surface — hairline border, inner top-light, elevation via lightness on dark */
 .report-center-dark .rc-kpi-surface {
   position: relative;
+  isolation: isolate;
+  min-width: 0;
+  max-width: 100%;
   background:
     linear-gradient(165deg, rgba(172, 255, 188, 0.055), rgba(172, 255, 188, 0.012) 42%, rgba(0, 0, 0, 0.16)),
     var(--rc-forest-surface);
   border: 1px solid var(--rc-forest-border);
   box-shadow: inset 0 1px 0 rgba(235, 255, 240, 0.07);
   transition:
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 220ms ease,
     background 220ms ease;
 }
 
 .report-center-dark .rc-kpi-surface:hover {
-  transform: translateY(-2px);
+  /* No lift transform — avoids neighbor card visual collision in tight grids/carousels */
   border-color: var(--rc-forest-border-strong);
   background:
     linear-gradient(165deg, rgba(172, 255, 188, 0.085), rgba(172, 255, 188, 0.02) 42%, rgba(0, 0, 0, 0.14)),
@@ -1181,8 +1205,13 @@ body {
   line-height: 0.95;
 }
 
-/* Chip data — mono, hairline */
+/* Chip data — mono, hairline; wrap-safe so cards don't collide */
 .report-center-dark .rc-chip {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.25rem;
   font-family: var(--font-data), ui-monospace, monospace;
   font-size: 10px;
   font-weight: 500;
@@ -1191,10 +1220,14 @@ body {
   border-radius: 999px;
   padding: 3px 8px;
   color: var(--rc-text-muted);
+  overflow: hidden;
   white-space: nowrap;
 }
 
 .report-center-dark .rc-chip strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--rc-text);
   font-weight: 600;
 }
