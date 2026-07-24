@@ -296,3 +296,11 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Empty-state netral (bukan error) saat DB tak terjangkau — terverifikasi via playwright (Chrome, login bypass dev, port 3100): toggle Qty/Valuasi/Freq mengubah label header ('Total nilai (Rp)' → 'Total quantity' → 'Total frekuensi dok'); 0 error JS; Fast Refresh dev server memuat komponen baru tanpa restart.
 - Verifikasi: `npx tsc --noEmit` 0, `npx eslint` kedua file 0 error baru, `npm run build` exit 0.
 - Catatan jujur: perilaku grafik dengan data nyata belum terverifikasi — DB sumber estate tak terjangkau dari mesin ini (API movement-matrix mengembalikan `fetch failed`).
+
+## 2026-07-24 - Trend pengeluaran selalu 5 bulan ke belakang
+
+- Akar masalah: `trend` & `issueFrequency.byMonth` di handler stockIssue (`app/api/reports/inventory/route.ts`) mengikuti filter periode report — mode bulan tunggal = 1 titik → "Trend butuh rentang lebih lebar".
+- CTE baru `issueTrendRowsCte`: kolom identik, rentang tanggal selalu **5 bulan ke belakang dari bulan anchor** (anchor = dateTo / bulan period / bulan berjalan, inklusif). `trend` & `trendFrequency` memakai CTE ini; KPI lain tetap periode terpilih. Filter lokasi/itemType tetap dihormati.
+- `MovementTrendChart.tsx`: header "Trend movement · 5 bulan" + "N titik"; empty-state baru "Belum ada movement pada 5 bulan terakhir".
+- Terverifikasi playwright dengan data nyata (periode bulan tunggal): grafik terisi "3 titik · puncak Jun 26 — Rp 11.5 M · Total Rp 27.7 M". 0 error JS.
+- Verifikasi: tsc 0, eslint 0 error baru (13 warning pre-existing di route.ts), build exit 0, simulasi node string-replace CTE cocok untuk cabang bulan & custom year.

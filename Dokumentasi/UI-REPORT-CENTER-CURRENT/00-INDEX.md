@@ -168,6 +168,29 @@ Verifikasi: `npx tsc --noEmit` ✓, `npx eslint` kedua file ✓ (0 error baru),
 `npm run build` ✓ (exit 0), playwright interaksi toggle ✓. Catatan: perilaku
 dengan data nyata belum terverifikasi — DB sumber tak terjangkau dari mesin ini.
 
+### 24. Trend pengeluaran selalu 5 bulan ke belakang (2026-07-24)
+
+Masalah: "Trend butuh rentang lebih lebar" — grafik tren usage hanya berisi satu
+titik saat user memilih periode bulan tunggal (trend mengikuti filter periode).
+
+Solusi di `app/api/reports/inventory/route.ts` (handler stockIssue /
+pengeluaran-barang): CTE baru `issueTrendRowsCte` — kolom identik dengan
+`issueRowsCte`, tapi rentang tanggal **selalu 5 bulan ke belakang dari bulan
+anchor** (anchor = dateTo / bulan period / bulan berjalan; bulan anchor ikut
+inklusif). Query `trend` dan `issueFrequency.byMonth` kini memakai CTE ini.
+Filter lokasi/itemType tetap dihormati; filter periode utama TIDAK memengaruhi
+rentang tren. KPI ringkasan lain tetap memakai periode terpilih.
+
+UI `MovementTrendChart.tsx`: label header "Trend movement · 5 bulan" + "N titik";
+empty-state baru "Belum ada movement pada 5 bulan terakhir" dengan penjelasan
+rentang tetap (bukan lagi menyuruh user ganti mode).
+
+Terverifikasi playwright dengan DATA NYATA: grafik kini terisi — "3 titik ·
+puncak Jun 26 — Rp 11.5 M · Total Rp 27.7 M" (Apr/Jun/Jul 26) padahal periode
+terpilih bulan tunggal. 0 error JS. Verifikasi statis: simulasi node
+string-replace CTE cocok untuk cabang bulan & custom year; tsc 0; eslint 0
+error baru (13 warning pre-existing); build exit 0.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

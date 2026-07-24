@@ -1342,8 +1342,7 @@ function monthlyStockAccountMovementCtes({
         CAST(${movementActualQtyExpression} AS decimal(18, 6)) AS MovementIssueQtyActual,
         CAST(${movementActualAmountExpression} AS decimal(18, 6)) AS MovementIssueAmountActual,
         mi.MovementLastIssueDate,
-        -- GUARDRAIL(mc-qty-period): Dead/Stale split uses period Closing qty, not live IN_ITEM.
-        -- Live on-hand after May reclassifies items that still hold stock today as Dead Stock vs Stale.
+        -- GUARDRAIL(mc-qty-period): qty expr kept for call signature; 0 issue always Dead Stock (Stale removed).
         ${movementCategorySqlCase(
           movementActualCountExpression,
           `CASE WHEN pc.ItemCode IS NOT NULL THEN ISNULL(pc.period_closing_qty, 0)
@@ -2054,6 +2053,12 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
       SUM(CASE WHEN item_type = '4' THEN 1 ELSE 0 END) AS WorkshopItemCount,
       SUM(CASE WHEN item_type = '1' AND total_quantity > 0 THEN 1 ELSE 0 END) AS GudangItemWithStock,
       SUM(CASE WHEN item_type = '4' AND total_quantity > 0 THEN 1 ELSE 0 END) AS WorkshopItemWithStock,
+      CAST(SUM(CASE WHEN item_type = '1' THEN quantity_on_hand ELSE 0 END) AS DECIMAL(18,2)) AS GudangQuantityOnHand,
+      CAST(SUM(CASE WHEN item_type = '1' THEN quantity_on_hold ELSE 0 END) AS DECIMAL(18,2)) AS GudangQuantityOnHold,
+      CAST(SUM(CASE WHEN item_type = '1' THEN total_quantity ELSE 0 END) AS DECIMAL(18,2)) AS GudangTotalQuantity,
+      CAST(SUM(CASE WHEN item_type = '4' THEN quantity_on_hand ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopQuantityOnHand,
+      CAST(SUM(CASE WHEN item_type = '4' THEN quantity_on_hold ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopQuantityOnHold,
+      CAST(SUM(CASE WHEN item_type = '4' THEN total_quantity ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopTotalQuantity,
       CAST(SUM(CASE WHEN item_type = '1' AND total_quantity > 0 THEN total_amount ELSE 0 END) AS DECIMAL(38,6)) AS GudangTotalAmount,
       CAST(SUM(CASE WHEN item_type = '4' AND total_quantity > 0 THEN total_amount ELSE 0 END) AS DECIMAL(38,6)) AS WorkshopTotalAmount,
       COUNT(DISTINCT CASE WHEN item_type = '1' AND total_quantity > 0 THEN location END) AS GudangLocationWithStock,
@@ -2417,10 +2422,10 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       CAST(SUM(CASE WHEN MovementCategory = 'Moving' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS MovingAmount,
       SUM(CASE WHEN MovementCategory = 'Slow Moving' THEN 1 ELSE 0 END) AS SlowMovingItem,
       CAST(SUM(CASE WHEN MovementCategory = 'Slow Moving' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS SlowMovingAmount,
-      SUM(CASE WHEN MovementCategory = 'Stale' THEN 1 ELSE 0 END) AS StaleItem,
-      CAST(SUM(CASE WHEN MovementCategory = 'Stale' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS StaleAmount,
-      SUM(CASE WHEN MovementCategory = 'Stale' THEN 1 ELSE 0 END) AS NoMovementItem,
-      CAST(SUM(CASE WHEN MovementCategory = 'Stale' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS NoMovementAmount,
+      SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN 1 ELSE 0 END) AS StaleItem,
+      CAST(SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS StaleAmount,
+      SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN 1 ELSE 0 END) AS NoMovementItem,
+      CAST(SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS NoMovementAmount,
       SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN 1 ELSE 0 END) AS DeadMovementItem,
       CAST(SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN AmountItem ELSE 0 END) AS DECIMAL(38,6)) AS DeadMovementAmount,
       CAST(SUM(quantity_on_hand) AS DECIMAL(18,2)) AS total_quantity_on_hand,
@@ -2490,7 +2495,7 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       statusScope: 'Tidak filter Status; scope mengikuti IN_ITEM WHERE ItemType IN (1, 4).',
       quantityRule: useMonthEnd ? 'Histori: total_quantity = IN_MTHENDITEM.Qty.' : 'Current: total_quantity = QtyOnHand + QtyOnHold; QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder.',
       valuationRule: useMonthEnd ? 'Histori: AmountItem = IN_MTHENDITEM.Qty * AverageCost.' : 'Current: TotalAssetAmount = SUM((QtyOnHand + QtyOnHold) * AverageCost) FROM IN_ITEM WHERE ItemType IN (1, 4).',
-      movementRule: `MovementCategory dihitung dari StockIssue Movement Count per item: ${movementCategoryThresholdLabel(movementThresholds)}. Dead Stock jika stok real-time ada tapi StockIssue Movement 0, Stale jika stok real-time dan StockIssue Movement 0.`,
+      movementRule: `MovementCategory dihitung dari StockIssue Movement Count per item: ${movementCategoryThresholdLabel(movementThresholds)}. Dead Stock jika StockIssue Movement 0 (qty closing diabaikan).`,
       movementCategoryThresholds: movementThresholds,
       movementCategoryThresholdLabel: movementCategoryThresholdLabel(movementThresholds),
       issueUsageRule: 'StockIssue Movement: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1. Asset Amount Real Time tetap berasal dari IN_ITEM (QtyOnHand + QtyOnHold) * AverageCost.',
@@ -2931,7 +2936,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       SUM(CASE WHEN MovementCategory = 'Moving' THEN 1 ELSE 0 END) AS MovingItem,
       SUM(CASE WHEN MovementCategory = 'Slow Moving' THEN 1 ELSE 0 END) AS SlowMovingItem,
       SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN 1 ELSE 0 END) AS DeadStockItem,
-      SUM(CASE WHEN MovementCategory = 'Stale' THEN 1 ELSE 0 END) AS StaleItem,
+      SUM(CASE WHEN MovementCategory = 'Dead Stock' THEN 1 ELSE 0 END) AS StaleItem,
       CAST(SUM(MovementActivityCountActual) AS DECIMAL(18,2)) AS TotalMovementActivityCountActual,
       CAST(SUM(MovementActivityQtyActual) AS DECIMAL(18,2)) AS TotalMovementActivityQtyActual,
       CAST(SUM(MovementActivityAmountActual) AS DECIMAL(18,2)) AS TotalMovementActivityAmountActual,
@@ -3039,7 +3044,7 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
     SlowMovingAmount: movementCategoryAmountByLabel['Slow Moving'] ?? summary.SlowMovingAmount,
     DeadStockAmount: movementCategoryAmountByLabel['Dead Stock'] ?? summary.DeadStockAmount,
     DeadMovementAmount: movementCategoryAmountByLabel['Dead Stock'] ?? summary.DeadMovementAmount,
-    StaleAmount: movementCategoryAmountByLabel['Stale'] ?? summary.StaleAmount,
+    StaleAmount: movementCategoryAmountByLabel['Dead Stock'] ?? summary.StaleAmount,
   }
 
   return {
@@ -3312,6 +3317,16 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   const gudangLocationSql = location ? `\n        AND RTRIM(h.LocCode) LIKE N'%${location}%'` : ''
   const workshopLocationSql = location ? `\n        AND RTRIM(s.LocCode) LIKE N'%${location}%'` : ''
 
+  // Rentang tren: SELALU 5 bulan ke belakang dari bulan anchor (period /
+  // dateTo / bulan berjalan), terlepas dari filter periode report. Tujuannya
+  // grafik tren di deck tidak pernah hanya berisi satu titik saat user memilih
+  // mode bulan tunggal. Bulan anchor ikut (inklusif) sebagai titik terakhir.
+  const anchorDate = cleanSqlDate(filters?.dateTo) ?? month.toExclusive ?? `${new Date().toISOString().slice(0, 7)}-01`
+  const trendFromSql = `CONVERT(date, DATEADD(MONTH, -4, '${anchorDate}'))`
+  const trendToSql = `DATEADD(MONTH, 1, '${anchorDate}')`
+  const gudangTrendDateSql = `h.PostDate >= ${trendFromSql}\n        AND h.PostDate < ${trendToSql}`
+  const workshopTrendDateSql = `${workshopDate} >= ${trendFromSql}\n        AND ${workshopDate} < ${trendToSql}`
+
   const gudangQuery = `
       SELECT
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
@@ -3367,6 +3382,19 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   const issueRowsCte = `
     WITH issue_rows AS (
       ${queries.join(' UNION ALL ')}
+    )`
+
+  // CTE khusus tren — kolom identik, tapi rentang tanggal memakai trend date
+  // (5 bulan ke belakang dari bulan anchor), BUKAN filter periode report.
+  const gudangTrendQuery = gudangQuery.replace(gudangDateSql, gudangTrendDateSql)
+  const workshopTrendQuery = workshopQuery.replace(workshopDateSql, workshopTrendDateSql)
+  const trendQueries = []
+  if (includeGudang) trendQueries.push(gudangTrendQuery)
+  if (includeWorkshop) trendQueries.push(workshopTrendQuery)
+  if (trendQueries.length === 0) trendQueries.push(gudangTrendQuery) // fallback
+  const issueTrendRowsCte = `
+    WITH issue_rows AS (
+      ${trendQueries.join(' UNION ALL ')}
     )`
   const reportRows = await rows(ctx, `
     ${issueRowsCte}
@@ -3447,10 +3475,11 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     ORDER BY SUM(ISNULL(Amount, 0)) DESC
   `)
 
-  // Trend bulanan (mengikuti filter periode yang sama dengan issue_rows) —
-  // additive; satu baris per bulan untuk area chart di KPI Command Deck.
+  // Trend bulanan — SELALU 5 bulan ke belakang dari bulan anchor (lihat
+  // issueTrendRowsCte), terlepas dari filter periode report, agar grafik tren
+  // di deck tidak pernah hanya satu titik saat mode bulan tunggal dipilih.
   const trend = await rows(ctx, `
-    ${issueRowsCte}
+    ${issueTrendRowsCte}
     SELECT
       CONVERT(varchar(7), Tanggal, 120) AS month,
       COUNT(*) AS events,
@@ -3462,12 +3491,9 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     ORDER BY month
   `)
 
-  // Frekuensi issue — additive. Bedakan dari `trend` (baris transaksi):
-  // di sini yang dihitung adalah DOKUMEN unik per bulan + item yang paling
-  // sering di-issue (by COUNT), sesuai permintaan "jumlah sebaran frekuensi
-  // issue & issue yang sering terjadi".
+  // Frekuensi issue per bulan — rentang yang sama dengan trend (5 bulan).
   const trendFrequency = await rows(ctx, `
-    ${issueRowsCte}
+    ${issueTrendRowsCte}
     SELECT
       CONVERT(varchar(7), Tanggal, 120) AS month,
       COUNT(DISTINCT Dokumen) AS docs,
@@ -4781,7 +4807,7 @@ async function handleInventoryGet(request: NextRequest) {
     const rawChart = rawPayloadWithMovement.chart
     const payload = applyTableSort(applyReportFilters(rawPayloadWithMovement, postFilterInput), tableSort.column, tableSort.direction)
     if (allStockMovementScopedFilters && Array.isArray(rawChart) && rawChart.length > 0) {
-      // Preserve SQL chart grouped by MovementCategory (Fast/Moving/Slow/Dead/Stale).
+      // Preserve SQL chart grouped by MovementCategory (Fast/Moving/Slow/Dead).
       payload.chart = rawChart
     }
     payload.metadata = {

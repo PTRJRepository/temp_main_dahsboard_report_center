@@ -95,12 +95,12 @@ export default function MovementTrendChart({ trend, frequency, loading }: Moveme
       <div className="grid h-full min-h-[200px] place-items-center rounded-2xl border-[var(--rc-forest-border)] bg-black/20 p-4 text-center">
         <div>
           <p className="text-sm font-bold text-[var(--rc-text-muted)]">
-            {loading ? 'Memuat trend movement…' : 'Trend butuh rentang lebih lebar'}
+            {loading ? 'Memuat trend movement…' : 'Belum ada movement pada 5 bulan terakhir'}
           </p>
           {!loading && (
             <p className="mt-1 text-[11px] font-semibold text-[var(--rc-text-faint)]">
-              Periode bulan tunggal hanya memberi satu titik. Pilih mode Tahun atau periode lebih panjang
-              untuk melihat pergerakan.
+              Tren selalu menampilkan 5 bulan ke belakang dari periode terpilih. Tidak ada transaksi issue
+              pada rentang tersebut — coba periode lain atau periksa filter lokasi/tipe barang.
             </p>
           )}
         </div>
@@ -114,9 +114,9 @@ export default function MovementTrendChart({ trend, frequency, loading }: Moveme
     <div className="flex h-full min-h-[200px] flex-col">
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-1 pb-2">
         <div>
-          <p className="text-[11px] font-semibold text-[var(--rc-forest-accent)]">Trend movement</p>
+          <p className="text-[11px] font-semibold text-[var(--rc-forest-accent)]">Trend movement · 5 bulan</p>
           <p className="mt-0.5 text-[11px] font-semibold text-[var(--rc-text-muted)]">
-            {points.length} bulan · puncak {peak.label} — Rp {formatCompact(peak.amount)}
+            {points.length} titik · puncak {peak.label} — Rp {formatCompact(peak.amount)}
           </p>
         </div>
         <span className="rc-chip">
