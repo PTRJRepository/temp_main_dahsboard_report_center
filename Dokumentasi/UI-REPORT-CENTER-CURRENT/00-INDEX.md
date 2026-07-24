@@ -106,6 +106,12 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **Integrasi:** blok reveal-order 5 setelah StockRiverChart di strip; lazy via `active={!glance}`.
 - **Verifikasi:** tsc 0, eslint 0 error baru, build exit 0. Belum uji browser / data nyata.
 
+### 16. Hierarki Procurement: PURCHASING + INVENTORY (2026-07-23)
+- **Struktur kanonik:** workspace `/report-center/procurement` kini PURCHASING + INVENTORY, masing-masing dengan kategori Transactions Listing / Reports / Documents — menggantikan tab datar Semua/Gudang/Workshop/Ordering.
+- **Sumber kebenaran:** `lib/reports/procurement-hierarchy.ts` (28 entri; 19 live dipetakan ke report existing, sisanya `soon`). **Nav:** `ProcurementHierarchyNav.tsx` (2-level + scope filter Gudang/Workshop di INVENTORY).
+- **Integrasi:** section "Area kerja" lama diganti `<ProcurementHierarchyNav/>`; header/KPI/overview/process map/aside dipertahankan; import mati dibersihkan.
+- **Verifikasi:** tsc 0, eslint bersih, build exit 0. Belum uji browser.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

@@ -1,28 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
-  ClipboardList,
-  FileText,
   Layers3,
-  Package,
   ShieldCheck,
-  Warehouse,
-  Wrench,
 } from 'lucide-react'
 import {
-  createProcurementGroupHref,
   createProcurementReportHref,
   getProcurementWorkspace,
-  type ProcurementStockGroup,
   type ReportSource,
 } from '@/lib/reports/procurement-workspace'
-import InventoryReportsClient from '@/app/(report-center)/report-center/inventory/InventoryReportsClient'
 import InventoryOverview from './InventoryOverview'
+import ProcurementHierarchyNav from './ProcurementHierarchyNav'
 import ProcurementKpiStrip, {
   createDefaultProcurementKpiFilters,
   type ProcurementKpiFilters,
@@ -42,19 +35,6 @@ const sourceCopy: Record<ReportSource, { label: string; description: string }> =
     label: 'Pabrik',
     description: 'db_ptrj_mill melalui SERVER_PROFILE_3',
   },
-}
-
-const groupIcon = {
-  inventory: Package,
-  gudang: Warehouse,
-  workshop: Wrench,
-  process: ClipboardList,
-} satisfies Record<ProcurementStockGroup, typeof Warehouse>
-
-const priorityTone = {
-  critical: 'border-rose-300/25 bg-rose-400/10 text-rose-100',
-  high: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
-  medium: 'border-slate-300/20 bg-slate-400/10 text-slate-100',
 }
 
 function sourceHref(source: ReportSource) {
@@ -186,97 +166,20 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
           hideScopeControls
         />
 
-        <section className="rc-panel overflow-hidden rounded-[28px] border border-[var(--rc-forest-border)]">
+<section className="rc-panel overflow-hidden rounded-[28px] border-[var(--rc-forest-border)]">
           <div className="border-b border-[var(--rc-border)] bg-[rgba(5,17,10,.74)] p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--rc-forest-accent)]">Area kerja</p>
-                <h2 className="mt-1 text-xl font-black tracking-[-0.04em] text-[var(--rc-text)]">
-                  {activeGroup.id === 'process' ? 'Ordering' : activeGroup.id === 'gudang' ? 'Inventory · Gudang' : activeGroup.id === 'workshop' ? 'Inventory · Workshop' : 'Inventory · Semua'}
-                </h2>
-              </div>
-              <div className="flex flex-wrap gap-1.5 rounded-2xl border border-white/10 bg-black/20 p-1.5">
-                {([
-                  { id: 'inventory' as const, label: 'Semua', hint: 'ItemType 1+4' },
-                  { id: 'gudang' as const, label: 'Gudang', hint: 'ItemType 1' },
-                  { id: 'workshop' as const, label: 'Workshop', hint: 'ItemType 4' },
-                  { id: 'process' as const, label: 'Ordering', hint: 'PR / PO / GR' },
-                ]).map((tab) => {
-                  const Icon = groupIcon[tab.id]
-                  const active = activeGroup.id === tab.id
-                  return (
-                    <Link
-                      key={tab.id}
-                      href={createProcurementGroupHref(tab.id, source)}
-                      title={tab.hint}
-                      className={[
-                        'inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-black transition',
-                        active
-                          ? 'bg-[var(--rc-forest-primary)] text-[#03130c]'
-                          : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
-                      ].join(' ')}
-                    >
-                      <Icon size={15} />
-                      {tab.label}
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--rc-forest-accent)]">Area kerja</p>
+            <h2 className="mt-1 text-xl font-black tracking-[-0.04em] text-[var(--rc-text)]">
+              Struktur modul procurement
+            </h2>
           </div>
 
           <div className="p-4 sm:p-5">
-              {activeGroup.id === 'process' ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {activeGroup.reports.map((report) => (
-                  <Link
-                    key={`${activeGroup.id}-${report.id}-${report.metricLabel}`}
-                    href={report.href}
-                    className="group flex min-h-[210px] flex-col rounded-3xl border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.025))] p-4 transition hover:-translate-y-0.5 hover:border-[var(--rc-forest-border-strong)] hover:bg-white/[0.08]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--rc-forest-border)] bg-black/20 text-[var(--rc-forest-accent)]">
-                        <FileText size={19} />
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        <span className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase ${priorityTone[report.priority]}`}>
-                          {report.priority}
-                        </span>
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-[var(--rc-text-faint)]">
-                          {report.cadence}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">{report.code} / {report.metricLabel}</p>
-                      <h3 className="mt-2 line-clamp-2 text-base font-black leading-6 text-[var(--rc-text)]">{report.title}</h3>
-                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--rc-text-muted)]">{report.purpose}</p>
-                    </div>
-
-                    <div className="mt-4 rounded-2xl border border-[var(--rc-border)] bg-black/15 p-3">
-                      <p className="text-xs font-semibold leading-5 text-[var(--rc-text-muted)]">{report.signal}</p>
-                    </div>
-
-                    <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-                      <span className="truncate text-xs font-semibold text-[var(--rc-text-faint)]">{report.owner}</span>
-                      <span className="inline-flex items-center gap-1 text-xs font-black text-[var(--rc-forest-accent)]">
-                        Buka report
-                        <ArrowRight size={13} />
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-              ) : (
-              <Suspense fallback={<div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-[var(--rc-text-muted)]">Memuat inventory catalog…</div>}>
-                <InventoryReportsClient
-                  embedded
-                  fixedSource={source}
-                  itemType={activeGroup.id === 'gudang' ? 'gudang' : activeGroup.id === 'workshop' ? 'workshop' : undefined}
-                />
-              </Suspense>
-              )}
+            <ProcurementHierarchyNav
+              source={source}
+              initialSubModule={activeGroup.id === 'process' ? 'purchasing' : 'inventory'}
+              initialScope={activeGroup.id === 'gudang' ? 'gudang' : activeGroup.id === 'workshop' ? 'workshop' : 'all'}
+            />
           </div>
         </section>
 
