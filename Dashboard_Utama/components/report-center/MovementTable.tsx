@@ -20,12 +20,14 @@ type RowInput = {
   events?: number
   /** Deret pola issue periode (opsional, dari matriks). */
   series?: number[]
+  /** Deret frekuensi dok periode (dari matriks). */
+  freqSeries?: number[]
 }
 
 type MovementTableProps = {
   rows: RowInput[]
-  metric: 'qty' | 'amount'
-  onMetricChange?: (metric: 'qty' | 'amount') => void
+  metric: 'qty' | 'amount' | 'freq'
+  onMetricChange?: (metric: 'qty' | 'amount' | 'freq') => void
   onDrilldown?: (item: { code: string; name: string }) => void
   loading?: boolean
   periodCount?: number
@@ -55,6 +57,14 @@ export default function MovementTable({
     copy.sort((a, b) => Number(b[sortKey] ?? 0) - Number(a[sortKey] ?? 0))
     return copy
   }, [rows, sortKey])
+
+  // Ringkasan frekuensi: berapa barang aktif issue & sebaran frekuensinya.
+  const freqSummary = useMemo(() => {
+    const withDocs = rows.filter((row) => Number(row.docs ?? 0) > 0)
+    const totalDocs = rows.reduce((sum, row) => sum + Number(row.docs ?? 0), 0)
+    const avgDocs = withDocs.length > 0 ? totalDocs / withDocs.length : 0
+    return { activeItems: withDocs.length, totalDocs, avgDocs }
+  }, [rows])
 
   if (loading) {
     return (
@@ -92,12 +102,14 @@ export default function MovementTable({
         <div className="min-w-0">
           <p className="text-[13px] font-semibold text-[var(--rc-text)]">Analisis per barang</p>
           <p className="rc-data mt-0.5 text-[10px] text-[var(--rc-text-faint)]">
-            Pola issue periode{periodCount ? ` · ${periodCount} periode` : ''} · klik baris untuk drill-down
+            {metric === 'freq'
+              ? `${freqSummary.activeItems} barang aktif issue · total ${formatCompact(freqSummary.totalDocs)} dok · rata ${freqSummary.avgDocs.toFixed(1)} dok/barang`
+              : `Pola issue periode${periodCount ? ` · ${periodCount} periode` : ''} · klik baris untuk drill-down`}
           </p>
         </div>
         {onMetricChange ? (
           <div className="flex shrink-0 gap-1 rounded-full border-white/10 bg-white/[0.04] p-0.5" role="tablist" aria-label="Metrik tabel">
-            {(['qty', 'amount'] as const).map((m) => (
+            {(['qty', 'amount', 'freq'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -108,7 +120,7 @@ export default function MovementTable({
                   metric === m ? 'bg-emerald-400/20 text-emerald-100' : 'text-[var(--rc-text-muted)] hover:bg-white/[0.06]'
                 }`}
               >
-                {m === 'qty' ? 'Qty' : 'Amount'}
+                {m === 'qty' ? 'Qty' : m === 'amount' ? 'Amount' : 'Freq'}
               </button>
             ))}
           </div>
@@ -116,12 +128,13 @@ export default function MovementTable({
       </div>
 
       {/* Header */}
-      <div className="grid grid-cols-[minmax(0,1.6fr)_70px_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_56px] items-center gap-2 border-b border-white/[0.07] pb-1.5">
+      <div className="grid grid-cols-[minmax(0,1.6fr)_70px_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,0.45fr)_56px] items-center gap-2 border-b border-white/[0.07] pb-1.5">
         <span className="rc-data text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">Barang</span>
         <span className="rc-data text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">Pola</span>
         <span className="text-right">{headerBtn('qty', 'Qty')}</span>
         <span className="text-right">{headerBtn('amount', 'Amount')}</span>
         <span className="text-right">{headerBtn('docs', 'Freq')}</span>
+        <span className="rc-data text-right text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">Aktif</span>
         <span className="rc-data text-right text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">Mom.</span>
       </div>
 
@@ -129,14 +142,15 @@ export default function MovementTable({
       <div className="min-h-0 flex-1 overflow-auto">
         <ul className="divide-y divide-white/[0.05]">
           {sorted.map((row) => {
-            const series = metric === 'qty' ? row.series : row.series
-            const value = metric === 'qty' ? Number(row.qty ?? 0) : Number(row.amount ?? 0)
+            const series = metric === 'qty' ? row.series : metric === 'freq' ? (row.freqSeries ?? row.series) : row.series
+            const activePeriods = (row.freqSeries ?? []).filter((v) => v > 0).length
+            const totalPeriods = (row.freqSeries ?? []).length
             return (
               <li key={row.code}>
                 <button
                   type="button"
                   onClick={() => onDrilldown?.({ code: row.code, name: row.name })}
-                  className="group grid w-full grid-cols-[minmax(0,1.6fr)_70px_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_56px] items-center gap-2 px-1 py-1.5 text-left transition hover:bg-white/[0.04]"
+                  className="group grid w-full grid-cols-[minmax(0,1.6fr)_70px_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,0.45fr)_56px] items-center gap-2 px-1 py-1.5 text-left transition hover:bg-white/[0.04]"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-[11px] font-semibold text-[var(--rc-text)] group-hover:text-emerald-200">
@@ -157,8 +171,11 @@ export default function MovementTable({
                   <span className={`rc-data text-right text-[10px] ${metric === 'amount' ? 'font-bold text-[var(--rc-text)]' : 'text-[var(--rc-text-muted)]'}`}>
                     Rp {formatCompact(Number(row.amount ?? 0))}
                   </span>
-                  <span className="rc-data text-right text-[10px] text-[var(--rc-text-muted)]">
+                  <span className={`rc-data text-right text-[10px] ${metric === 'freq' ? 'font-bold text-emerald-200' : 'text-[var(--rc-text-muted)]'}`}>
                     {row.docs != null ? formatCompact(Number(row.docs)) : '—'}
+                  </span>
+                  <span className="rc-data text-right text-[10px] text-[var(--rc-text-muted)]">
+                    {totalPeriods > 0 ? `${activePeriods}/${totalPeriods}` : '—'}
                   </span>
                   <span className="flex justify-end">
                     {series && series.length > 1 ? <MomentumDelta values={series} /> : <span className="rc-data text-[9px] text-[var(--rc-text-faint)]">—</span>}

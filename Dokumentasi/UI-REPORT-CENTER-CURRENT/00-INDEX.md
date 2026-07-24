@@ -130,6 +130,11 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - Panel "Sehat arus stok": coverage closing vs issue (×) + opening→closing (%) dengan interpretasi kondisional satu kalimat.
 - **Verifikasi:** tsc 0, eslint baseline, build exit 0. Belum uji browser.
 
+### 20. Analisis frekuensi movement (2026-07-23 lanjut)
+
+- Metric `freq` (jumlah dok issue) menyertai qty & amount: heatmap matriks, tabel per barang (kolom Aktif x/y + ringkasan sebaran), dan drill-down (kerutinan %, rata dok/periode aktif, interpretasi fast/regular/slow-moving).
+- **Verifikasi:** tsc 0, eslint 0 error baru, build exit 0. Belum uji browser.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

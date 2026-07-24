@@ -260,3 +260,12 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
   - **Sehat arus stok** — coverage closing vs issue (×) dan perubahan opening→closing (%), masing-masing dengan satu kalimat interpretasi kondisional (overstock / aman / waspada; pemakaian vs pengisian).
 - Data konsentrasi dihitung dari `payload.rows` (kolom `IssuedTotalAmount`/`IssuedTotalQty` + kode/nama barang); fallback aman bila rows kosong.
 - Verifikasi: tsc 0, eslint baseline pre-existing, build exit 0.
+
+## 2026-07-23 (lanjut) - Analisis frekuensi di movement analysis
+
+- Metric baru `'freq'` (jumlah dokumen issue) di seluruh deck movement, di samping qty & amount:
+  - **MovementMatrix** — toggle Qty/Amount/Freq; heatmap bisa menampilkan intensitas = jumlah dok issue per barang periode; tooltip menegaskan "N dok" saat mode freq.
+  - **MovementTable** — toggle Freq; kolom Freq menonjol saat mode freq; kolom baru **Aktif** (`x/y periode`) menunjukkan di berapa periode barang benar-benar ada issue; header mode freq menampilkan ringkasan sebaran ("N barang aktif · total M dok · rata R dok/barang"). Sparkline + momentum mengikuti deret frekuensi.
+  - **ItemDrilldown** — metric freq: sparkline pola frekuensi; blok baru "Analisis frekuensi issue" berisi periode aktif x/y, kerutinan %, rata dok/periode aktif, plus satu kalimat interpretasi (fast-moving ≥80% / reguler ≥40% / slow-moving <40%) dan puncak frekuensi.
+- `ChargeBreakdown` menerima fallback `amount` saat mode freq (komponen ini belum punya deret dok).
+- Verifikasi: tsc 0, eslint 0 error baru (1 warning `exhaustive-deps` pre-existing di MovementMatrix), build exit 0.

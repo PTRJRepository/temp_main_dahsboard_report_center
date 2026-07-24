@@ -10,7 +10,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
  * Data di-fetch lazy dari /api/reports/inventory/movement-matrix.
  */
 
-type MatrixMetric = 'qty' | 'amount'
+type MatrixMetric = 'qty' | 'amount' | 'freq'
 
 type ApiMatrixRow = {
   code: string
@@ -105,14 +105,14 @@ export default function MovementMatrix({
   const maxValue = useMemo(() => {
     let max = 0
     for (const row of rows) {
-      const series = metric === 'qty' ? row.cells.qty : row.cells.amount
+      const series = metric === 'qty' ? row.cells.qty : metric === 'freq' ? row.cells.docs : row.cells.amount
       for (const v of series) if (v > max) max = v
     }
     return max
   }, [rows, metric])
 
   const cellValue = (row: ApiMatrixRow, colIdx: number) =>
-    metric === 'qty' ? row.cells.qty[colIdx] : row.cells.amount[colIdx]
+    metric === 'qty' ? row.cells.qty[colIdx] : metric === 'freq' ? row.cells.docs[colIdx] : row.cells.amount[colIdx]
 
   if (loading && !data) {
     return (
@@ -138,11 +138,11 @@ export default function MovementMatrix({
         <div className="min-w-0">
           <p className="text-[13px] font-semibold text-[var(--rc-text)]">Matriks movement</p>
           <p className="rc-data mt-0.5 text-[10px] text-[var(--rc-text-faint)]">
-            Barang × periode · intensitas = {metric === 'qty' ? 'quantity' : 'amount'}
+            Barang × periode · intensitas = {metric === 'qty' ? 'quantity' : metric === 'freq' ? 'frekuensi (jml dok)' : 'amount'}
           </p>
         </div>
         <div className="flex shrink-0 gap-1 rounded-full border-white/10 bg-white/[0.04] p-0.5" role="tablist" aria-label="Metrik matriks">
-          {(['qty', 'amount'] as const).map((m) => (
+          {(['qty', 'amount', 'freq'] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -153,7 +153,7 @@ export default function MovementMatrix({
                 metric === m ? 'bg-emerald-400/20 text-emerald-100' : 'text-[var(--rc-text-muted)] hover:bg-white/[0.06]'
               }`}
             >
-              {m === 'qty' ? 'Qty' : 'Amount'}
+              {m === 'qty' ? 'Qty' : m === 'amount' ? 'Amount' : 'Freq'}
             </button>
           ))}
         </div>
@@ -196,7 +196,7 @@ export default function MovementMatrix({
                   <button
                     key={`${row.code}-${p}`}
                     type="button"
-                    aria-label={`${row.name} ${periodLabel(p)}: ${metric === 'qty' ? formatCompact(value) : formatCurrency(value)}`}
+                    aria-label={`${row.name} ${periodLabel(p)}: ${metric === 'qty' ? formatCompact(value) : metric === 'freq' ? `${formatCompact(value)} dok` : formatCurrency(value)}`}
                     onMouseEnter={() => setHover({ r, c })}
                     onMouseLeave={() => setHover(null)}
                     onFocus={() => setHover({ r, c })}
@@ -234,7 +234,7 @@ export default function MovementMatrix({
                   <strong className="text-[var(--rc-text)]">{row.name}</strong> · {periodLabel(p)}
                 </span>
                 <span className="shrink-0">
-                  Qty {formatCompact(qty)} · {formatCurrency(amount)} · {docs} dok
+                  Qty {formatCompact(qty)} · {formatCurrency(amount)} · <strong className={metric === 'freq' ? 'text-emerald-200' : undefined}>{docs} dok</strong>
                 </span>
               </>
             )

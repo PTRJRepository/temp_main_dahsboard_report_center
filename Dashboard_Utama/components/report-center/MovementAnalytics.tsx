@@ -71,7 +71,7 @@ export default function MovementAnalytics({
   onFocusPeriod,
   onOpenDetail,
 }: MovementAnalyticsProps) {
-  const [metric, setMetric] = useState<'qty' | 'amount'>('amount')
+  const [metric, setMetric] = useState<'qty' | 'amount' | 'freq'>('amount')
   const [data, setData] = useState<ApiMatrixResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [drillItem, setDrillItem] = useState<{ code: string; name: string } | null>(null)
@@ -112,7 +112,8 @@ export default function MovementAnalytics({
         qty: row.cells.qty.reduce((a, b) => a + b, 0),
         amount: row.cells.amount.reduce((a, b) => a + b, 0),
         docs: row.cells.docs.reduce((a, b) => a + b, 0),
-        series: metric === 'qty' ? row.cells.qty : row.cells.amount,
+        series: metric === 'qty' ? row.cells.qty : metric === 'freq' ? row.cells.docs : row.cells.amount,
+        freqSeries: row.cells.docs,
       })),
     [matrixRows, metric],
   )
@@ -146,7 +147,7 @@ export default function MovementAnalytics({
             stationQty={stationQty}
             ledgerQty={ledgerQty}
             vehicleQty={vehicleQty}
-            metric={metric}
+            metric={metric === 'freq' ? 'amount' : metric}
           />
         </div>
       </div>

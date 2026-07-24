@@ -24,7 +24,7 @@ type ItemDrilldownProps = {
   qtySeries: number[]
   amountSeries: number[]
   docsSeries: number[]
-  metric: 'qty' | 'amount'
+  metric: 'qty' | 'amount' | 'freq'
   onClose: () => void
   /** Buka report detail issue untuk barang ini. */
   onOpenDetail?: (item: DrilldownItem) => void
@@ -67,7 +67,7 @@ export default function ItemDrilldown({
   }, [item, onClose])
 
   const stats = useMemo(() => {
-    const series = metric === 'qty' ? qtySeries : amountSeries
+    const series = metric === 'qty' ? qtySeries : metric === 'freq' ? docsSeries : amountSeries
     const totalQty = qtySeries.reduce((a, b) => a + b, 0)
     const totalAmount = amountSeries.reduce((a, b) => a + b, 0)
     const totalDocs = docsSeries.reduce((a, b) => a + b, 0)
@@ -75,14 +75,21 @@ export default function ItemDrilldown({
     const peak = Math.max(...series, 0)
     const peakIdx = series.indexOf(peak)
     const avg = active > 0 ? series.reduce((a, b) => a + b, 0) / active : 0
+    // Statistik frekuensi: seberapa sering issue terjadi (dok periode).
+    const docsActive = docsSeries.filter((v) => v > 0).length
+    const avgDocsPerActivePeriod = docsActive > 0 ? totalDocs / docsActive : 0
+    const peakDocs = Math.max(...docsSeries, 0)
+    const peakDocsIdx = docsSeries.indexOf(peakDocs)
+    // Regularity: dari periode aktif, berapa % yang issue-nya rutin (>0).
+    const regularityPct = periods.length > 0 ? Math.round((docsActive / periods.length) * 100) : 0
     // Deteksi periode nol beruntun terakhir (perlambatan) → penanda amber.
     let trailingZero = 0
     for (let i = series.length - 1; i >= 0; i -= 1) {
       if (series[i] > 0) break
       trailingZero += 1
     }
-    return { totalQty, totalAmount, totalDocs, active, peak, peakIdx, avg, trailingZero, series }
-  }, [qtySeries, amountSeries, docsSeries, metric])
+    return { totalQty, totalAmount, totalDocs, active, peak, peakIdx, avg, trailingZero, series, docsActive, avgDocsPerActivePeriod, peakDocs, peakDocsIdx, regularityPct }
+  }, [qtySeries, amountSeries, docsSeries, metric, periods.length])
 
   if (!item) return null
 
@@ -123,7 +130,7 @@ export default function ItemDrilldown({
           <div className="rounded-2xl border-white/10 bg-white/[0.03] p-3">
             <div className="flex items-center justify-between">
               <p className="rc-data text-[9px] uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">
-                Pola issue {metric === 'qty' ? 'qty' : 'amount'} · {periods.length} periode
+                Pola issue {metric === 'qty' ? 'qty' : metric === 'freq' ? 'frekuensi (dok)' : 'amount'} · {periods.length} periode
               </p>
               <MomentumDelta values={stats.series} />
             </div>
@@ -155,13 +162,42 @@ export default function ItemDrilldown({
               { label: 'Total qty', value: formatCompact(stats.totalQty) },
               { label: 'Total amount', value: `Rp ${formatCompact(stats.totalAmount)}` },
               { label: 'Frekuensi dok', value: formatCompact(stats.totalDocs) },
-              { label: 'Rata-rata/periode', value: metric === 'qty' ? formatCompact(stats.avg) : `Rp ${formatCompact(stats.avg)}` },
+              { label: metric === 'freq' ? 'Rata dok/periode' : 'Rata-rata/periode', value: metric === 'qty' ? formatCompact(stats.avg) : metric === 'freq' ? stats.avg.toFixed(1) : `Rp ${formatCompact(stats.avg)}` },
             ].map((s) => (
               <div key={s.label} className="rounded-xl border-white/10 bg-white/[0.03] px-2.5 py-2">
                 <p className="rc-data text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">{s.label}</p>
                 <p className="rc-metric mt-1 truncate text-sm font-semibold text-[var(--rc-text)]">{s.value}</p>
               </div>
             ))}
+          </div>
+
+          {/* Analisis frekuensi: seberapa sering issue terjadi */}
+          <div className="mt-3 rounded-2xl border-white/10 bg-white/[0.03] p-3">
+            <p className="rc-data text-[9px] uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Analisis frekuensi issue</p>
+            <div className="mt-2 grid-cols-3 gap-2">
+              <div className="rounded-xl border-white/10 bg-black/20 px-2.5 py-2">
+                <p className="rc-data text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">Periode aktif</p>
+                <p className="rc-metric mt-1 text-sm font-semibold text-[var(--rc-text)]">
+                  {stats.docsActive}<span className="text-[10px] text-[var(--rc-text-faint)]">/{periods.length}</span>
+                </p>
+              </div>
+              <div className="rounded-xl border-white/10 bg-black/20 px-2.5 py-2">
+                <p className="rc-data text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">Kerutinan</p>
+                <p className="rc-metric mt-1 text-sm font-semibold text-[var(--rc-text)]">{stats.regularityPct}%</p>
+              </div>
+              <div className="rounded-xl border-white/10 bg-black/20 px-2.5 py-2">
+                <p className="rc-data text-[9px] uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">Rata dok/aktif</p>
+                <p className="rc-metric mt-1 text-sm font-semibold text-[var(--rc-text)]">{stats.avgDocsPerActivePeriod.toFixed(1)}</p>
+              </div>
+            </div>
+            <p className="rc-data mt-2 text-[11px] leading-4 text-[var(--rc-text-muted)]">
+              {stats.regularityPct >= 80
+                ? `Issue rutin hampir tiap periode (${stats.regularityPct}%) — barang fast-moving, stok harus selalu siap.`
+                : stats.regularityPct >= 40
+                  ? `Issue cukup sering (${stats.regularityPct}% periode) — barang reguler, pantau pola puncaknya.`
+                  : `Issue jarang (${stats.regularityPct}% periode) — barang slow-moving, hindari stok berlebih.`}
+              {stats.peakDocs > 0 ? ` Puncak frekuensi: ${stats.peakDocs} dok di ${periodLabel(periods[stats.peakDocsIdx] ?? '')}.` : ''}
+            </p>
           </div>
 
           {/* Insight singkat */}
