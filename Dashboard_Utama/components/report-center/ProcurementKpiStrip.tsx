@@ -1253,6 +1253,13 @@ export default function ProcurementKpiStrip({
   const headlineCard = heroCards[0]
   const heroSideCards = heroCards.slice(1)
   const valuationSideCards = valuationCards.slice(1)
+  // Panel "Jumlah Issue" yang selalu terlihat — ringkasan hitungan issue periode terpilih.
+  const issueCountCards: ProcurementKpiCard[] = [
+    movementCards[0], // Total Issue Movement (event)
+    movementCards[1], // Issue Qty (unit fisik)
+    movementCards[3], // Frekuensi Issue (dokumen)
+    movementCards[7], // Paling Sering Di-issue
+  ].filter(Boolean)
   const gudangShare = Math.min(Math.max(percentOf(gudangValue, inventoryValue), 0), 100)
   const workshopShare = Math.min(Math.max(percentOf(workshopValue, inventoryValue), 0), 100)
 
@@ -1553,6 +1560,13 @@ export default function ProcurementKpiStrip({
               Always visible · Total Usage · {inventoryScopeShort} · {kpiTimelineRange.label}
             </p>
             {renderCardGrid(heroSideCards)}
+          </div>
+
+          <div className="min-w-0">
+            <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">
+              Jumlah Issue · {inventoryScopeShort} · {kpiTimelineRange.label}
+            </p>
+            {renderCardGrid(issueCountCards)}
           </div>
 
           <div className="min-w-0">

@@ -323,3 +323,8 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Ditambah penjelasan periode eksplisit: "Periode movement = N bulan mundur dari periode berjalan - dari <periode awal> sampai <periode akhir>".
 - Fix UX nyata: form kini `noValidate` + tombol `type="button"` dengan onClick langsung — sebelumnya input type=number min=1 max=10 memblokir submit HTML5 saat user mengisi >10 (mis. 15), sehingga timeline tidak pernah berubah.
 - Verifikasi: tsc 0 error; build exit 0; perilaku submit tervalidasi via instrumentasi fiber di browser sebelum dev server milik pihak lain berhenti.
+
+## 2026-07-24 - Panel Jumlah Issue selalu terlihat
+- Deck procurement kini punya panel "Jumlah Issue" yang selalu tampil di bawah Total Usage: Total Issue Movement (event), Issue Qty (unit fisik), Frekuensi Issue (dokumen), dan Paling Sering Di-issue — masing-masing dengan breakdown lengkap.
+- Sebelumnya informasi jumlah ini hanya ada di tab "Movement" (carousel sekunder) sehingga tidak langsung terlihat; sekarang terpisah dan always-visible sesuai konteks scope & periode KPI.
+- Verifikasi: tsc 0 error; build exit 0; ESLint file hanya menyisakan error pre-existing (setState dalam effect, sudah ada sebelum perubahan ini).
