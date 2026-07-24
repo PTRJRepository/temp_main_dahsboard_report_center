@@ -145,6 +145,29 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - Katalog chip-switcher + smart search lintas group (banner hitungan benar), timeline 6/12/24/kustom (label rentang ikut berubah) — semua terverifikasi di Chrome nyata.
 - Gap jujur: konten data movement (tab Freq, matriks, drill-down) belum bisa diverifikasi dengan data nyata — DB sumber tak terjangkau dari mesin ini (API matrix `fetch failed`); empty-state-nya tampil benar.
 
+### 23. Grafik tren dinamis Qty/Valuasi/Freq di movement deck (2026-07-24)
+
+Panel **Tren movement** baru di atas matriks: grafik tren agregat periode yang
+mengikuti metric toggle yang sama (satu sumber kebenaran di MovementAnalytics).
+Komponen: `components/report-center/MovementTrend.tsx` (recharts ComposedChart;
+dipasang di `MovementAnalytics.tsx` di bawah bar timeline, h-[260px]).
+
+- Toggle **Qty / Valuasi / Freq** di header panel — sinkron dengan matriks, tabel,
+  dan drill-down (state `metric` bersama). Valuasi/Qty = area emerald; Freq =
+  garis amber dengan dot; batang frekuensi abu jadi konteks ritme saat metrik utama
+  bukan freq.
+- Header merangkum: total metrik terpilih, periode puncak, dan delta % vs periode
+  lalu (emerald = naik, amber = turun).
+- Data = agregasi `sum` periode dari seluruh baris matriks
+  (`/api/reports/inventory/movement-matrix`) — tanpa fetch baru.
+- Empty-state netral (bukan error) saat DB tak terjangkau — terverifikasi via
+  playwright: toggle Qty/Valuasi/Freq mengubah label header ('Total nilai (Rp)' →
+  'Total quantity' → 'Total frekuensi dok'), 0 error JS.
+
+Verifikasi: `npx tsc --noEmit` ✓, `npx eslint` kedua file ✓ (0 error baru),
+`npm run build` ✓ (exit 0), playwright interaksi toggle ✓. Catatan: perilaku
+dengan data nyata belum terverifikasi — DB sumber tak terjangkau dari mesin ini.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

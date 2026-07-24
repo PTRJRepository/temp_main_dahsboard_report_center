@@ -1,0 +1,290 @@
+'use client'
+
+import { useMemo } from 'react'
+import {
+  Area,
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+
+/**
+ * MovementTrend — grafik tren agregat periode, dinamis mengikuti metric.
+ *
+ * User meminta "report quantity dan valuasinya secara dinamis dari grafik":
+ * satu panel tren di atas matriks, yang berubah saat metric toggle dipakai.
+ * Panel ini membawa toggle metric sendiri (sumber kebenaran tetap di parent),
+ * jadi dari sini user bisa bolak-balik Qty ↔ Amount ↔ Freq tanpa scroll.
+ *
+ * Data: agregasi periode dari seluruh baris matriks movement.
+ * - qty    → jumlah quantity issue periode.
+ * - amount → jumlah nilai (IDR) periode (garis area emerald).
+ * - freq   → jumlah dokumen issue periode (batang abu, sumbu kanan).
+ *
+ * Calm-minimal: emerald = nilai utama; abu = konteks; amber = frekuensi.
+ * Bila data kosong (DB tak terjangkau / rentang tak ada data) → empty-state
+ * netral, bukan error, agar deck tetap rapi.
+ */
+
+type MatrixMetric = 'qty' | 'amount' | 'freq'
+
+type ApiMatrixRow = {
+  code: string
+  name: string
+  cells: { qty: number[]; amount: number[]; docs: number[] }
+}
+
+type MovementTrendProps = {
+  periods: string[]
+  rows: ApiMatrixRow[]
+  metric: MatrixMetric
+  onMetricChange: (metric: MatrixMetric) => void
+  loading?: boolean
+}
+
+const MONTH_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+
+function formatCompact(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)} T`
+  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} M`
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} jt`
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)} rb`
+  return `${Math.round(value)}`
+}
+
+function periodLabel(period: string): string {
+  const [y, m] = period.split('-')
+  const mi = Number(m) - 1
+  return `${MONTH_ID[mi] ?? m} ${String(y).slice(2)}`
+}
+
+export default function MovementTrend({ periods, rows, metric, onMetricChange, loading }: MovementTrendProps) {
+  const points = useMemo(() => {
+    return periods.map((period, i) => {
+      let qty = 0
+      let amount = 0
+      let docs = 0
+      for (const row of rows) {
+        qty += row.cells.qty[i] ?? 0
+        amount += row.cells.amount[i] ?? 0
+        docs += row.cells.docs[i] ?? 0
+      }
+      return { period, label: periodLabel(period), qty, amount, docs }
+    })
+  }, [periods, rows])
+
+  const activeKey: 'qty' | 'amount' | 'docs' = metric === 'freq' ? 'docs' : metric
+
+  const total = points.reduce((s, p) => s + p[activeKey], 0)
+  const peak = points.length > 0 ? points.reduce((acc, p) => (p[activeKey] > acc[activeKey] ? p : acc), points[0]) : null
+  const last = points.length > 1 ? points[points.length - 1] : null
+  const prev = points.length > 1 ? points[points.length - 2] : null
+  const deltaPct =
+    last && prev && prev[activeKey] !== 0 ? ((last[activeKey] - prev[activeKey]) / Math.abs(prev[activeKey])) * 100 : null
+
+  const metricLabel = metric === 'qty' ? 'quantity' : metric === 'freq' ? 'frekuensi dok' : 'nilai (Rp)'
+  const formatValue = (v: number) => (metric === 'amount' ? `Rp ${formatCompact(v)}` : formatCompact(v))
+
+  if (loading && points.length === 0) {
+    return (
+      <div className="grid h-full min-h-[220px] place-items-center rounded-[24px] border-white/10 bg-white/[0.03]">
+        <p className="rc-data text-[11px] text-[var(--rc-text-faint)]">Memuat tren movement…</p>
+      </div>
+    )
+  }
+
+  if (points.length === 0 || rows.length === 0) {
+    return (
+      <div className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-[24px] border-white/10 bg-white/[0.03] p-3">
+        <TrendHeader
+          metric={metric}
+          metricLabel={metricLabel}
+          onMetricChange={onMetricChange}
+          total={0}
+          peakLabel={null}
+          deltaPct={null}
+          formatValue={formatValue}
+        />
+        <div className="grid min-h-0 flex-1 place-items-center px-4">
+          <p className="rc-data text-center text-[11px] leading-relaxed text-[var(--rc-text-faint)]">
+            Tren dinamis Qty/Valuasi akan terisi begitu data movement tersedia.
+            <br />
+            <span className="text-[10px]">Bila sumber data sedang tak terjangkau, panel ini tetap siap — coba lagi saat koneksi DB pulih.</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-[24px] border-white/10 bg-[rgba(3,14,10,.4)] p-3">
+      <TrendHeader
+        metric={metric}
+        metricLabel={metricLabel}
+        onMetricChange={onMetricChange}
+        total={total}
+        peakLabel={peak ? peak.label : null}
+        deltaPct={deltaPct}
+        formatValue={formatValue}
+      />
+      <div className="min-h-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={points} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="rcTrendFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#34d399" stopOpacity={0.34} />
+                <stop offset="60%" stopColor="#34d399" stopOpacity={0.1} />
+                <stop offset="100%" stopColor="#34d399" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: '#8fa89c', fontSize: 10, fontFamily: 'var(--font-data)' }}
+              axisLine={{ stroke: 'rgba(255,255,255,0.12)' }}
+              tickLine={false}
+              minTickGap={18}
+            />
+            <YAxis
+              yAxisId="main"
+              width={48}
+              tick={{ fill: '#8fa89c', fontSize: 10, fontFamily: 'var(--font-data)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v: number) => formatCompact(v)}
+            />
+            <YAxis
+              yAxisId="freq"
+              orientation="right"
+              width={40}
+              hide={metric === 'freq'}
+              tick={{ fill: '#a0aec0', fontSize: 10, fontFamily: 'var(--font-data)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v: number) => formatCompact(v)}
+            />
+            <Tooltip
+              cursor={{ stroke: 'rgba(52,211,153,0.4)', strokeDasharray: '3 3' }}
+              contentStyle={{
+                background: '#0a1510',
+                border: '1px solid rgba(255,255,255,0.16)',
+                borderRadius: 12,
+                fontFamily: 'var(--font-data)',
+                fontSize: 11,
+              }}
+              labelStyle={{ color: '#a7f3d0', fontWeight: 700 }}
+              formatter={(value, name) => {
+                const v = typeof value === 'number' ? value : Number(value ?? 0)
+                if (name === 'amount') return [`Rp ${formatCompact(v)}`, 'Valuasi']
+                if (name === 'qty') return [formatCompact(v), 'Quantity']
+                return [formatCompact(v), 'Dok issue']
+              }}
+            />
+            <Legend
+              wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: 10, color: '#8fa89c' }}
+              formatter={(value) => (value === 'amount' ? 'Valuasi' : value === 'qty' ? 'Quantity' : 'Dok issue')}
+            />
+            {/* Batang frekuensi sebagai konteks ritme — disembunyikan bila freq jadi metrik utama. */}
+            {metric !== 'freq' && (
+              <Bar yAxisId="freq" dataKey="docs" fill="rgba(148,163,184,0.35)" radius={[3, 3, 0, 0]} maxBarSize={16} />
+            )}
+            {metric === 'amount' && (
+              <Area
+                yAxisId="main"
+                type="monotone"
+                dataKey="amount"
+                stroke="#34d399"
+                strokeWidth={2.2}
+                fill="url(#rcTrendFill)"
+                dot={false}
+                activeDot={{ r: 4, fill: '#a7f3d0', stroke: '#04130c', strokeWidth: 2 }}
+              />
+            )}
+            {metric === 'qty' && (
+              <Area
+                yAxisId="main"
+                type="monotone"
+                dataKey="qty"
+                stroke="#34d399"
+                strokeWidth={2.2}
+                fill="url(#rcTrendFill)"
+                dot={false}
+                activeDot={{ r: 4, fill: '#a7f3d0', stroke: '#04130c', strokeWidth: 2 }}
+              />
+            )}
+            {metric === 'freq' && (
+              <Line
+                yAxisId="main"
+                type="monotone"
+                dataKey="docs"
+                stroke="#f59e0b"
+                strokeWidth={2.2}
+                dot={{ r: 3, fill: '#f59e0b', stroke: '#04130c', strokeWidth: 1.5 }}
+                activeDot={{ r: 4, fill: '#fcd34d', stroke: '#04130c', strokeWidth: 2 }}
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="rc-data mt-2 border-t border-white/[0.06] pt-2 text-[10px] text-[var(--rc-text-faint)]">
+        Agregasi {rows.length} barang teratas · {metricLabel} periode · ganti metrik untuk melihat sisi lain dari
+        pergerakan yang sama.
+      </p>
+    </div>
+  )
+}
+
+type TrendHeaderProps = {
+  metric: MatrixMetric
+  metricLabel: string
+  onMetricChange: (metric: MatrixMetric) => void
+  total: number
+  peakLabel: string | null
+  deltaPct: number | null
+  formatValue: (v: number) => string
+}
+
+function TrendHeader({ metric, metricLabel, onMetricChange, total, peakLabel, deltaPct, formatValue }: TrendHeaderProps) {
+  return (
+    <div className="mb-2 flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-[13px] font-semibold text-[var(--rc-text)]">Tren movement</p>
+        <p className="rc-data mt-0.5 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[var(--rc-text-faint)]">
+          <span>
+            Total {metricLabel}: <strong className="text-[var(--rc-text)]">{formatValue(total)}</strong>
+          </span>
+          {peakLabel && <span>· puncak {peakLabel}</span>}
+          {deltaPct !== null && Number.isFinite(deltaPct) && (
+            <span className={deltaPct >= 0 ? 'text-emerald-300/90' : 'text-amber-300/90'}>
+              {deltaPct >= 0 ? '▲' : '▼'} {Math.abs(deltaPct).toFixed(0)}% vs periode lalu
+            </span>
+          )}
+        </p>
+      </div>
+      <div className="flex shrink-0 gap-1 rounded-full border-white/10 bg-white/[0.04] p-0.5" role="tablist" aria-label="Metrik tren">
+        {(['qty', 'amount', 'freq'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={metric === m}
+            onClick={() => onMetricChange(m)}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+              metric === m ? 'bg-emerald-400/20 text-emerald-100' : 'text-[var(--rc-text-muted)] hover:bg-white/[0.06]'
+            }`}
+          >
+            {m === 'qty' ? 'Qty' : m === 'amount' ? 'Valuasi' : 'Freq'}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}

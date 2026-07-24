@@ -287,3 +287,12 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
   - **Fallback data** — matriks & tabel menampilkan empty-state bersih ("Belum ada data movement untuk rentang periode ini") karena API `/api/reports/inventory/movement-matrix` mengembalikan `error: "fetch failed"` (DB sumber tak terjangkau dari mesin ini) — BUKAN bug UI.
 - Temuan non-bug: halaman `/report-center/inventory/all-stock-movement-analysis` stuck "Memuat report…" karena fetch data gagal yang sama; console bersih (0 error JS).
 - Catatan dev: password user lokal `admin` direset ke `ptrj@123` via Prisma (dev.db lokal) agar sesuai `prisma/create-admin.js`.
+
+## 2026-07-24 - Grafik tren dinamis Qty/Valuasi/Freq di movement deck
+
+- Komponen baru `components/report-center/MovementTrend.tsx` (recharts ComposedChart): tren agregat periode di atas matriks movement, dipasang di `MovementAnalytics.tsx` (di bawah bar timeline, h-[260px]).
+- Toggle **Qty / Valuasi / Freq** di header panel — memakai state `metric` yang sama dengan matriks/tabel/drill-down (satu sumber kebenaran di MovementAnalytics; tidak ada fetch baru, data = agregasi sum periode dari baris matriks).
+- Visual: Valuasi/Qty = area emerald gradient; Freq = garis amber dengan dot; batang frekuensi abu sebagai konteks ritme saat metrik utama bukan freq. Header merangkum total metrik terpilih, periode puncak, dan delta % vs periode lalu (emerald/amber).
+- Empty-state netral (bukan error) saat DB tak terjangkau — terverifikasi via playwright (Chrome, login bypass dev, port 3100): toggle Qty/Valuasi/Freq mengubah label header ('Total nilai (Rp)' → 'Total quantity' → 'Total frekuensi dok'); 0 error JS; Fast Refresh dev server memuat komponen baru tanpa restart.
+- Verifikasi: `npx tsc --noEmit` 0, `npx eslint` kedua file 0 error baru, `npm run build` exit 0.
+- Catatan jujur: perilaku grafik dengan data nyata belum terverifikasi — DB sumber estate tak terjangkau dari mesin ini (API movement-matrix mengembalikan `fetch failed`).

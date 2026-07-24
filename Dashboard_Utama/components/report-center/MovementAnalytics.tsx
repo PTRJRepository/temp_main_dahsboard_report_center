@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import MovementMatrix from './MovementMatrix'
+import MovementTrend from './MovementTrend'
 import ChargeBreakdown from './ChargeBreakdown'
 import MovementTable from './MovementTable'
 import ItemDrilldown from './ItemDrilldown'
@@ -183,6 +184,17 @@ export default function MovementAnalytics({
           </form>
         </div>
       ) : null}
+
+      {/* Tren agregat dinamis — protagonis; mengikuti metric toggle yang sama. */}
+      <div className="h-[260px]">
+        <MovementTrend
+          periods={periods}
+          rows={matrixRows}
+          metric={metric}
+          onMetricChange={setMetric}
+          loading={loading && !data}
+        />
+      </div>
 
       {/* Grid: matriks (lebar) + charge (sempit) */}
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
