@@ -333,3 +333,8 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Komponen baru `MarketTicker.tsx`: pita KPI berjalan (marquee) ala papan bursa — sepasang LABEL + nilai + badge delta ▲/▼ opsional; pause saat hover, hormati reduced-motion, animasi via `rc-ticker-track`.
 - Dipasang di atas panel Total Usage: Issue Event, Issue Qty, Issue Amount, Dokumen, Total Usage (dengan delta ▲/▼ dari 2 titik spark terakhir), dan item Top — mengikuti scope & periode KPI terpilih.
 - Verifikasi: tsc 0 error; build exit 0; ESLint file baru 0 problem (error pre-existing di ProcurementKpiStrip tetap bukan dari perubahan ini).
+
+## 2026-07-24 - Analisis tren lengkap di MovementTrend
+- Header "Tren movement" kini membawa analisis lebih kaya selain total & delta: rata-rata periode, titik tertinggi & terendah, arah tren (naik/turun/datar dari perbandingan rata-rata paruh awal vs akhir), dan jumlah titik periode.
+- Semua metrik analisis mengikuti toggle metrik yang sama (Qty / Valuasi / Freq), jadi user bisa membaca analisis lain dari pergerakan yang sama tanpa pindah panel.
+- Verifikasi: tsc 0 error; ESLint MovementTrend 0 problem; build exit 0.

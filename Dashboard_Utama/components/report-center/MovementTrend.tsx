@@ -85,10 +85,24 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
 
   const total = points.reduce((s, p) => s + p[activeKey], 0)
   const peak = points.length > 0 ? points.reduce((acc, p) => (p[activeKey] > acc[activeKey] ? p : acc), points[0]) : null
+  const trough = points.length > 0 ? points.reduce((acc, p) => (p[activeKey] < acc[activeKey] ? p : acc), points[0]) : null
+  const avg = points.length > 0 ? total / points.length : 0
   const last = points.length > 1 ? points[points.length - 1] : null
   const prev = points.length > 1 ? points[points.length - 2] : null
   const deltaPct =
     last && prev && prev[activeKey] !== 0 ? ((last[activeKey] - prev[activeKey]) / Math.abs(prev[activeKey])) * 100 : null
+  // Arah tren: bandingkan rata-rata paruh akhir vs paruh awal (robust untuk >2 titik).
+  const trendDir = useMemo(() => {
+    if (points.length < 4) return null
+    const half = Math.floor(points.length / 2)
+    const first = points.slice(0, half).reduce((s, p) => s + p[activeKey], 0) / half
+    const second = points.slice(half).reduce((s, p) => s + p[activeKey], 0) / (points.length - half)
+    if (first === 0) return null
+    const drift = ((second - first) / Math.abs(first)) * 100
+    if (drift > 8) return { label: 'naik', pct: drift }
+    if (drift < -8) return { label: 'turun', pct: drift }
+    return { label: 'datar', pct: drift }
+  }, [points, activeKey])
 
   const metricLabel = metric === 'qty' ? 'quantity' : metric === 'freq' ? 'frekuensi dok' : 'nilai (Rp)'
   const formatValue = (v: number) => (metric === 'amount' ? `Rp ${formatCompact(v)}` : formatCompact(v))
@@ -101,7 +115,9 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
     )
   }
 
-  if (points.length === 0 || rows.length === 0) {
+  // Only blank when no period axis at all. Zero-row matrix still plots zeros so
+  // frekuensi / total activity line does not disappear on sparse windows.
+  if (points.length === 0) {
     return (
       <div className="flex h-full min-h-[220px] flex-col overflow-hidden rounded-[24px] border-white/10 bg-white/[0.03] p-3">
         <TrendHeader
@@ -109,13 +125,17 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
           metricLabel={metricLabel}
           onMetricChange={onMetricChange}
           total={0}
+          avg={0}
+          pointCount={0}
           peakLabel={null}
+          troughLabel={null}
           deltaPct={null}
+          trendDir={null}
           formatValue={formatValue}
         />
         <div className="grid min-h-0 flex-1 place-items-center px-4">
           <p className="rc-data text-center text-[11px] leading-relaxed text-[var(--rc-text-faint)]">
-            Tren dinamis Qty/Valuasi akan terisi begitu data movement tersedia.
+            Tren dinamis Qty/Valuasi/Frekuensi siap begitu matriks periode tersedia.
             <br />
             <span className="text-[10px]">Bila sumber data sedang tak terjangkau, panel ini tetap siap — coba lagi saat koneksi DB pulih.</span>
           </p>
@@ -131,8 +151,12 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
         metricLabel={metricLabel}
         onMetricChange={onMetricChange}
         total={total}
+        avg={avg}
+        pointCount={points.length}
         peakLabel={peak ? peak.label : null}
+        troughLabel={trough ? trough.label : null}
         deltaPct={deltaPct}
+        trendDir={trendDir}
         formatValue={formatValue}
       />
       <div className="min-h-0 flex-1">
@@ -247,12 +271,16 @@ type TrendHeaderProps = {
   metricLabel: string
   onMetricChange: (metric: MatrixMetric) => void
   total: number
+  avg: number
+  pointCount: number
   peakLabel: string | null
+  troughLabel: string | null
   deltaPct: number | null
+  trendDir: { label: string; pct: number } | null
   formatValue: (v: number) => string
 }
 
-function TrendHeader({ metric, metricLabel, onMetricChange, total, peakLabel, deltaPct, formatValue }: TrendHeaderProps) {
+function TrendHeader({ metric, metricLabel, onMetricChange, total, avg, pointCount, peakLabel, troughLabel, deltaPct, trendDir, formatValue }: TrendHeaderProps) {
   return (
     <div className="mb-2 flex-wrap items-center justify-between gap-2">
       <div className="min-w-0">
@@ -261,12 +289,22 @@ function TrendHeader({ metric, metricLabel, onMetricChange, total, peakLabel, de
           <span>
             Total {metricLabel}: <strong className="text-[var(--rc-text)]">{formatValue(total)}</strong>
           </span>
-          {peakLabel && <span>· puncak {peakLabel}</span>}
+          <span>
+            · rata-rata <strong className="text-[var(--rc-text)]">{formatValue(avg)}</strong>/periode
+          </span>
+          {peakLabel && <span>· tertinggi {peakLabel}</span>}
+          {troughLabel && <span>· terendah {troughLabel}</span>}
+          {trendDir && (
+            <span className={trendDir.label === 'naik' ? 'text-emerald-300/90' : trendDir.label === 'turun' ? 'text-amber-300/90' : 'text-[var(--rc-text-muted)]'}>
+              · tren {trendDir.label}
+            </span>
+          )}
           {deltaPct !== null && Number.isFinite(deltaPct) && (
             <span className={deltaPct >= 0 ? 'text-emerald-300/90' : 'text-amber-300/90'}>
               {deltaPct >= 0 ? '▲' : '▼'} {Math.abs(deltaPct).toFixed(0)}% vs periode lalu
             </span>
           )}
+          <span>· {pointCount} titik</span>
         </p>
       </div>
       <div className="flex shrink-0 gap-1 rounded-full border-white/10 bg-white/[0.04] p-0.5" role="tablist" aria-label="Metrik tren">
