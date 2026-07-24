@@ -112,6 +112,12 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - **Integrasi:** section "Area kerja" lama diganti `<ProcurementHierarchyNav/>`; header/KPI/overview/process map/aside dipertahankan; import mati dibersihkan.
 - **Verifikasi:** tsc 0, eslint bersih, build exit 0. Belum uji browser.
 
+### 17. Katalog satu-pandangan + smart search (2026-07-23 lanjut)
+
+- Chip group katalog = switcher group (klik = ganti, satu pandangan, scroll-spy dihapus); `groupedReports` flatten `{ group, title, reports }`.
+- Saat `searching`, semua group hasil lintas katalog dirender + banner "N hasil lintas M group"; header katalog menegaskan "cari lintas group".
+- **Verifikasi:** tsc 0, eslint 0 error, build exit 0. Belum uji browser.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

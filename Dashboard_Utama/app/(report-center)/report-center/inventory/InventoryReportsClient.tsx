@@ -1473,69 +1473,34 @@ export default function InventoryReportsClient({
   }, [])
 
   const groupedReports = useMemo(() => reportGroupOptions
-    .map((group) => ({
-      group,
-      reports: filteredReports.filter((report) => report.group === group.group),
+    .map((g) => ({
+      group: g.group,
+      title: g.title,
+      reports: filteredReports.filter((report) => report.group === g.group),
     }))
-    .filter((group) => group.reports.length > 0), [filteredReports, reportGroupOptions])
+    .filter((g) => g.reports.length > 0), [filteredReports, reportGroupOptions])
 
   useEffect(() => {
     if (!groupedReports.length) {
       setActiveCatalogGroup('')
       return
     }
-    if (!groupedReports.some((entry) => entry.group.group === activeCatalogGroup)) {
-      setActiveCatalogGroup(groupedReports[0].group.group)
+    if (!groupedReports.some((entry) => entry.group === activeCatalogGroup)) {
+      setActiveCatalogGroup(groupedReports[0].group)
     }
   }, [activeCatalogGroup, groupedReports])
 
   const jumpToCatalogGroup = (groupId: string) => {
-    const target = document.getElementById(`catalog-group-${groupId}`)
-    if (!target) return
-    const root = target.closest('.rc-scroll-root') as HTMLElement | null
+    // Satu-pandangan: chip mengganti group aktif (bukan scroll).
     catalogJumpLockRef.current = true
     setActiveCatalogGroup(groupId)
-
-    if (root) {
-      const rootRect = root.getBoundingClientRect()
-      const targetRect = target.getBoundingClientRect()
-      const stickyNav = root.querySelector('.rc-catalog-jump') as HTMLElement | null
-      const stickyOffset = (stickyNav?.offsetHeight ?? 56) + 12
-      const nextTop = root.scrollTop + (targetRect.top - rootRect.top) - stickyOffset
-      root.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' })
-    } else {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-
     window.setTimeout(() => {
       catalogJumpLockRef.current = false
-    }, 700)
+    }, 200)
   }
 
-  useEffect(() => {
-    if (!groupedReports.length) return
-
-    const first = document.getElementById(`catalog-group-${groupedReports[0].group.group}`)
-    const root = (first?.closest('.rc-scroll-root') as HTMLElement | null) ?? null
-    if (!root) return
-
-    const onScroll = () => {
-      if (catalogJumpLockRef.current) return
-      const stickyNav = root.querySelector('.rc-catalog-jump') as HTMLElement | null
-      const marker = root.getBoundingClientRect().top + (stickyNav?.offsetHeight ?? 56) + 24
-      let current = groupedReports[0].group.group
-      for (const entry of groupedReports) {
-        const el = document.getElementById(`catalog-group-${entry.group.group}`)
-        if (!el) continue
-        if (el.getBoundingClientRect().top <= marker) current = entry.group.group
-      }
-      setActiveCatalogGroup((prev) => (prev === current ? prev : current))
-    }
-
-    onScroll()
-    root.addEventListener('scroll', onScroll, { passive: true })
-    return () => root.removeEventListener('scroll', onScroll)
-  }, [groupedReports])
+  const searching = search.trim().length > 0
+  const visibleCatalogGroups = searching ? groupedReports : groupedReports.filter((entry) => entry.group === activeCatalogGroup)
 
   const sourceTileValue = sourceDescription(selectedSource)
   const liveCount = LIVE_INVENTORY_REPORT_CATALOG.length
@@ -2119,7 +2084,7 @@ export default function InventoryReportsClient({
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 id="report-catalog-heading" className="text-base font-extrabold text-[var(--rc-text)]">Report Catalog</h2>
-                <p className="mt-0.5 text-xs text-[var(--rc-text-muted)]">{filteredReports.length} live · group jump di bawah</p>
+                <p className="mt-0.5 text-xs text-[var(--rc-text-muted)]">{filteredReports.length} live · cari lintas group · klik chip = ganti group</p>
               </div>
               <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/[0.04] px-2.5 py-1 text-[10px] font-bold text-[var(--rc-text-muted)]">
                 {selectedStage.stageName}
@@ -2142,16 +2107,16 @@ export default function InventoryReportsClient({
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--rc-forest-accent)]">Lompat group</p>
-                    <span className="text-[10px] font-bold text-[var(--rc-text-faint)]">{groupedReports.length} group · klik = scroll</span>
+                    <span className="text-[10px] font-bold text-[var(--rc-text-faint)]">{groupedReports.length} group · klik = ganti</span>
                   </div>
                   <div className="rc-catalog-jump-track flex flex-wrap gap-2 pb-0.5">
-                    {groupedReports.map(({ group, reports }) => {
-                      const active = activeCatalogGroup === group.group
+                    {groupedReports.map(({ group, title, reports }) => {
+                      const active = !searching && activeCatalogGroup === group
                       return (
                         <button
-                          key={group.group}
+                          key={group}
                           type="button"
-                          onClick={() => jumpToCatalogGroup(group.group)}
+                          onClick={() => jumpToCatalogGroup(group)}
                           aria-current={active ? 'true' : undefined}
                           className={
                             active
@@ -2160,7 +2125,7 @@ export default function InventoryReportsClient({
                           }
                         >
                           <span className="h-px w-5 bg-current opacity-25" aria-hidden="true" />
-                          <span className="max-w-[14rem] truncate">{group.title}</span>
+                          <span className="max-w-[14rem] truncate">{title}</span>
                           <span
                             className={
                               active
@@ -2176,22 +2141,28 @@ export default function InventoryReportsClient({
                   </div>
                 </nav>
 
-                {groupedReports.map(({ group, reports }) => {
+                {searching ? (
+                  <p className="mb-3 rounded-xl border-white/10 bg-white/[0.045] px-3 py-2 text-xs text-[var(--rc-text-muted)]">
+                    Menampilkan <span className="font-bold text-[var(--rc-text)]">{filteredReports.length}</span> hasil lintas {groupedReports.length} group — kosongkan pencarian untuk kembali ke mode satu group.
+                  </p>
+                ) : null}
+
+                {visibleCatalogGroups.map(({ group, title, reports }) => {
                   return (
                     <section
-                      key={group.group}
-                      id={`catalog-group-${group.group}`}
-                      data-catalog-group={group.group}
+                      key={group}
+                      id={`catalog-group-${group}`}
+                      data-catalog-group={group}
                       className="rc-catalog-group scroll-mt-24 rounded-[22px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.58)] p-4"
                     >
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <h3 className="text-base font-extrabold text-[var(--rc-text)]">{group.title}</h3>
+                          <h3 className="text-base font-extrabold text-[var(--rc-text)]">{title}</h3>
                           <p className="text-xs leading-5 text-[var(--rc-text-muted)]">Business group dari metadata report. Flow tetap terlihat di tiap card.</p>
                         </div>
                         <span className="rounded-full border border-[var(--rc-forest-border)] bg-white/5 px-3 py-1 text-xs font-bold text-[var(--rc-forest-accent)]">{reports.length} report</span>
                       </div>
-                      <ReportRail ariaLabel={`Rail report ${group.title}`} railId={`rail-${group.group}`}>
+                      <ReportRail ariaLabel={`Rail report ${title}`} railId={`rail-${group}`}>
                         {reports.map((report) => (
                           <ReportTile
                             key={report.reportCode}

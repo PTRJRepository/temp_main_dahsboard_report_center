@@ -239,3 +239,10 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - **INTEGRASI:** section "Area kerja" lama (tab Semua/Gudang/Workshop/Ordering + grid kartu) di `ProcurementModuleWorkspace.tsx` diganti satu blok `<ProcurementHierarchyNav/>`; `initialSubModule` = 'purchasing' bila stockGroup='process', `initialScope` = gudang/workshop bila deep-link lama. Import mati dibersihkan (groupIcon, priorityTone, createProcurementGroupHref, FileText, Suspense, Warehouse, Wrench, ClipboardList, Package, InventoryReportsClient langsung). Header, ProcurementKpiStrip, InventoryOverview, process map, aside "Cara baca module" dipertahankan.
 - **VERIFIKASI:** tsc 0; eslint 3 file bersih total; build exit 0.
 - **PLANNED:** uji nav 2-level di browser (auth gate); implementasi report `soon` (Dispatch Advice, Rincian Perbandingan Harga, Fuel Issue/Return, Stock Return Advice, Daily Fuel Issuance, Material Distribution, Monthly Inventory Utilization) sesuai prioritas.
+
+## 2026-07-23 (lanjut) - Katalog satu-pandangan + smart search
+
+- `InventoryReportsClient.tsx`: chip group di katalog kini **switcher group** (klik = ganti group, satu pandangan, tanpa scroll-spy). Scroll-spy useEffect dihapus; `groupedReports` di-flatten jadi `{ group, title, reports }`.
+- `visibleCatalogGroups`: saat tidak mencari render 1 group aktif; saat `searching` render semua group hasil lintas katalog.
+- Smart search lintas group dipertegas: header katalog `{n} live · cari lintas group · klik chip = ganti group`, plus banner kecil saat searching: "Menampilkan N hasil lintas M group".
+- Verifikasi: `npx tsc --noEmit` = 0, eslint file tersentuh = 0 error (5 warning pre-existing), `npm run build` sukses.
