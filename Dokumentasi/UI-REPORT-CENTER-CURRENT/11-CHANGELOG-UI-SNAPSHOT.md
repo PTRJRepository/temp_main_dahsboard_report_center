@@ -349,3 +349,8 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Perbaikan di `app/api/reports/inventory/route.ts`: cari MAX(Tanggal) dari CTE TANPA batas tanggal sama sekali, lalu jadikan bulan terakhir itu anchor window 12 bulan; fallback ke anchor filter bila sumber benar-benar kosong. `trend` dan `trendFrequency` kini dipad dari anchor efektif ini.
 - Hasil: grafik tren selalu menampilkan 12 bulan berakhir di bulan terakhir yang benar-benar ada issue — sesuai ekspektasi "patokannya ke yang terakhir".
 - Verifikasi: tsc 0 error; build exit 0.
+
+## 2026-07-24 - Aturan pemilihan tabel: periode lampau = monthend
+- Aturan: bila periode yang dipilih adalah periode LAMPAU (bukan bulan berjalan), sumber data diusahakan dari tabel monthend (mis. `IN_MTHENDITEM`) — bukan balance live. Periode berjalan tetap memakai balance live (monthend belum terbentuk).
+- Status implementasi: sudah diterapkan di `assetStockValuationListing` (`app/api/reports/inventory/route.ts:1971` — `useMonthEnd = period.requested && !isCurrentActualPeriod`) dan di jalur opening/closing `IN_MTHENDITEM` lain.
+- Fix anchor tren movement (eabfaf7) sejalan dengan aturan ini: anchor dipatok ke bulan terakhir yang benar-benar ada issue, bukan ke periode lampau/depan yang kosong.
