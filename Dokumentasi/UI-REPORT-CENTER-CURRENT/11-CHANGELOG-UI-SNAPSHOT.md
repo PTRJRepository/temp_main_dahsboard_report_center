@@ -328,3 +328,8 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Deck procurement kini punya panel "Jumlah Issue" yang selalu tampil di bawah Total Usage: Total Issue Movement (event), Issue Qty (unit fisik), Frekuensi Issue (dokumen), dan Paling Sering Di-issue — masing-masing dengan breakdown lengkap.
 - Sebelumnya informasi jumlah ini hanya ada di tab "Movement" (carousel sekunder) sehingga tidak langsung terlihat; sekarang terpisah dan always-visible sesuai konteks scope & periode KPI.
 - Verifikasi: tsc 0 error; build exit 0; ESLint file hanya menyisakan error pre-existing (setState dalam effect, sudah ada sebelum perubahan ini).
+
+## 2026-07-24 - MarketTicker ala bursa di deck procurement
+- Komponen baru `MarketTicker.tsx`: pita KPI berjalan (marquee) ala papan bursa — sepasang LABEL + nilai + badge delta ▲/▼ opsional; pause saat hover, hormati reduced-motion, animasi via `rc-ticker-track`.
+- Dipasang di atas panel Total Usage: Issue Event, Issue Qty, Issue Amount, Dokumen, Total Usage (dengan delta ▲/▼ dari 2 titik spark terakhir), dan item Top — mengikuti scope & periode KPI terpilih.
+- Verifikasi: tsc 0 error; build exit 0; ESLint file baru 0 problem (error pre-existing di ProcurementKpiStrip tetap bukan dari perubahan ini).

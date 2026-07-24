@@ -227,6 +227,9 @@ itu. 0 error JS. tsc 0, eslint 0, build exit 0.
 ### 28. 2026-07-24 - Panel Jumlah Issue selalu terlihat
 - Panel always-visible berisi jumlah issue (event/qty/dokumen/top item) + breakdown, terpisah dari carousel Movement.
 
+### 29. 2026-07-24 - MarketTicker ala bursa di deck procurement
+- Pita KPI berjalan (LABEL + nilai + ▲/▼) di atas panel Total Usage, mengikuti scope & periode KPI.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

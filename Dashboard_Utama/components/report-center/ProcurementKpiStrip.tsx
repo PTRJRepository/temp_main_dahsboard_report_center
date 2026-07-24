@@ -13,6 +13,7 @@ import PeriodScrubber from './PeriodScrubber'
 import MovementAnalytics from './MovementAnalytics'
 import Sparkline, { MomentumDelta } from './Sparkline'
 import InsightTicker from './InsightTicker'
+import MarketTicker, { type MarketTickerItem } from './MarketTicker'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
 import type { ReportSource } from '@/lib/reports/procurement-workspace'
 
@@ -1260,6 +1261,20 @@ export default function ProcurementKpiStrip({
     movementCards[3], // Frekuensi Issue (dokumen)
     movementCards[7], // Paling Sering Di-issue
   ].filter(Boolean)
+
+  // Pita KPI berjalan ala bursa — jumlah issue + metrik utama periode terpilih.
+  const usageSpark = (Array.isArray(usageTrend) ? usageTrend : []).map((t) => Number(t?.amount ?? 0)).filter((v) => Number.isFinite(v))
+  const usageDeltaPct = usageSpark.length > 1 && usageSpark[usageSpark.length - 2] !== 0
+    ? ((usageSpark[usageSpark.length - 1] - usageSpark[usageSpark.length - 2]) / Math.abs(usageSpark[usageSpark.length - 2])) * 100
+    : undefined
+  const marketTickerItems: MarketTickerItem[] = [
+    { label: 'Issue Event', value: formatNumber(movementEvent) },
+    { label: 'Issue Qty', value: formatQuantity(movementQty) },
+    { label: 'Issue Amount', value: formatCurrencyCompact(movementAmount) },
+    { label: 'Dokumen', value: formatNumber(usageDocuments) },
+    { label: 'Total Usage', value: formatCurrencyCompact(usageAmount), deltaPct: usageDeltaPct },
+    { label: 'Top', value: topIssueFreq ? (topIssueFreq.code ?? topIssueFreq.name ?? '—') : '—' },
+  ]
   const gudangShare = Math.min(Math.max(percentOf(gudangValue, inventoryValue), 0), 100)
   const workshopShare = Math.min(Math.max(percentOf(workshopValue, inventoryValue), 0), 100)
 
@@ -1555,6 +1570,10 @@ export default function ProcurementKpiStrip({
         ) : null}
 
         <div className="min-w-0 space-y-3">
+          <div className="min-w-0">
+            <MarketTicker items={marketTickerItems} />
+          </div>
+
           <div className="min-w-0">
             <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">
               Always visible · Total Usage · {inventoryScopeShort} · {kpiTimelineRange.label}
