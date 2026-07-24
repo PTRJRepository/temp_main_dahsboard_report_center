@@ -245,6 +245,9 @@ itu. 0 error JS. tsc 0, eslint 0, build exit 0.
 ### 34. 2026-07-24 - Badge penanda periode berjalan vs lampau
 - Badge eksplisit (emerald=berjalan/live, amber=lampau/monthend) di konteks filter KPI.
 
+### 35. 2026-07-24 - SQL cek data di tooltip setiap kartu KPI
+- Tooltip kartu kini menyertakan query sederhana untuk verifikasi angka, mengikuti aturan monthend (lampau) vs live (berjalan).
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

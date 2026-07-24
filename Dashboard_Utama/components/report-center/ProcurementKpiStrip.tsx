@@ -110,11 +110,13 @@ type ProcurementKpiCard = {
   className: string
   /** Deret nilai tren untuk sparkline mini (opsional). */
   spark?: number[]
+  /** SQL sederhana untuk cek data yang dipakai kartu ini. */
+  checkSql?: string
   /** Native hover tooltip — penjelasan detail kartu. */
   tooltip?: string
 }
 
-function cardTooltip(card: Pick<ProcurementKpiCard, 'label' | 'valueExact' | 'value' | 'description' | 'formula' | 'source' | 'breakdown' | 'tooltip'>) {
+function cardTooltip(card: Pick<ProcurementKpiCard, 'label' | 'valueExact' | 'value' | 'description' | 'formula' | 'source' | 'breakdown' | 'checkSql' | 'tooltip'>) {
   if (card.tooltip) return card.tooltip
   const chips = (card.breakdown ?? []).map((b) => `${b.label}: ${b.value}`).join(' · ')
   return [
@@ -123,7 +125,42 @@ function cardTooltip(card: Pick<ProcurementKpiCard, 'label' | 'valueExact' | 'va
     `Rumus: ${card.formula}`,
     `Sumber: ${card.source}`,
     chips ? `Rincian: ${chips}` : '',
+    card.checkSql ? `Cek SQL: ${card.checkSql}` : '',
   ].filter(Boolean).join('\n')
+}
+
+/** SQL sederhana untuk verifikasi cepat angka kartu KPI — mengikuti periode & mode. */
+function kpiCheckSql(cardId: string, opts: { periodFrom: string; periodTo: string; accYear: number; accMonth: number; isCurrentPeriod: boolean; database: string }): string {
+  const { periodFrom, periodTo, accYear, accMonth, isCurrentPeriod, database } = opts
+  const db = database || 'ESTATE'
+  const d = (s: string) => `'${s}'`
+  switch (cardId) {
+    case 'total-usage':
+    case 'movement-amount':
+      return isCurrentPeriod
+        ? `SELECT SUM(l.Qty*l.Cost) AS Amount FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
+        : `SELECT SUM(m.Amount) AS Amount FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+    case 'movement-qty':
+      return isCurrentPeriod
+        ? `SELECT SUM(l.Qty) AS Qty FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
+        : `SELECT SUM(m.IssuedTotalQty) AS Qty FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+    case 'movement-frequency':
+      return `SELECT COUNT(DISTINCT h.StockIssueID) AS Dok FROM [${db}].dbo.IN_STOCKISSUE h WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
+    case 'movement-total':
+      return `SELECT COUNT(*) AS Event FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
+    case 'movement-top-frequency':
+      return `SELECT TOP 1 l.ItemCode, COUNT(DISTINCT h.StockIssueID) AS Dok FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)} GROUP BY l.ItemCode ORDER BY Dok DESC`
+    case 'movement-gr-qty':
+      return `SELECT SUM(m.GoodsReceiveQty) AS GRQty FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+    case 'movement-open-close-qty':
+      return `SELECT SUM(m.OpeningQty) AS Opening, SUM(m.ClosingQty) AS Closing FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+    case 'movement-issued-split':
+      return `SELECT SUM(m.IssuedLedgerQty) AS Ledger, SUM(m.IssuedStationQty) AS Station, SUM(m.IssuedVehicleQty) AS Vehicle FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+    default:
+      return isCurrentPeriod
+        ? `SELECT SUM((i.QtyOnHand+i.QtyOnHold)*i.AverageCost) AS Amount FROM [${db}].dbo.IN_ITEM i`
+        : `SELECT SUM(m.Amount) AS Amount FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+  }
 }
 
 const DECK_SECTIONS: Array<{ id: DeckSection; label: string; tone: string }> = [
@@ -549,6 +586,21 @@ export default function ProcurementKpiStrip({
   const periodKindBadge = isCurrentPeriod
     ? { label: 'Periode berjalan · live balance', tone: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100' }
     : { label: 'Periode lampau · snapshot monthend', tone: 'border-amber-300/30 bg-amber-400/10 text-amber-100' }
+
+  // Parameter SQL cek data kartu — mengikuti periode terpilih.
+  const kpiPeriodMatch = String(filters.period ?? '').trim().match(/^(\d{4})-(\d{1,2})/)
+  const kpiAccYear = isYearMode ? Number((filters.customYear ?? '').trim()) : kpiPeriodMatch ? Number(kpiPeriodMatch[1]) : now.getFullYear()
+  const kpiAccMonth = isYearMode ? 12 : kpiPeriodMatch ? Number(kpiPeriodMatch[2]) : now.getMonth() + 1
+  const checkSqlOpts = {
+    periodFrom: kpiTimelineRange.from,
+    periodTo: kpiTimelineRange.to,
+    accYear: kpiAccYear,
+    accMonth: kpiAccMonth,
+    isCurrentPeriod,
+    database: source === 'pabrik' ? 'PABRIK' : 'ESTATE',
+  }
+  const withCheckSql = (card: ProcurementKpiCard): ProcurementKpiCard =>
+    card.checkSql ? card : { ...card, checkSql: kpiCheckSql(card.id, checkSqlOpts) }
   const filteredLinks = {
     stock: hrefWithFilters(links.stock, filters, { includeGroupBy: false }),
     receive: hrefWithFilters(links.receive, filters, { includeGroupBy: false }),
@@ -1262,7 +1314,7 @@ export default function ProcurementKpiStrip({
   ]
 
   const partial = Object.values(snapshots).some((snapshot) => snapshot && !snapshot.ok)
-  const headlineCard = heroCards[0]
+  const headlineCard = heroCards[0] ? withCheckSql(heroCards[0]) : heroCards[0]
   const heroSideCards = heroCards.slice(1)
   const valuationSideCards = valuationCards.slice(1)
   // Panel "Jumlah Issue" yang selalu terlihat — ringkasan hitungan issue periode terpilih.
@@ -1391,10 +1443,11 @@ export default function ProcurementKpiStrip({
     </div>
   )
 
-  const sectionCards =
+  const sectionCards = (
     openSection === 'proses' ? processCards
       : openSection === 'movement' ? movementCards
         : valuationSideCards
+  ).map(withCheckSql)
 
   return (
     <section className="relative overflow-hidden rounded-[32px] border border-[var(--rc-forest-border)] bg-[radial-gradient(circle_at_8%_0%,rgba(155,226,61,.18),transparent_28%),radial-gradient(circle_at_90%_8%,rgba(41,199,200,.16),transparent_25%),linear-gradient(135deg,rgba(2,10,7,.94),rgba(7,25,17,.9)_46%,rgba(10,14,7,.92))] shadow-[0_26px_90px_rgba(0,0,0,.34)]">
@@ -1597,14 +1650,14 @@ export default function ProcurementKpiStrip({
             <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">
               Always visible · Total Usage · {inventoryScopeShort} · {kpiTimelineRange.label}
             </p>
-            {renderCardGrid(heroSideCards)}
+            {renderCardGrid(heroSideCards.map(withCheckSql))}
           </div>
 
           <div className="min-w-0">
             <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">
               Jumlah Issue · {inventoryScopeShort} · {kpiTimelineRange.label}
             </p>
-            {renderCardGrid(issueCountCards)}
+            {renderCardGrid(issueCountCards.map(withCheckSql))}
           </div>
 
           <div className="min-w-0">

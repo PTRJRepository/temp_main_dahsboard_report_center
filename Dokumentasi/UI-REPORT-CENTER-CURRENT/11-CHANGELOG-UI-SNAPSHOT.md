@@ -359,3 +359,9 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Deck KPI kini menampilkan badge eksplisit: "Periode berjalan · live balance" (emerald) atau "Periode lampau · snapshot monthend" (amber), lengkap dengan tooltip yang menjelaskan sumber datanya.
 - Memperkuat aturan monthend (IN_MTHENDITEM untuk periode lampau, live balance untuk periode berjalan) agar selalu terlihat oleh user, bukan hanya tercat di kode.
 - Verifikasi: tsc 0 error; build exit 0.
+
+## 2026-07-24 - SQL cek data di tooltip setiap kartu KPI
+- Setiap kartu KPI kini membawa properti `checkSql`: query sederhana untuk verifikasi cepat angka yang dipakai, muncul di tooltip sebagai "Cek SQL: ...".
+- Query mengikuti aturan monthend: periode lampau memakai snapshot `IN_MTHENDITEM` (AccYear/AccMonth), periode berjalan memakai tabel live (`IN_STOCKISSUE`/`IN_STOCKISSUELN`/`IN_ITEM`).
+- Helper `kpiCheckSql()` memetakan id kartu → query agregat sederhana (amount/qty/dokumen/event/top item/GR/opening-closing/issued split), dengan rentang tanggal & database dari konteks filter.
+- Verifikasi: tsc 0 error; build exit 0.
