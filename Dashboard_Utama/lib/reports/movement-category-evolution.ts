@@ -1,5 +1,4 @@
 import {
-  MOVEMENT_CATEGORY_ORDER,
   movementCategoryFromIssueCount,
   type MovementCategory,
   type MovementCategoryThresholds,
