@@ -7,6 +7,9 @@ import ChargeBreakdown from './ChargeBreakdown'
 import MovementTable from './MovementTable'
 import FrequencyInsights from './FrequencyInsights'
 import ItemDrilldown from './ItemDrilldown'
+import MovementCategoryEvolution from './MovementCategoryEvolution'
+import { buildCategoryEvolutionFromMatrix } from '@/lib/reports/movement-category-evolution'
+import { MOVEMENT_CATEGORY_THRESHOLDS } from '@/lib/reports/movement-category'
 
 /**
  * MovementAnalytics — pembungkus section analisis movement.
@@ -84,6 +87,7 @@ export default function MovementAnalytics({
   onOpenDetail,
 }: MovementAnalyticsProps) {
   const [metric, setMetric] = useState<'qty' | 'amount' | 'freq'>('amount')
+  const [evolutionMetric, setEvolutionMetric] = useState<'count' | 'qty' | 'amount'>('count')
   const [data, setData] = useState<ApiMatrixResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [drillItem, setDrillItem] = useState<{ code: string; name: string } | null>(null)
@@ -123,6 +127,11 @@ export default function MovementAnalytics({
 
   const periods = data?.periods ?? []
   const matrixRows = useMemo(() => data?.rows ?? [], [data])
+
+  const evolution = useMemo(
+    () => buildCategoryEvolutionFromMatrix(matrixRows, data?.periods ?? [], MOVEMENT_CATEGORY_THRESHOLDS),
+    [matrixRows, data],
+  )
 
   // Baris tabel: dari matriks (punya series pola) — paling informatif.
   const tableRows = useMemo(
@@ -234,6 +243,20 @@ export default function MovementAnalytics({
           metric={metric}
           onMetricChange={setMetric}
           loading={loading && !data}
+        />
+      </div>
+
+      {/* Evolusi kategori movement — stacked count/qty/amount + movers */}
+      <div className="h-[320px]">
+        <MovementCategoryEvolution
+          periods={periods}
+          byPeriod={evolution.byPeriod}
+          movers={evolution.movers}
+          totals={evolution.totals}
+          metric={evolutionMetric}
+          onMetricChange={setEvolutionMetric}
+          loading={loading && !data}
+          onDrilldown={(item) => setDrillItem(item)}
         />
       </div>
 
