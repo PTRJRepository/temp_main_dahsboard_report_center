@@ -236,6 +236,9 @@ itu. 0 error JS. tsc 0, eslint 0, build exit 0.
 ### 31. 2026-07-24 - Analisis lintas-metrik di MovementTrend
 - Chip: harga rata-rata/unit, qty/dok, nilai/dok, konsentrasi puncak — dihitung dari agregat penuh, independen dari toggle aktif.
 
+### 32. 2026-07-24 - Fix anchor tren movement ke bulan terakhir berdata
+- Anchor window 12 bulan = bulan dengan issue terakhir (bukan periode terpilih), jadi tren tidak lagi kosong saat periode terpilih belum berdata.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

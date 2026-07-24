@@ -343,3 +343,9 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Di bawah grafik tren kini ada baris chip analisis lintas-metrik: harga rata-rata per unit (valuasi ÷ qty), qty per dokumen, nilai per dokumen, dan konsentrasi periode puncak (% dari total).
 - Dihitung dari agregat penuh yang sama — independen dari toggle Qty/Valuasi/Freq yang sedang aktif, jadi user bisa membaca hubungan antar-metrik tanpa berpindah mode.
 - Verifikasi: tsc 0 error; ESLint MovementTrend 0 problem; build exit 0.
+
+## 2026-07-24 - Fix anchor tren movement ke bulan terakhir berdata
+- Akar masalah "trend movement selalu kosong": anchor tren mengikuti periode terpilih user; bila periode itu belum ada datanya, CTE tren ikut kosong dan seluruh window 12 bulan jadi nol.
+- Perbaikan di `app/api/reports/inventory/route.ts`: cari MAX(Tanggal) dari CTE TANPA batas tanggal sama sekali, lalu jadikan bulan terakhir itu anchor window 12 bulan; fallback ke anchor filter bila sumber benar-benar kosong. `trend` dan `trendFrequency` kini dipad dari anchor efektif ini.
+- Hasil: grafik tren selalu menampilkan 12 bulan berakhir di bulan terakhir yang benar-benar ada issue — sesuai ekspektasi "patokannya ke yang terakhir".
+- Verifikasi: tsc 0 error; build exit 0.

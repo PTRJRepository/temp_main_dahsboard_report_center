@@ -305,6 +305,51 @@ function formatPeriod(year: number, month: number) {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
+/** Deck usage trend length (inclusive of anchor month). */
+const USAGE_TREND_MONTHS = 12
+
+function shiftPeriodYm(ym: string, deltaMonths: number) {
+  const match = String(ym).match(/^(\d{4})-(\d{2})$/)
+  if (!match) return ym
+  const date = new Date(Number(match[1]), Number(match[2]) - 1 + deltaMonths, 1)
+  return formatPeriod(date.getFullYear(), date.getMonth() + 1)
+}
+
+/** Anchor month for usage trend: period → dateTo → dateFrom → now. */
+function resolveUsageTrendAnchorYm(filters?: ReportFilterInput) {
+  const period = String(filters?.period ?? '').trim()
+  if (/^\d{4}-\d{2}/.test(period)) return period.slice(0, 7)
+  const dateTo = cleanSqlDate(filters?.dateTo)
+  if (dateTo) return dateTo.slice(0, 7)
+  const dateFrom = cleanSqlDate(filters?.dateFrom)
+  if (dateFrom) return dateFrom.slice(0, 7)
+  const now = new Date()
+  return formatPeriod(now.getFullYear(), now.getMonth() + 1)
+}
+
+/** Fill missing months with zeros so chart never collapses to <2 points. */
+function padMonthlyTrendRows(
+  raw: Array<Record<string, unknown>>,
+  anchorYm: string,
+  months: number,
+  valueKeys: string[],
+) {
+  const byMonth = new Map<string, Record<string, unknown>>()
+  for (const row of raw ?? []) {
+    const month = String(row?.month ?? '').slice(0, 7)
+    if (/^\d{4}-\d{2}$/.test(month)) byMonth.set(month, row)
+  }
+  const out: Array<Record<string, unknown>> = []
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const month = shiftPeriodYm(anchorYm, -i)
+    const hit = byMonth.get(month)
+    const next: Record<string, unknown> = { month }
+    for (const key of valueKeys) next[key] = hit?.[key] ?? 0
+    out.push(next)
+  }
+  return out
+}
+
 function resolveActualAccountingPeriod(period?: string) {
   const match = period?.trim().match(/^(\d{4})-(\d{2})(?:-\d{2})?$/)
   const parsed = match ? actualToAccountingPeriod(Number(match[1]), Number(match[2])) : null
@@ -2029,7 +2074,7 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
     ORDER BY total_amount DESC, item_code ASC
   `)
 
-  const summary = await first(ctx, `
+  const summaryRow = await first(ctx, `
     ${reportSql}
     SELECT
       ${period.accYear} AS acc_year,
@@ -2065,6 +2110,70 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
       COUNT(DISTINCT CASE WHEN item_type = '4' AND total_quantity > 0 THEN location END) AS WorkshopLocationWithStock
     FROM asset_valuation
   `)
+
+  // Opening = previous accounting month snapshot (IN_MTHENDITEM).
+  // Compare basis for Master valuation: selected/current vs opening period.
+  const openingPeriod = previousAccountingPeriod(period.accYear, period.accMonth)
+  const openingActual = accountingToActualPeriod(openingPeriod.accYear, openingPeriod.accMonth)
+  const openingActualPeriod = openingActual
+    ? formatPeriod(openingActual.actualYear, openingActual.actualMonth)
+    : ''
+  const openingAccountingPeriod = formatPeriod(openingPeriod.accYear, openingPeriod.accMonth)
+  const openingAmountExpr = 'CAST(ISNULL(m.Amount, ISNULL(m.Qty, 0) * ISNULL(m.AverageCost, 0)) AS DECIMAL(38,6))'
+  const openingSummary = await first(ctx, `
+    SELECT
+      CAST(SUM(CASE WHEN ${openingAmountExpr} > 0 THEN ${openingAmountExpr} ELSE 0 END) AS DECIMAL(38,6)) AS OpeningTotalAmount,
+      CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '1' AND ${openingAmountExpr} > 0 THEN ${openingAmountExpr} ELSE 0 END) AS DECIMAL(38,6)) AS OpeningGudangTotalAmount,
+      CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '4' AND ${openingAmountExpr} > 0 THEN ${openingAmountExpr} ELSE 0 END) AS DECIMAL(38,6)) AS OpeningWorkshopTotalAmount,
+      CAST(SUM(ISNULL(m.Qty, 0)) AS DECIMAL(18,2)) AS OpeningTotalQuantity,
+      CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '1' THEN ISNULL(m.Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS OpeningGudangQuantity,
+      CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType, '')) = '4' THEN ISNULL(m.Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS OpeningWorkshopQuantity,
+      COUNT(*) AS OpeningItemCount
+    FROM [${DATABASE}].[dbo].[IN_MTHENDITEM] m
+    INNER JOIN [${DATABASE}].[dbo].[IN_ITEM] i
+      ON i.ItemCode = m.ItemCode
+      AND i.LocCode = m.LocCode
+    WHERE 1=1
+      AND RTRIM(CONVERT(varchar(10), m.AccYear)) = '${openingPeriod.accYear}'
+      AND TRY_CONVERT(int, NULLIF(RTRIM(CONVERT(varchar(10), m.AccMonth)), '')) = ${openingPeriod.accMonth}
+      ${itemTypeSql}
+      ${locationFilter}
+      ${taxonomyFilter}
+      ${categoryFilter}
+  `).catch(() => ({
+    OpeningTotalAmount: 0,
+    OpeningGudangTotalAmount: 0,
+    OpeningWorkshopTotalAmount: 0,
+    OpeningTotalQuantity: 0,
+    OpeningGudangQuantity: 0,
+    OpeningWorkshopQuantity: 0,
+    OpeningItemCount: 0,
+  }))
+
+  const currentAmount = Number(summaryRow?.total_amount ?? 0) || 0
+  const openingAmount = Number(openingSummary?.OpeningTotalAmount ?? 0) || 0
+  const valuationDelta = currentAmount - openingAmount
+  const valuationDeltaPct = openingAmount !== 0 ? (valuationDelta / openingAmount) * 100 : null
+
+  const summary: DbRow = {
+    ...(summaryRow ?? {}),
+    OpeningAccYear: openingPeriod.accYear,
+    OpeningAccMonth: openingPeriod.accMonth,
+    OpeningAccountingPeriod: openingAccountingPeriod,
+    OpeningActualPeriod: openingActualPeriod,
+    OpeningTotalAmount: openingAmount,
+    OpeningGudangTotalAmount: Number(openingSummary?.OpeningGudangTotalAmount ?? 0) || 0,
+    OpeningWorkshopTotalAmount: Number(openingSummary?.OpeningWorkshopTotalAmount ?? 0) || 0,
+    OpeningTotalQuantity: Number(openingSummary?.OpeningTotalQuantity ?? 0) || 0,
+    OpeningGudangQuantity: Number(openingSummary?.OpeningGudangQuantity ?? 0) || 0,
+    OpeningWorkshopQuantity: Number(openingSummary?.OpeningWorkshopQuantity ?? 0) || 0,
+    OpeningItemCount: Number(openingSummary?.OpeningItemCount ?? 0) || 0,
+    ValuationDeltaAmount: valuationDelta,
+    ValuationDeltaPct: valuationDeltaPct,
+    CurrentVsOpeningLabel: openingActualPeriod
+      ? `Current ${period.actualPeriod} vs Opening ${openingActualPeriod}`
+      : `Current ${period.actualPeriod} vs Opening Acc ${openingAccountingPeriod}`,
+  }
 
   const chart = await rows(ctx, `
     ${reportSql}
@@ -2113,6 +2222,11 @@ async function assetStockValuationListing({ limit, limitAll, search, ctx, filter
       periodRule: 'Actual period YYYY-MM dikonversi dengan actualToAccountingPeriod; AccYear/AccMonth dikonversi balik dengan accountingToActualPeriod.',
       quantityRule: 'total_quantity = quantity_on_hand + quantity_on_hold.',
       valuationRule: useMonthEnd ? 'total_amount = IN_MTHENDITEM.Qty * AverageCost.' : 'total_amount = (quantity_on_hand + quantity_on_hold) * IN_ITEM.AverageCost',
+      openingValuationRule: 'Opening = previous accounting month IN_MTHENDITEM snapshot (Amount or Qty×AverageCost). Delta = current total_amount − OpeningTotalAmount.',
+      openingActualPeriod,
+      openingAccountingPeriod,
+      openingAccYear: openingPeriod.accYear,
+      openingAccMonth: openingPeriod.accMonth,
       differentialUnitCostRule: useMonthEnd ? 'IN_MTHENDITEM tidak punya DiffAverageCost; differential_unit_cost ditampilkan 0.' : 'differential_unit_cost = IN_ITEM.DiffAverageCost',
       primaryChart: 'Top Product Type by total_amount',
       availableCharts: ['Top product type by total_amount', 'Quantity on hand by product type', 'Zero balance quality check'],
@@ -3317,26 +3431,32 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   const gudangLocationSql = location ? `\n        AND RTRIM(h.LocCode) LIKE N'%${location}%'` : ''
   const workshopLocationSql = location ? `\n        AND RTRIM(s.LocCode) LIKE N'%${location}%'` : ''
 
-  // Rentang tren: SELALU 5 bulan ke belakang dari bulan anchor (period /
-  // dateTo / bulan berjalan), terlepas dari filter periode report. Tujuannya
-  // grafik tren di deck tidak pernah hanya berisi satu titik saat user memilih
-  // mode bulan tunggal. Bulan anchor ikut (inklusif) sebagai titik terakhir.
-  const anchorDate = cleanSqlDate(filters?.dateTo) ?? month.toExclusive ?? `${new Date().toISOString().slice(0, 7)}-01`
-  const trendFromSql = `CONVERT(date, DATEADD(MONTH, -4, '${anchorDate}'))`
-  const trendToSql = `DATEADD(MONTH, 1, '${anchorDate}')`
+  // Trend window: last USAGE_TREND_MONTHS months ending at selected period month
+  // (or dateTo month in year mode). Independent of single-month report filter so
+  // deck chart always has a full series. Anchor month inclusive; end exclusive.
+  const trendAnchorYm = resolveUsageTrendAnchorYm(filters)
+  const trendStartYm = shiftPeriodYm(trendAnchorYm, -(USAGE_TREND_MONTHS - 1))
+  const trendEndExclusiveYm = shiftPeriodYm(trendAnchorYm, 1)
+  const trendFromSql = `CONVERT(date, '${trendStartYm}-01')`
+  const trendToSql = `CONVERT(date, '${trendEndExclusiveYm}-01')`
   const gudangTrendDateSql = `h.PostDate >= ${trendFromSql}\n        AND h.PostDate < ${trendToSql}`
   const workshopTrendDateSql = `${workshopDate} >= ${trendFromSql}\n        AND ${workshopDate} < ${trendToSql}`
 
+  // Issue total = LINE only (IN_STOCKISSUELN / WS_JOBSTOCK row).
+  // Header IN_STOCKISSUE is join key only — never SUM header amount.
+  // StockIssueID = header id; StockIssueLnID = line id (detail item).
   const gudangQuery = `
       SELECT
+        CAST(h.StockIssueID AS INT) AS StockIssueID,
+        CAST(l.StockIssueLnID AS INT) AS StockIssueLnID,
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
         h.PostDate AS Tanggal,
         RTRIM(l.ItemCode) AS KodeBarang,
         RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
         RTRIM(ISNULL(i.ProdCatCode, '-')) AS Kategori,
         CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
-        CAST(ISNULL(l.Cost, 0) AS DECIMAL(18,2)) AS Cost,
-        CAST(ISNULL(l.Amount, 0) AS DECIMAL(18,2)) AS Amount,
+        CAST(ISNULL(l.Cost, 0) AS DECIMAL(18,4)) AS Cost,
+        CAST(${issueLineAmountExpression('l')} AS DECIMAL(18,4)) AS Amount,
         RTRIM(ISNULL(l.VehCode, '')) AS VehCode,
         RTRIM(ISNULL(l.AccCode, '')) AS AccCode,
         RTRIM(ISNULL(l.BlkCode, '')) AS BlkCode,
@@ -3352,14 +3472,16 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
 
   const workshopQuery = `
       SELECT
+        CAST(COALESCE(s.JobStockIssueID, s.JobStockID, s.JobID) AS INT) AS StockIssueID,
+        CAST(COALESCE(s.JobStockID, s.JobStockIssueID, s.JobID) AS INT) AS StockIssueLnID,
         RTRIM(${workshopDoc}) AS Dokumen,
         ${workshopDate} AS Tanggal,
         RTRIM(s.ItemCode) AS KodeBarang,
         RTRIM(ISNULL(i.Description, s.ItemCode)) AS NamaBarang,
         RTRIM(ISNULL(i.ProdCatCode, '-')) AS Kategori,
         CAST(ISNULL(s.Qty, 0) AS DECIMAL(18,2)) AS Qty,
-        CAST(ISNULL(s.Cost, 0) AS DECIMAL(18,2)) AS Cost,
-        CAST(${workshopAmount} AS DECIMAL(18,2)) AS Amount,
+        CAST(ISNULL(s.Cost, ISNULL(s.Price, 0)) AS DECIMAL(18,4)) AS Cost,
+        CAST(${workshopAmount} AS DECIMAL(18,4)) AS Amount,
         RTRIM(COALESCE(NULLIF(RTRIM(s.VehCode), ''), NULLIF(RTRIM(j.VehCode), ''), '')) AS VehCode,
         RTRIM(ISNULL(s.AccCode, '')) AS AccCode,
         RTRIM(COALESCE(NULLIF(RTRIM(s.BlkCode), ''), NULLIF(RTRIM(j.BlkCode), ''), '')) AS BlkCode,
@@ -3385,7 +3507,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     )`
 
   // CTE khusus tren — kolom identik, tapi rentang tanggal memakai trend date
-  // (5 bulan ke belakang dari bulan anchor), BUKAN filter periode report.
+  // (N bulan ke belakang dari bulan anchor), BUKAN filter periode report.
   const gudangTrendQuery = gudangQuery.replace(gudangDateSql, gudangTrendDateSql)
   const workshopTrendQuery = workshopQuery.replace(workshopDateSql, workshopTrendDateSql)
   const trendQueries = []
@@ -3406,14 +3528,18 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     ORDER BY Tanggal DESC, Dokumen DESC
   `)
 
+  // Summary totals = SUM of LINE rows only (issue_rows grain = StockIssueLn / JobStock line).
+  // Do NOT aggregate header-level amounts. Cost is unit cost — not summed into TotalAmount.
   const summary = await first(ctx, `
     ${issueRowsCte}
     SELECT
-      COUNT(DISTINCT Dokumen) AS TotalDokumen,
-      COUNT(*) AS TotalBaris,
+      COUNT(DISTINCT StockIssueID) AS TotalDokumen,
+      COUNT(DISTINCT StockIssueLnID) AS TotalBaris,
+      COUNT(*) AS TotalLineRows,
       COUNT(DISTINCT KodeBarang) AS TotalItem,
       CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS TotalQty,
-      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS TotalAmount,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,4)) AS TotalAmount,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,4)) AS TotalIssueAmount,
       SUM(CASE WHEN RTRIM(ISNULL(AccCode, '')) = '' THEN 1 ELSE 0 END) AS BarisAccCodeKosong,
       SUM(CASE WHEN RTRIM(ISNULL(BlkCode, '')) = '' THEN 1 ELSE 0 END) AS BarisBlkCodeKosong,
       SUM(CASE WHEN RTRIM(ISNULL(VehCode, '')) = '' THEN 1 ELSE 0 END) AS BarisVehCodeKosong,
@@ -3430,16 +3556,16 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       NamaBarang,
       COUNT(*) AS BarisTransaksi,
       CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS QtyKeluar,
-      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS NilaiKeluar,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,4)) AS NilaiKeluar,
       MAX(Tanggal) AS LastIssueDate
     FROM issue_rows
-    WHERE Tanggal >= '2025-05-01'
     GROUP BY KodeBarang, NamaBarang
     ORDER BY NilaiKeluar DESC
   `)
 
   // Top lists untuk KPI Command Deck — additive, reuse issue_rows CTE yang sama
   // sehingga RTRIM/char-compare + cabang gudang/workshop tetap konsisten.
+  // Amount/qty = SUM line rows (bukan header).
   const topItems = await rows(ctx, `
     ${issueRowsCte}
     SELECT TOP 5
@@ -3447,7 +3573,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       NamaBarang AS name,
       COUNT(*) AS events,
       CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
-      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,4)) AS amount
     FROM issue_rows
     GROUP BY KodeBarang, NamaBarang
     ORDER BY SUM(ISNULL(Amount, 0)) DESC
@@ -3475,10 +3601,25 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     ORDER BY SUM(ISNULL(Amount, 0)) DESC
   `)
 
-  // Trend bulanan — SELALU 5 bulan ke belakang dari bulan anchor (lihat
-  // issueTrendRowsCte), terlepas dari filter periode report, agar grafik tren
-  // di deck tidak pernah hanya satu titik saat mode bulan tunggal dipilih.
-  const trend = await rows(ctx, `
+  // Trend bulanan — anchored to bulan TERAKHIR yang benar-benar ada issue
+  // (bukan periode terpilih), supaya window 12 bulan tidak melewati data kosong.
+  // CTE anchor membuang batas tanggal sama sekali agar MAX(Tanggal) tidak ikut kosong.
+  const stripToNoDate = (q: string) => q.replace(/h\.PostDate >= '[^']*'(\s*AND h\.PostDate < [^\n]+)?/g, '1=1').replace(new RegExp(`${workshopDate} >= '[^']*'(\\s*AND ${workshopDate} < [^\\n]+)?`, 'g'), '1=1')
+  const unboundedQueries = trendQueries.map((q) => stripToNoDate(q))
+  const issueUnboundedRowsCte = `
+    WITH issue_rows AS (
+      ${unboundedQueries.join(' UNION ALL ')}
+    )`
+  const latestIssueRow = await first(ctx, `
+    ${issueUnboundedRowsCte}
+    SELECT MAX(Tanggal) AS lastIssue
+    FROM issue_rows
+    WHERE Tanggal IS NOT NULL
+  `)
+  const latestIssueYm = String(latestIssueRow?.lastIssue ?? '').slice(0, 7)
+  const effectiveTrendAnchorYm = /^\d{4}-\d{2}$/.test(latestIssueYm) ? latestIssueYm : trendAnchorYm
+
+  const trendRaw = await rows(ctx, `
     ${issueTrendRowsCte}
     SELECT
       CONVERT(varchar(7), Tanggal, 120) AS month,
@@ -3490,9 +3631,10 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     GROUP BY CONVERT(varchar(7), Tanggal, 120)
     ORDER BY month
   `)
+  const trend = padMonthlyTrendRows(trendRaw, effectiveTrendAnchorYm, USAGE_TREND_MONTHS, ['events', 'qty', 'amount'])
 
-  // Frekuensi issue per bulan — rentang yang sama dengan trend (5 bulan).
-  const trendFrequency = await rows(ctx, `
+  // Frekuensi issue per bulan — same padded window as trend.
+  const trendFrequencyRaw = await rows(ctx, `
     ${issueTrendRowsCte}
     SELECT
       CONVERT(varchar(7), Tanggal, 120) AS month,
@@ -3504,6 +3646,7 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     GROUP BY CONVERT(varchar(7), Tanggal, 120)
     ORDER BY month
   `)
+  const trendFrequency = padMonthlyTrendRows(trendFrequencyRaw, effectiveTrendAnchorYm, USAGE_TREND_MONTHS, ['docs', 'activeDays', 'qty'])
   const issueFrequencyTop = await rows(ctx, `
     ${issueRowsCte}
     SELECT TOP 5
@@ -3538,6 +3681,8 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     metadata: metadata(ctx, {
       sourceTables: 'IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK, WS_JOB, IN_STOCKISSUELN_ACC',
       issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType = 1.',
+      issueGrain: 'LINE — one row = StockIssueLnID (gudang) or JobStock line (workshop). Totals = SUM(line Amount/Qty). Header StockIssueID is join key only; never sum header amount.',
+      issueIdFields: 'StockIssueID = header id; StockIssueLnID = line/detail id. Amount = COALESCE(NULLIF(line.Amount,0), Qty*Cost). Cost = unit cost (not summed).',
       primaryChart: 'Top Barang Keluar by Amount',
       availableCharts: ['Top Barang Keluar by Amount', 'Pengeluaran per Block / Account', 'Pengeluaran per Kendaraan'],
       qualityFocus: ['AccCode/BlkCode/VehCode kosong', 'PostDate placeholder'],
