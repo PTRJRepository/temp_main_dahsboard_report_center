@@ -304,3 +304,10 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - `MovementTrendChart.tsx`: header "Trend movement · 5 bulan" + "N titik"; empty-state baru "Belum ada movement pada 5 bulan terakhir".
 - Terverifikasi playwright dengan data nyata (periode bulan tunggal): grafik terisi "3 titik · puncak Jun 26 — Rp 11.5 M · Total Rp 27.7 M". 0 error JS.
 - Verifikasi: tsc 0, eslint 0 error baru (13 warning pre-existing di route.ts), build exit 0, simulasi node string-replace CTE cocok untuk cabang bulan & custom year.
+
+## 2026-07-24 - Analisis frekuensi issue level deck + mode demo matriks
+
+- Komponen baru `components/report-center/FrequencyInsights.tsx`: analisis frekuensi issue agregat deck — ritme dokumen periode (bar strip hover), statistik (total dok, periode aktif + % konsisten, rata/periode, teramai/tersepi), sebaran kerutinan Fast/Reguler/Slow (≥80% / ≥40% / <40%), top 5 barang paling sering di-issue (klik → ItemDrilldown). Data dari rows matriks (cells.docs) tanpa fetch baru. Dipasang di `MovementAnalytics.tsx` di bawah MovementTable.
+- Mode demo matriks: `?demo=1` di `/api/reports/inventory/movement-matrix` → matriks sintetis deterministik (mulberry32 seed tetap; 12 item dengan pola fast/reguler/slow/seasonal). Hanya aktif via param eksplisit; produksi tidak terpengaruh. Tujuan: verifikasi UI saat DB sumber tak terjangkau.
+- Terverifikasi playwright (window.fetch dipatch → demo=1): "132 dok · 6/6 periode aktif (100% konsisten) · rata 22.0 dok/periode", ritme bar 25/23/23/18/17/26, Fast 4 / Reguler 5 / Slow 3, top "NPK 12/12/17/2 + TE · 28 dok · 21%"; klik item → dialog drilldown terbuka. 0 error JS.
+- Verifikasi: tsc 0, eslint 0 (ketiga file), build exit 0.

@@ -21,6 +21,10 @@ import {
  *
  * Periode current dihitung live (data berubah terus); rentang default 12 bulan
  * terakhir. Cache in-memory TTL pendek agar buka-tutup section tidak memukul DB.
+ *
+ * Mode demo: `?demo=1` menghasilkan matriks sintetis deterministik (tanpa DB) —
+ * dipakai untuk verifikasi UI saat sumber data tak terjangkau. Tidak pernah
+ * aktif tanpa param eksplisit.
  */
 
 type ReportSource = 'estate' | 'pabrik'
@@ -132,6 +136,56 @@ function clampInt(value: number, min: number, max: number, fallback: number) {
   return Math.min(Math.max(Math.trunc(value), min), max)
 }
 
+/** PRNG deterministik (mulberry32) — demo harus stabil antar request. */
+function mulberry32(seed: number) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const DEMO_ITEMS: Array<[string, string]> = [
+  ['FE025', 'BUAMAX / NPK 13/6/27/4+0.65B'],
+  ['MFE012', 'PUPUK COMPOS'],
+  ['FE023', 'NPK 12/12/17/2 + TE'],
+  ['FE012', 'MOP'],
+  ['FE039', 'NPK 15/15/6/4'],
+  ['OL003', 'OLI MESRAN SAE 40'],
+  ['PS057', 'SPAREPART POMPA IRIGASI'],
+  ['CH001', 'GLYPHOSATE 480 SL'],
+  ['SP110', 'BEARING 6310 ZZ'],
+  ['FUEL01', 'SOLAR INDUSTRI HSD'],
+  ['FE001', 'UREA 46% N'],
+  ['PS052', 'V-BELT B-65'],
+]
+
+/** Matriks sintetis: campuran pola fast-moving, reguler, slow-moving, dan seasonal. */
+function demoMatrix(periods: string[], top: number): MatrixRow[] {
+  const rand = mulberry32(20260724)
+  const count = Math.min(top, DEMO_ITEMS.length)
+  return DEMO_ITEMS.slice(0, count).map(([code, name], idx) => {
+    const qty: number[] = []
+    const amount: number[] = []
+    const docs: number[] = []
+    const unitCost = 25_000 + rand() * 2_400_000
+    const regularity = idx < 3 ? 0.95 : idx < 8 ? 0.6 : 0.25
+    periods.forEach((_, pIdx) => {
+      const seasonal = 0.7 + 0.5 * Math.sin((pIdx / Math.max(1, periods.length - 1)) * Math.PI * 2 + idx)
+      const active = rand() < regularity
+      const d = active ? Math.max(1, Math.round(rand() * 6 * regularity + 1)) : 0
+      const q = active ? Math.round((20 + rand() * 400) * seasonal) : 0
+      docs.push(d)
+      qty.push(q)
+      amount.push(Math.round(q * unitCost))
+    })
+    return { code, name, cells: { qty, amount, docs } }
+  })
+}
+
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const source = getSource(request)
   const sp = request.nextUrl.searchParams
@@ -152,6 +206,18 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const hit = cache.get(cacheKey)
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
     return NextResponse.json({ ...hit.payload, cached: true })
+  }
+
+  // Mode demo eksplisit — verifikasi UI tanpa DB (deterministik).
+  if (sp.get('demo') === '1') {
+    return NextResponse.json({
+      success: true,
+      periods,
+      rows: demoMatrix(periods, top),
+      metric: 'qty',
+      currentPeriod: periods[periods.length - 1],
+      source,
+    } satisfies MatrixResponse)
   }
 
   // Pola issue_rows (lihat inventory/route.ts:3315-3370), tapi diagregasi per barang×bulan.

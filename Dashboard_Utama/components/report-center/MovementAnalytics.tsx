@@ -5,6 +5,7 @@ import MovementMatrix from './MovementMatrix'
 import MovementTrend from './MovementTrend'
 import ChargeBreakdown from './ChargeBreakdown'
 import MovementTable from './MovementTable'
+import FrequencyInsights from './FrequencyInsights'
 import ItemDrilldown from './ItemDrilldown'
 
 /**
@@ -60,7 +61,9 @@ type MovementAnalyticsProps = {
   onOpenDetail?: (item: { code: string; name: string }) => void
 }
 
-const TIMELINE_OPTIONS = [6, 12, 24] as const
+const TIMELINE_OPTIONS = [6, 12, 24, 60, 120] as const
+const TIMELINE_CUSTOM_MIN = 3
+const TIMELINE_CUSTOM_MAX = 120
 
 export default function MovementAnalytics({
   source,
@@ -159,16 +162,18 @@ export default function MovementAnalytics({
             onSubmit={(event) => {
               event.preventDefault()
               const parsed = Number(customTimeline)
-              if (Number.isFinite(parsed) && parsed >= 3 && parsed <= 36) setTimelineMonths(Math.round(parsed))
+              if (Number.isFinite(parsed) && parsed >= TIMELINE_CUSTOM_MIN && parsed <= TIMELINE_CUSTOM_MAX) {
+                setTimelineMonths(Math.round(parsed))
+              }
             }}
           >
             <input
               type="number"
-              min={3}
-              max={36}
+              min={TIMELINE_CUSTOM_MIN}
+              max={TIMELINE_CUSTOM_MAX}
               value={customTimeline}
               onChange={(event) => setCustomTimeline(event.target.value)}
-              placeholder="3–36"
+              placeholder="3–120"
               aria-label="Rentang bulan kustom"
               className="rc-data h-7 w-16 rounded-lg border-white/10 bg-black/25 px-2 text-[11px] text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-300/40"
             />
@@ -235,6 +240,15 @@ export default function MovementAnalytics({
           onDrilldown={(item) => setDrillItem(item)}
           loading={loading && !data}
           periodCount={periods.length}
+        />
+      </div>
+
+      {/* Analisis frekuensi issue agregat: ritme, top dok, sebaran kerutinan */}
+      <div className="h-[280px]">
+        <FrequencyInsights
+          periods={periods}
+          rows={matrixRows}
+          onDrilldown={(item) => setDrillItem(item)}
         />
       </div>
 

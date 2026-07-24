@@ -191,6 +191,33 @@ terpilih bulan tunggal. 0 error JS. Verifikasi statis: simulasi node
 string-replace CTE cocok untuk cabang bulan & custom year; tsc 0; eslint 0
 error baru (13 warning pre-existing); build exit 0.
 
+### 25. Analisis frekuensi issue level deck + mode demo matriks (2026-07-24)
+
+Panel **Analisis frekuensi issue** baru di bawah tabel movement
+(`components/report-center/FrequencyInsights.tsx`, dipasang di
+`MovementAnalytics.tsx` h-[280px]) — agregat deck, melengkapi analisis frekuensi
+per-barang di ItemDrilldown:
+
+- **Ritme dokumen issue** — bar strip periode (hover = jumlah dok);
+  ringkasan: total dok, periode aktif x/y + % konsisten, rata dok/periode,
+  periode teramai & tersepi.
+- **Sebaran kerutinan barang** — stacked bar + legenda: Fast (≥80% periode
+  aktif) / Reguler (≥40%) / Slow (<40%).
+- **Paling sering di-issue** — top 5 barang by jumlah dok + share %; klik
+  membuka ItemDrilldown barang itu.
+- Data dari rows matriks yang sama (cells.docs) — tanpa fetch baru.
+
+Mode demo matriks: `GET /api/reports/inventory/movement-matrix?demo=1`
+menghasilkan matriks sintetis deterministik (mulberry32, 12 item pola
+fast/reguler/slow/seasonal) tanpa DB — hanya aktif dengan param eksplisit;
+dipakai untuk verifikasi UI saat DB tak terjangkau.
+
+Terverifikasi playwright (patch fetch window → demo=1): panel render penuh —
+"132 dok · 6/6 periode aktif (100% konsisten) · rata 22.0 dok/periode",
+ritme 25/23/23/18/17/26, sebaran Fast 4 Reguler 5 Slow 3, top list "NPK
+12/12/17/2 + TE · 28 dok · 21%"; klik top item membuka dialog drilldown barang
+itu. 0 error JS. tsc 0, eslint 0, build exit 0.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.
