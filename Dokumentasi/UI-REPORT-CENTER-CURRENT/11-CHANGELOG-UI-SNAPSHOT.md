@@ -246,3 +246,9 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - `visibleCatalogGroups`: saat tidak mencari render 1 group aktif; saat `searching` render semua group hasil lintas katalog.
 - Smart search lintas group dipertegas: header katalog `{n} live · cari lintas group · klik chip = ganti group`, plus banner kecil saat searching: "Menampilkan N hasil lintas M group".
 - Verifikasi: `npx tsc --noEmit` = 0, eslint file tersentuh = 0 error (5 warning pre-existing), `npm run build` sukses.
+
+## 2026-07-23 (lanjut) - Analisis disederhanakan: taksonomi dihapus, breakdown = angka + penjelasan
+
+- \`MonthlyStockRingkasan.tsx\`: section "Sub-category analysis" (rail taksonomi ProductType/Location dll., duplikatif dengan kategori analisis yang dipilih) DIHAPUS saat monthly. \`subKpiCards\` prop tetap diterima demi kompatibilitas tapi tidak dirender di mode monthly.
+- \`MonthlyMovementVisuals\` ditulis ulang: dari bar bertumpuk + banyak teks menjadi panel angka besar (Opening/Issued/Receive/Return/Closing) masing-masing dengan SATU kalimat penjelasan (saldo awal, pemakaian keluar, dst.) + strip rincian issue Ledger/Station/Vehicle dengan angka + share % + satu kalimat definisi. Tone warna ramai (sky/amber/emerald/yellow per elemen) diganti neutral sesuai estetika calm-minimal.
+- Verifikasi: tsc 0, eslint kembali ke baseline pre-existing (2 error `any` + 1 warning, tak terkait perubahan ini), build exit 0.

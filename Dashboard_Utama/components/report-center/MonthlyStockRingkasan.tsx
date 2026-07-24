@@ -203,75 +203,77 @@ function MonthlyMovementVisuals({
   const goodsReceive = findKpi(flowKpiCards, 'Purchasing - Goods Receive')
   const returnKpi = findKpi(flowKpiCards, 'Purchasing - Return')
   const closing = findKpi(flowKpiCards, 'Closing')
+
   const issueParts = [
-    { label: 'Ledger', kpi: issuedLedger, className: 'bg-amber-300' },
-    { label: 'Station', kpi: issuedStation, className: 'bg-orange-400' },
-    { label: 'Vehicle', kpi: issuedVehicle, className: 'bg-red-400' },
+    { label: 'Ledger', kpi: issuedLedger },
+    { label: 'Station', kpi: issuedStation },
+    { label: 'Vehicle', kpi: issuedVehicle },
   ].map((item) => ({ ...item, amount: toNumber(metricValue(item.kpi, /Amount/i)), qty: toNumber(metricValue(item.kpi, /Qty/i)) }))
   const issueTotalAmount = Math.max(toNumber(metricValue(issuedTotal, /Amount/i)), issueParts.reduce((sum, item) => sum + item.amount, 0), 1)
+
   const bridge = [
-    { label: 'Opening', kpi: opening, className: 'bg-sky-300' },
-    { label: 'Issued', kpi: issuedTotal, className: 'bg-amber-300' },
-    { label: 'Goods receive', kpi: goodsReceive, className: 'bg-emerald-300' },
-    { label: 'Return', kpi: returnKpi, className: 'bg-cyan-300' },
-    { label: 'Closing', kpi: closing, className: 'bg-yellow-200' },
+    { label: 'Opening', kpi: opening, note: 'Saldo awal periode' },
+    { label: 'Issued', kpi: issuedTotal, note: 'Total pemakaian keluar' },
+    { label: 'Receive', kpi: goodsReceive, note: 'Barang masuk dari pembelian' },
+    { label: 'Return', kpi: returnKpi, note: 'Retur ke supplier' },
+    { label: 'Closing', kpi: closing, note: 'Saldo akhir periode' },
   ].map((item) => ({ ...item, amount: toNumber(metricValue(item.kpi, /Amount|TotalItem/i)), qty: toNumber(metricValue(item.kpi, /Qty/i)) }))
   const bridgeMax = Math.max(...bridge.map((item) => Math.abs(item.amount)), 1)
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(250,204,21,0.18),transparent_28%),linear-gradient(135deg,rgba(5,35,23,0.92),rgba(7,20,38,0.9))] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <section className="overflow-hidden rounded-[28px] border-white/10 bg-white/[0.035] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.30),inset_0_1px_0_rgba(255,255,255,0.08)] sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.26em] text-yellow-100/80">Movement visual analysis</p>
-          <h3 className="mt-1 text-2xl font-black tracking-[-0.05em] text-white sm:text-3xl">Quantity, issue, receive, closing terbaca sekilas.</h3>
+          <p className="text-[11px] font-black uppercase tracking-[0.26em] text-white/55">Alur periode</p>
+          <h3 className="mt-1 text-xl font-black tracking-[-0.03em] text-white sm:text-2xl">Opening → issue → receive → closing</h3>
         </div>
-        <span className="w-fit rounded-2xl border border-yellow-200/30 bg-yellow-300/12 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-yellow-50">
-          MC window {activeMonthlyMovementWindow}
+        <span className="rounded-full border-white/10 bg-black/25 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-white/60">
+          Window {activeMonthlyMovementWindow}
         </span>
       </div>
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
-          <p className="text-sm font-black uppercase tracking-[0.14em] text-amber-50">Issue composition</p>
-          <p className="mt-1 text-[11px] font-bold leading-5 text-white/55">Bar length = issue amount share. Qty line = physical issue quantity.</p>
-          <div className="mt-4 space-y-3">
-            {issueParts.map((item) => {
-              const width = Math.max(4, Math.min(100, (item.amount / issueTotalAmount) * 100))
-              return (
-                <div key={item.label} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-3 text-xs font-bold text-white/80">
-                    <span className="text-white">{item.label}</span>
-                    <span className="tabular-nums text-yellow-50">{compactMetric(item.amount, 'IssuedTotalAmount', item.label)}</span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-white/10">
-                    <div className={`h-full rounded-full ${item.className}`} style={{ width: `${width}%` }} />
-                  </div>
-                  <p className="text-[11px] font-semibold text-white/55">Qty {compactMetric(item.qty, 'IssuedTotalQty', item.label)}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-5">
+        {bridge.map((item) => {
+          const width = Math.max(6, Math.min(100, (Math.abs(item.amount) / bridgeMax) * 100))
+          return (
+            <div key={item.label} className="rounded-2xl border-white/10 bg-black/25 p-3">
+              <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-white/55">{item.label}</span>
+              <strong className="mt-1.5 block min-h-[2rem] text-lg font-black tabular-nums leading-tight text-white">
+                {compactMetric(item.amount, 'Amount', item.label)}
+              </strong>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-white/45" style={{ width: `${width}%` }} />
+              </div>
+              <span className="mt-2 block text-[11px] font-semibold text-white/60">{item.note}</span>
+              <span className="mt-0.5 block text-[10px] font-bold tabular-nums text-white/45">Qty {compactMetric(item.qty, 'Qty', item.label)}</span>
+            </div>
+          )
+        })}
+      </div>
 
-        <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
-          <p className="text-sm font-black uppercase tracking-[0.14em] text-emerald-50">Opening → issue → receive → closing</p>
-          <p className="mt-1 text-[11px] font-bold leading-5 text-white/55">Amount = IDR value in period flow. Qty = physical movement quantity.</p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-5">
-            {bridge.map((item) => {
-              const width = Math.max(8, Math.min(100, (Math.abs(item.amount) / bridgeMax) * 100))
-              return (
-                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.045] p-3">
-                  <span className="block text-[11px] font-black uppercase tracking-[0.12em] text-white">{item.label}</span>
-                  <strong className="mt-2 block min-h-[2.1rem] text-sm font-black leading-tight text-yellow-50">{compactMetric(item.amount, 'Amount', item.label)}</strong>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className={`h-full rounded-full ${item.className}`} style={{ width: `${width}%` }} />
-                  </div>
-                  <span className="mt-2 block text-[10px] font-bold text-white/55">Qty {compactMetric(item.qty, 'Qty', item.label)}</span>
-                </div>
-              )
-            })}
-          </div>
+      <div className="mt-4 rounded-2xl border-white/10 bg-black/25 p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/55">Rincian issue</p>
+          <p className="text-[11px] font-bold text-white/50">Total {compactMetric(issueTotalAmount, 'IssuedTotalAmount', 'Issued total')}</p>
         </div>
+        <div className="mt-3 space-y-2.5">
+          {issueParts.map((item) => {
+            const share = Math.round((item.amount / issueTotalAmount) * 100)
+            return (
+              <div key={item.label} className="flex items-center gap-3">
+                <span className="w-16 shrink-0 text-xs font-bold text-white/75">{item.label}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full rounded-full bg-white/45" style={{ width: `${Math.max(3, share)}%` }} />
+                </div>
+                <span className="w-24 shrink-0 text-right text-xs font-black tabular-nums text-white">{compactMetric(item.amount, 'IssuedTotalAmount', item.label)}</span>
+                <span className="w-10 shrink-0 text-right text-[10px] font-bold tabular-nums text-white/50">{share}%</span>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-3 text-[11px] font-semibold leading-4 text-white/50">
+          Ledger = issue ke blok/afdeling, Station = issue ke stasiun pabrik, Vehicle = issue ke kendaraan. Persen = porsi dari total issue periode ini.
+        </p>
       </div>
     </section>
   )
@@ -317,7 +319,6 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
   const MONTHLY_ANALYSIS_GROUP_OPTIONS = analysisGroupOptions
   const MONTHLY_MOVEMENT_WINDOW_OPTIONS = movementWindowOptions
   const activeAnalysisLabel = analysisGroupLabel(MONTHLY_ANALYSIS_GROUP_OPTIONS, resolvedMonthlyAnalysisGroup)
-  const subCategoryMax = Math.max(...subKpiCards.map(cardChartValue), 1)
   const movementCategoryMax = Math.max(...movementCategoryKpiCards.map(cardChartValue), 1)
 
   return (
@@ -441,33 +442,6 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                   compactMetric={compactMetric}
                 />
               )}
-              <section className="rounded-[30px] border border-sky-300/25 bg-[radial-gradient(circle_at_100%_0%,rgba(56,189,248,0.18),transparent_30%),linear-gradient(135deg,rgba(8,34,52,0.92),rgba(4,20,34,0.92))] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-5">
-                <SectionBar
-                  title={`Sub-category analysis · ${displayColumnLabel(subKpiCards[0]?.groupField ?? activeTableGroupColumn ?? resolvedMonthlyAnalysisGroup)}`}
-                  note={`${subKpiCards.length} grup · sync Actual ${activePeriodLabels.actual ?? 'current'}`}
-                  tone="sky"
-                />
-                {subKpiCards.length > 0 ? (
-                  <div className="rc-breakdown-scroll mt-4 grid max-h-[34rem] grid-cols-1 gap-3 pr-1 lg:grid-cols-2 2xl:grid-cols-3">
-                    {subKpiCards.slice(0, 24).map((kpi) => (
-                      <KpiBarCard
-                        key={`sub-chart-${kpi.groupField}-${kpi.groupKey}`}
-                        kpi={kpi}
-                        max={subCategoryMax}
-                        compactMetric={compactMetric}
-                        label="Sub category"
-                        caption="Bar length = primary amount/count for active analysis group."
-                        tone="sky"
-                        onClick={() => applySubKpiCardFilter(kpi)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-3xl border border-sky-300/20 bg-black/20 p-5 text-sm font-semibold text-sky-50/70">
-                    Tidak ada sub-category untuk kategori aktif. Pilih Product Type / Brand / Model / Material untuk grafik grup.
-                  </div>
-                )}
-              </section>
               <section className="rounded-[30px] border border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(132,204,22,0.20),transparent_30%),linear-gradient(135deg,rgba(5,40,25,0.94),rgba(4,24,20,0.92))] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-5">
                 <SectionBar
                   title="Movement category analysis"

@@ -118,6 +118,12 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - Saat `searching`, semua group hasil lintas katalog dirender + banner "N hasil lintas M group"; header katalog menegaskan "cari lintas group".
 - **Verifikasi:** tsc 0, eslint 0 error, build exit 0. Belum uji browser.
 
+### 18. Analisis ringkas tanpa rail taksonomi (2026-07-23 lanjut)
+
+- Rail "Sub-category analysis" (taksonomi duplikatif) dihapus dari mode monthly; kategori analisis cukup dari Movement Category rail + kontrol kategori.
+- Movement visual = panel angka besar + satu kalimat penjelasan per tahap + rincian issue Ledger/Station/Vehicle dengan share %; bukan lagi bar bertumpuk penuh teks.
+- **Verifikasi:** tsc 0, eslint baseline, build exit 0. Belum uji browser.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.
