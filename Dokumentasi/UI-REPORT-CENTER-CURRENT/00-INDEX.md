@@ -124,6 +124,12 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - Movement visual = panel angka besar + satu kalimat penjelasan per tahap + rincian issue Ledger/Station/Vehicle dengan share %; bukan lagi bar bertumpuk penuh teks.
 - **Verifikasi:** tsc 0, eslint baseline, build exit 0. Belum uji browser.
 
+### 19. Analisis berguna pengganti taksonomi (2026-07-23 lanjut)
+
+- Panel "Konsentrasi issue per barang": top 5 item issue terbesar (angka, share %, qty) + makna ketergantungan stok.
+- Panel "Sehat arus stok": coverage closing vs issue (×) + opening→closing (%) dengan interpretasi kondisional satu kalimat.
+- **Verifikasi:** tsc 0, eslint baseline, build exit 0. Belum uji browser.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

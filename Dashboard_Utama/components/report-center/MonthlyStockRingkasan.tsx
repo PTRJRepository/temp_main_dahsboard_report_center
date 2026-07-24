@@ -38,7 +38,7 @@ export type MonthlyStockRingkasanProps = {
   analysisGroupOptions: ReadonlyArray<{ field: string; label: string }>
   movementWindowOptions: ReadonlyArray<{ value: string; label: string }>
   requestFilters: ReportFilterInput
-  payload: { summary?: DbRow; metadata?: DbRow } | null
+  payload: { summary?: DbRow; metadata?: DbRow; rows?: DbRow[]; columns?: Array<string | { field?: string; name?: string }> } | null
   appliedFilters: ReportFilterInput
   viewerProfile: { kpiPresetByLabel?: Record<string, string> }
   compactMetric: (value: unknown, field?: string, label?: string) => string
@@ -190,10 +190,12 @@ function MonthlyMovementVisuals({
   flowKpiCards,
   activeMonthlyMovementWindow,
   compactMetric,
+  payload,
 }: {
   flowKpiCards: ReportKpiCardLike[]
   activeMonthlyMovementWindow: string
   compactMetric: (value: unknown, field?: string, label?: string) => string
+  payload: { summary?: DbRow; rows?: DbRow[] } | null
 }) {
   const opening = findKpi(flowKpiCards, 'Opening')
   const issuedLedger = findKpi(flowKpiCards, 'Issued - Ledger')
@@ -210,6 +212,25 @@ function MonthlyMovementVisuals({
     { label: 'Vehicle', kpi: issuedVehicle },
   ].map((item) => ({ ...item, amount: toNumber(metricValue(item.kpi, /Amount/i)), qty: toNumber(metricValue(item.kpi, /Qty/i)) }))
   const issueTotalAmount = Math.max(toNumber(metricValue(issuedTotal, /Amount/i)), issueParts.reduce((sum, item) => sum + item.amount, 0), 1)
+
+  const issueRows = (payload?.rows ?? []).filter((row) => toNumber(row.IssuedTotalAmount) > 0)
+  const issueTotalFromRows = issueRows.reduce((sum, row) => sum + toNumber(row.IssuedTotalAmount), 0)
+  const topIssueItems = [...issueRows]
+    .sort((a, b) => toNumber(b.IssuedTotalAmount) - toNumber(a.IssuedTotalAmount))
+    .slice(0, 5)
+    .map((row) => ({
+      code: String(row.StockCode ?? row.ItemCode ?? row.Code ?? row.StockName ?? row.ItemName ?? 'Item'),
+      name: String(row.StockName ?? row.ItemName ?? row.Description ?? row.Name ?? ''),
+      amount: toNumber(row.IssuedTotalAmount),
+      qty: toNumber(row.IssuedTotalQty),
+    }))
+  const top5Amount = topIssueItems.reduce((sum, item) => sum + item.amount, 0)
+  const concentrationShare = issueTotalFromRows > 0 ? Math.round((top5Amount / issueTotalFromRows) * 100) : 0
+  const openingAmount = toNumber(metricValue(opening, /Amount/i))
+  const closingAmount = toNumber(metricValue(closing, /Amount/i))
+  const issuedAmountForHealth = toNumber(metricValue(issuedTotal, /Amount/i))
+  const stockCoverage = issuedAmountForHealth > 0 ? closingAmount / issuedAmountForHealth : 0
+  const openingToClosingDrop = openingAmount > 0 ? Math.round(((openingAmount - closingAmount) / openingAmount) * 100) : 0
 
   const bridge = [
     { label: 'Opening', kpi: opening, note: 'Saldo awal periode' },
@@ -275,6 +296,77 @@ function MonthlyMovementVisuals({
           Ledger = issue ke blok/afdeling, Station = issue ke stasiun pabrik, Vehicle = issue ke kendaraan. Persen = porsi dari total issue periode ini.
         </p>
       </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-2xl border-white/10 bg-black/25 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/55">Konsentrasi issue per barang</p>
+            <p className="text-[11px] font-bold text-white/50">
+              Top 5 = {concentrationShare}% dari total issue · {issueRows.length} barang ada issue
+            </p>
+          </div>
+          {topIssueItems.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {topIssueItems.map((item, index) => {
+                const share = issueTotalFromRows > 0 ? Math.round((item.amount / issueTotalFromRows) * 100) : 0
+                return (
+                  <div key={`${item.code}-${index}`} className="flex items-center gap-3">
+                    <span className="w-5 shrink-0 text-[10px] font-black tabular-nums text-white/40">{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-xs font-bold text-white/85">{item.code}{item.name ? ` · ${item.name}` : ''}</span>
+                        <span className="shrink-0 text-xs font-black tabular-nums text-white">{compactMetric(item.amount, 'IssuedTotalAmount', item.code)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-white/45" style={{ width: `${Math.max(3, share)}%` }} />
+                        </div>
+                        <span className="shrink-0 text-[10px] font-bold tabular-nums text-white/50">{share}%</span>
+                        <span className="shrink-0 text-[10px] font-bold tabular-nums text-white/45">Qty {compactMetric(item.qty, 'IssuedTotalQty', item.code)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs font-semibold text-white/50">Belum ada baris issue pada periode ini.</p>
+          )}
+          <p className="mt-3 text-[11px] font-semibold leading-4 text-white/50">
+            Semakin besar porsi top 5, semakin tergantung pemakaian pada sedikit barang — prioritas kontrol stoknya.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border-white/10 bg-black/25 p-4">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/55">Sehat arus stok</p>
+          <div className="mt-3 space-y-2.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-bold text-white/75">Coverage closing vs issue</span>
+              <span className="text-sm font-black tabular-nums text-white">{stockCoverage.toFixed(2)}×</span>
+            </div>
+            <p className="text-[11px] font-semibold leading-4 text-white/50">
+              {stockCoverage >= 2
+                ? 'Stok akhir jauh di atas pemakaian — aman, tapi cek risiko overstock.'
+                : stockCoverage >= 1
+                  ? 'Stok akhir masih menutup pemakaian periode ini.'
+                  : 'Stok akhir lebih kecil dari pemakaian — waspada kekurangan stok.'}
+            </p>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-bold text-white/75">Opening → closing</span>
+              <span className="text-sm font-black tabular-nums text-white">
+                {openingToClosingDrop > 0 ? `-${openingToClosingDrop}%` : openingToClosingDrop < 0 ? `+${Math.abs(openingToClosingDrop)}%` : '0%'}
+              </span>
+            </div>
+            <p className="text-[11px] font-semibold leading-4 text-white/50">
+              {openingToClosingDrop > 0
+                ? 'Nilai stok turun dari awal ke akhir periode — pemakaian melebihi pengisian.'
+                : openingToClosingDrop < 0
+                  ? 'Nilai stok naik dari awal ke akhir periode — pengisian melebihi pemakaian.'
+                  : 'Nilai stok stabil dari awal ke akhir periode.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
     </section>
   )
 }
@@ -440,6 +532,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                   flowKpiCards={flowKpiCards}
                   activeMonthlyMovementWindow={activeMonthlyMovementWindow}
                   compactMetric={compactMetric}
+                  payload={payload}
                 />
               )}
               <section className="rounded-[30px] border border-emerald-300/25 bg-[radial-gradient(circle_at_0%_0%,rgba(132,204,22,0.20),transparent_30%),linear-gradient(135deg,rgba(5,40,25,0.94),rgba(4,24,20,0.92))] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.10)] sm:p-5">

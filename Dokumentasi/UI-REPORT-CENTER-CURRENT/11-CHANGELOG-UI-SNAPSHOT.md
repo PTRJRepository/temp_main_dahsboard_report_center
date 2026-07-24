@@ -252,3 +252,11 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - \`MonthlyStockRingkasan.tsx\`: section "Sub-category analysis" (rail taksonomi ProductType/Location dll., duplikatif dengan kategori analisis yang dipilih) DIHAPUS saat monthly. \`subKpiCards\` prop tetap diterima demi kompatibilitas tapi tidak dirender di mode monthly.
 - \`MonthlyMovementVisuals\` ditulis ulang: dari bar bertumpuk + banyak teks menjadi panel angka besar (Opening/Issued/Receive/Return/Closing) masing-masing dengan SATU kalimat penjelasan (saldo awal, pemakaian keluar, dst.) + strip rincian issue Ledger/Station/Vehicle dengan angka + share % + satu kalimat definisi. Tone warna ramai (sky/amber/emerald/yellow per elemen) diganti neutral sesuai estetika calm-minimal.
 - Verifikasi: tsc 0, eslint kembali ke baseline pre-existing (2 error `any` + 1 warning, tak terkait perubahan ini), build exit 0.
+
+## 2026-07-23 (lanjut) - Taksonomi diganti analisis berguna
+
+- \`MonthlyStockRingkasan.tsx\`: ruang kosong bekas rail taksonomi kini diisi 2 panel analisis yang langsung menjawab pertanyaan operasional:
+  - **Konsentrasi issue per barang** — top 5 barang dengan issue amount terbesar, masing-masing angka + share % + qty, plus header "Top 5 = N% dari total issue · M barang ada issue" dan satu kalimat makna (ketergantungan pada sedikit barang = prioritas kontrol).
+  - **Sehat arus stok** — coverage closing vs issue (×) dan perubahan opening→closing (%), masing-masing dengan satu kalimat interpretasi kondisional (overstock / aman / waspada; pemakaian vs pengisian).
+- Data konsentrasi dihitung dari `payload.rows` (kolom `IssuedTotalAmount`/`IssuedTotalQty` + kode/nama barang); fallback aman bila rows kosong.
+- Verifikasi: tsc 0, eslint baseline pre-existing, build exit 0.
