@@ -242,6 +242,9 @@ itu. 0 error JS. tsc 0, eslint 0, build exit 0.
 ### 33. 2026-07-24 - Aturan pemilihan tabel: periode lampau = monthend
 - Periode lampau memakai snapshot monthend (IN_MTHENDITEM); periode berjalan memakai balance live. Sudah diterapkan di valuation & opening/closing.
 
+### 34. 2026-07-24 - Badge penanda periode berjalan vs lampau
+- Badge eksplisit (emerald=berjalan/live, amber=lampau/monthend) di konteks filter KPI.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

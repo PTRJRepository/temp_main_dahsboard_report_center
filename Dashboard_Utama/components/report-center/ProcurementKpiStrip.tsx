@@ -538,6 +538,17 @@ export default function ProcurementKpiStrip({
     return { from, to, label: `${from} s/d ${to}` }
   })()
   const kpiTimelineBadge = `KPI · ${activePeriodLabel} · ${kpiTimelineRange.label}`
+  // Penanda periode berjalan vs lampau — menentukan sumber data (live vs monthend).
+  const now = new Date()
+  const isCurrentPeriod = isYearMode
+    ? Number((filters.customYear ?? '').trim()) === now.getFullYear()
+    : (() => {
+        const m = String(filters.period ?? '').trim().match(/^(\d{4})-(\d{1,2})/)
+        return m ? Number(m[1]) === now.getFullYear() && Number(m[2]) === now.getMonth() + 1 : false
+      })()
+  const periodKindBadge = isCurrentPeriod
+    ? { label: 'Periode berjalan · live balance', tone: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100' }
+    : { label: 'Periode lampau · snapshot monthend', tone: 'border-amber-300/30 bg-amber-400/10 text-amber-100' }
   const filteredLinks = {
     stock: hrefWithFilters(links.stock, filters, { includeGroupBy: false }),
     receive: hrefWithFilters(links.receive, filters, { includeGroupBy: false }),
@@ -1446,6 +1457,14 @@ export default function ProcurementKpiStrip({
             title={`KPI period: ${kpiTimelineRange.label}`}
           >
             Period {activePeriodLabel}{isYearMode ? '' : ` · ${filters.period}`}
+          </span>
+          <span
+            className={`rounded-full border px-2.5 py-1 font-black ${periodKindBadge.tone}`}
+            title={isCurrentPeriod
+              ? 'Periode berjalan: KPI memakai balance live (monthend belum terbentuk).'
+              : 'Periode lampau: KPI memakai snapshot monthend (IN_MTHENDITEM) — data sudah closing.'}
+          >
+            {periodKindBadge.label}
           </span>
           <span
             className="rounded-full border border-sky-300/25 bg-sky-400/10 px-2.5 py-1 text-sky-100"

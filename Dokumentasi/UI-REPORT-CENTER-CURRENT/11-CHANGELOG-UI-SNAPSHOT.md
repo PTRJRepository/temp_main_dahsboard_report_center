@@ -354,3 +354,8 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Aturan: bila periode yang dipilih adalah periode LAMPAU (bukan bulan berjalan), sumber data diusahakan dari tabel monthend (mis. `IN_MTHENDITEM`) — bukan balance live. Periode berjalan tetap memakai balance live (monthend belum terbentuk).
 - Status implementasi: sudah diterapkan di `assetStockValuationListing` (`app/api/reports/inventory/route.ts:1971` — `useMonthEnd = period.requested && !isCurrentActualPeriod`) dan di jalur opening/closing `IN_MTHENDITEM` lain.
 - Fix anchor tren movement (eabfaf7) sejalan dengan aturan ini: anchor dipatok ke bulan terakhir yang benar-benar ada issue, bukan ke periode lampau/depan yang kosong.
+
+## 2026-07-24 - Badge penanda periode berjalan vs lampau
+- Deck KPI kini menampilkan badge eksplisit: "Periode berjalan · live balance" (emerald) atau "Periode lampau · snapshot monthend" (amber), lengkap dengan tooltip yang menjelaskan sumber datanya.
+- Memperkuat aturan monthend (IN_MTHENDITEM untuk periode lampau, live balance untuk periode berjalan) agar selalu terlihat oleh user, bukan hanya tercat di kode.
+- Verifikasi: tsc 0 error; build exit 0.
