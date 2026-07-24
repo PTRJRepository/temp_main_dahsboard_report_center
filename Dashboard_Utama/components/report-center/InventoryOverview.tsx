@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation'
 import { CalendarDays, Database, RefreshCw, Search, TrendingUp } from 'lucide-react'
 import ExceptionQueue, { type InventoryExceptionItem } from './ExceptionQueue'
 import MovementComposition, { movementTone, type MovementCompositionSegment } from './MovementComposition'
+import MovementCategoryEvolution, {
+  type CategoryEvolutionPoint,
+  type MovementMover,
+} from './MovementCategoryEvolution'
 
 type ReportSource = 'estate' | 'pabrik'
 type InventoryItemTypeScope = 'gudang' | 'workshop'
@@ -66,6 +70,29 @@ type MovementDefinition = {
   slowCount: number
 }
 
+type EvolutionApiResponse = {
+  success: boolean
+  periods: string[]
+  byPeriod: CategoryEvolutionPoint[]
+  movers: MovementMover[]
+  totals: { qty: number; amount: number; docs: number; itemCount: number }
+  error?: string
+}
+
+function movementWindowToMonths(window: string): number {
+  const map: Record<string, number> = {
+    '1m': 1,
+    '3m': 3,
+    '6m': 6,
+    '12m': 12,
+    '2y': 24,
+    '5y': 60,
+    '10y': 120,
+    all: 120,
+  }
+  return map[window] ?? 12
+}
+
 type InventoryOverviewProps = {
   source: ReportSource
   className?: string
@@ -87,7 +114,10 @@ const MOVEMENT_WINDOW_OPTIONS = [
   { value: '1m', label: '1 bulan' },
   { value: '3m', label: '3 bulan' },
   { value: '6m', label: '6 bulan' },
-  { value: '12m', label: '12 bulan' },
+  { value: '12m', label: '12 bulan / 1 tahun' },
+  { value: '2y', label: '2 tahun' },
+  { value: '5y', label: '5 tahun' },
+  { value: '10y', label: '10 tahun' },
 ]
 
 const MOVEMENT_CATEGORY_LABELS = [
@@ -95,7 +125,6 @@ const MOVEMENT_CATEGORY_LABELS = [
   'Moving',
   'Slow Moving',
   'Dead Stock',
-  'Stale',
 ] as const
 
 const MOVEMENT_CATEGORY_LOOKUP = new Map(
@@ -107,7 +136,6 @@ const MOVEMENT_SUMMARY_KEYS = [
   { label: 'Moving', itemKey: 'MovingItem', amountKey: 'MovingAmount' },
   { label: 'Slow Moving', itemKey: 'SlowMovingItem', amountKey: 'SlowMovingAmount' },
   { label: 'Dead Stock', itemKey: 'DeadMovementItem', amountKey: 'DeadMovementAmount' },
-  { label: 'Stale', itemKey: 'StaleItem', amountKey: 'StaleAmount' },
 ] as const
 
 const DEFAULT_MOVEMENT_DEFINITION: MovementDefinition = {
@@ -217,7 +245,7 @@ function normalizeMovementCategoryLabel(value: unknown) {
     .replace(/^Movement\s*-\s*/i, '')
     .trim()
   if (!cleaned) return ''
-  if (/^no movement$/i.test(cleaned)) return 'Stale'
+  if (/^(no movement|stale)$/i.test(cleaned)) return 'Dead Stock'
   return MOVEMENT_CATEGORY_LOOKUP.get(cleaned.toLowerCase()) ?? ''
 }
 
@@ -337,6 +365,9 @@ export function InventoryOverview({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [evolutionPayload, setEvolutionPayload] = useState<EvolutionApiResponse | null>(null)
+  const [evolutionLoading, setEvolutionLoading] = useState(false)
+  const [evolutionMetric, setEvolutionMetric] = useState<'count' | 'qty' | 'amount'>('count')
   const options = useMemo(() => periodOptions(), [])
 
   useEffect(() => {
@@ -383,6 +414,45 @@ export function InventoryOverview({
       controller.abort()
     }
   }, [itemType, movementDefinition, movementWindow, period, refreshKey, source])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let active = true
+
+    const months = movementWindowToMonths(movementWindow || 'all')
+    const params = new URLSearchParams({
+      source,
+      months: String(months),
+      period,
+      movementFastMin: String(movementDefinition.fastMin),
+      movementMovingMin: String(movementDefinition.movingMin),
+      movementMovingMax: String(movementDefinition.movingMax),
+      movementSlowCount: String(movementDefinition.slowCount),
+    })
+    if (itemType) params.set('itemType', itemType)
+
+    const loadEvolution = async () => {
+      setEvolutionLoading(true)
+      try {
+        const response = await fetch(`/api/reports/inventory/movement-category-evolution?${params.toString()}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        const result = (await response.json()) as EvolutionApiResponse
+        if (active && result?.success) setEvolutionPayload(result)
+      } catch {
+        // keep previous payload on error
+      } finally {
+        if (active) setEvolutionLoading(false)
+      }
+    }
+
+    void loadEvolution()
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [source, period, movementWindow, itemType, movementDefinition])
 
   const openReport = (params?: Record<string, string | undefined>, reportId = OVERVIEW_REPORT_ID) => {
     const movementParams = reportId === OVERVIEW_REPORT_ID
@@ -669,6 +739,18 @@ export function InventoryOverview({
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="mt-5 h-[360px]">
+        <MovementCategoryEvolution
+          periods={evolutionPayload?.periods ?? []}
+          byPeriod={evolutionPayload?.byPeriod ?? []}
+          movers={evolutionPayload?.movers ?? []}
+          totals={evolutionPayload?.totals ?? { qty: 0, amount: 0, docs: 0, itemCount: 0 }}
+          metric={evolutionMetric}
+          onMetricChange={setEvolutionMetric}
+          loading={evolutionLoading}
+        />
       </div>
     </section>
   )
