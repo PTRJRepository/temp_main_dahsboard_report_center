@@ -276,3 +276,14 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Rentang disetel via state \`timelineMonths\` (default = prop \`months\`); fetch matriks ikut refetch saat timeline berubah. MovementMatrix menerima \`months={timelineMonths}\`.
 - Diaktifkan di \`ProcurementKpiStrip\` (allowTimeline) — satu-satunya pemakaian MovementAnalytics saat ini.
 - Verifikasi: tsc 0, eslint sama persis baseline pre-existing (5 problems di ProcurementKpiStrip), build exit 0.
+
+## 2026-07-23 (lanjut) - Skill playwright-cli + verifikasi browser nyata
+
+- Skill `microsoft/playwright-cli@playwright-cli` (96K installs) terpasang global di `~/.agents/skills/playwright-cli`; CLI dipakai via `npx playwright cli` (playwright 1.61.1 sudah ada di node_modules dashboard).
+- Verifikasi browser (Chrome nyata, login via bypass dev `bypss_ptrj`, port 3100):
+  - **Katalog satu-pandangan** — chip "Mutasi & Transaksi" → hanya group itu dirender (`[data-catalog-group]` tunggal); header "19 live · cari lintas group · klik chip = ganti group" tampil.
+  - **Smart search lintas group** — `search=fuel` → banner "Menampilkan 1 hasil lintas 1 group"; `search=stock` → "10 hasil lintas 6 group" (executive, transaction, master, control, fertilizer, vehicle). Keduanya benar.
+  - **Timeline deck** — tab 6/12/24 bln + input kustom tampil; klik "6 bln" → label "6 bln · 2026-02 → 2026-07"; input kustom 9 → "9 bln · 2025-11 → 2026-07" (refetch terjadi).
+  - **Fallback data** — matriks & tabel menampilkan empty-state bersih ("Belum ada data movement untuk rentang periode ini") karena API `/api/reports/inventory/movement-matrix` mengembalikan `error: "fetch failed"` (DB sumber tak terjangkau dari mesin ini) — BUKAN bug UI.
+- Temuan non-bug: halaman `/report-center/inventory/all-stock-movement-analysis` stuck "Memuat report…" karena fetch data gagal yang sama; console bersih (0 error JS).
+- Catatan dev: password user lokal `admin` direset ke `ptrj@123` via Prisma (dev.db lokal) agar sesuai `prisma/create-admin.js`.

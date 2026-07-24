@@ -140,6 +140,11 @@ State **LIVE** di `ProcurementKpiStrip.tsx` + komponen baru (commit `1bef165` vi
 - Bar kontrol timeline di atas deck: preset 6/12/24 bln + input kustom 3–36 bln + label rentang aktual; matriks/tabel/drill-down ikut refetch sesuai rentang.
 - **Verifikasi:** tsc 0, eslint baseline, build exit 0. Belum uji browser.
 
+### 22. Verifikasi browser nyata (playwright-cli)
+
+- Katalog chip-switcher + smart search lintas group (banner hitungan benar), timeline 6/12/24/kustom (label rentang ikut berubah) — semua terverifikasi di Chrome nyata.
+- Gap jujur: konten data movement (tab Freq, matriks, drill-down) belum bisa diverifikasi dengan data nyata — DB sumber tak terjangkau dari mesin ini (API matrix `fetch failed`); empty-state-nya tampil benar.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.
