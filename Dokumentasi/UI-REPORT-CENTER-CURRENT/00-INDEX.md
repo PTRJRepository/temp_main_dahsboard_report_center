@@ -233,6 +233,9 @@ itu. 0 error JS. tsc 0, eslint 0, build exit 0.
 ### 30. 2026-07-24 - Analisis tren lengkap di MovementTrend
 - Rata-rata/periode, tertinggi & terendah, arah tren (naik/turun/datar), jumlah titik — mengikuti toggle metrik.
 
+### 31. 2026-07-24 - Analisis lintas-metrik di MovementTrend
+- Chip: harga rata-rata/unit, qty/dok, nilai/dok, konsentrasi puncak — dihitung dari agregat penuh, independen dari toggle aktif.
+
 ### Gap jujur (belum terverifikasi)
 - Screenshot media browser (butuh login manual — auth gate).
 - `topLists` / `trend` / `issueFrequency` belum smoke-test ke SQL Gateway live.

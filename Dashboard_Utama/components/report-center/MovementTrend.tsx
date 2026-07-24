@@ -107,6 +107,15 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
   const metricLabel = metric === 'qty' ? 'quantity' : metric === 'freq' ? 'frekuensi dok' : 'nilai (Rp)'
   const formatValue = (v: number) => (metric === 'amount' ? `Rp ${formatCompact(v)}` : formatCompact(v))
 
+  // Analisis lintas-metrik — dibaca dari agregat yang sama, tak peduli toggle aktif.
+  const totalQty = points.reduce((s, p) => s + p.qty, 0)
+  const totalAmount = points.reduce((s, p) => s + p.amount, 0)
+  const totalDocs = points.reduce((s, p) => s + p.docs, 0)
+  const avgUnitPrice = totalQty > 0 ? totalAmount / totalQty : 0 // harga rata-rata per unit
+  const qtyPerDoc = totalDocs > 0 ? totalQty / totalDocs : 0
+  const amountPerDoc = totalDocs > 0 ? totalAmount / totalDocs : 0
+  const peakShare = peak && total > 0 ? (peak[activeKey] / total) * 100 : 0 // konsentrasi periode puncak
+
   if (loading && points.length === 0) {
     return (
       <div className="grid h-full min-h-[220px] place-items-center rounded-[24px] border-white/10 bg-white/[0.03]">
@@ -262,6 +271,20 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
         Agregasi {rows.length} barang teratas · {metricLabel} periode · ganti metrik untuk melihat sisi lain dari
         pergerakan yang sama.
       </p>
+      <div className="rc-data mt-1.5 flex-wrap gap-1.5 text-[10px]">
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Valuasi total dibagi qty total — harga rata-rata per unit fisik.">
+          Harga rata-rata/unit <strong className="text-emerald-200/90">Rp {formatCompact(avgUnitPrice)}</strong>
+        </span>
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Qty total dibagi jumlah dokumen — volume fisik per dokumen issue.">
+          Qty/dok <strong className="text-[var(--rc-text)]">{formatCompact(qtyPerDoc)}</strong>
+        </span>
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Valuasi total dibagi jumlah dokumen — nilai rata-rata per dokumen issue.">
+          Nilai/dok <strong className="text-[var(--rc-text)]">Rp {formatCompact(amountPerDoc)}</strong>
+        </span>
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Bagian periode puncak terhadap total — makin besar makin terkonsentrasi.">
+          Puncak menampung <strong className="text-amber-200/90">{peakShare.toFixed(0)}%</strong> total
+        </span>
+      </div>
     </div>
   )
 }

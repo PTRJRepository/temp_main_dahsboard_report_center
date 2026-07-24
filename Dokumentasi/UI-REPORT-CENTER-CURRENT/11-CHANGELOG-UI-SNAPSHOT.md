@@ -338,3 +338,8 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - Header "Tren movement" kini membawa analisis lebih kaya selain total & delta: rata-rata periode, titik tertinggi & terendah, arah tren (naik/turun/datar dari perbandingan rata-rata paruh awal vs akhir), dan jumlah titik periode.
 - Semua metrik analisis mengikuti toggle metrik yang sama (Qty / Valuasi / Freq), jadi user bisa membaca analisis lain dari pergerakan yang sama tanpa pindah panel.
 - Verifikasi: tsc 0 error; ESLint MovementTrend 0 problem; build exit 0.
+
+## 2026-07-24 - Analisis lintas-metrik di MovementTrend
+- Di bawah grafik tren kini ada baris chip analisis lintas-metrik: harga rata-rata per unit (valuasi ÷ qty), qty per dokumen, nilai per dokumen, dan konsentrasi periode puncak (% dari total).
+- Dihitung dari agregat penuh yang sama — independen dari toggle Qty/Valuasi/Freq yang sedang aktif, jadi user bisa membaca hubungan antar-metrik tanpa berpindah mode.
+- Verifikasi: tsc 0 error; ESLint MovementTrend 0 problem; build exit 0.
