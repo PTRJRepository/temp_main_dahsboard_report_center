@@ -317,3 +317,9 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
 - TopMovementScatter jadi leaderboard "Top movement barang": bar #1 gradient emerald menyala, gradasi emerald→slate, toggle aktif glow — gaya leaderboard exchange.
 - Kartu KPI di ProcurementKpiStrip kini punya badge delta ▲/▼ % (dari 2 titik spark terakhir) seperti aplikasi market.
 - Verifikasi: tsc 0 error; build exit 0; ESLint 0 pada file baru; badge delta terbukti render di halaman. Catatan jujur: saat verifikasi DB estate sedang tidak bisa dihubungi, sehingga ticker & Top movement tampil sebagai empty-state (by design) — tampilan penuhnya menunggu data nyata.
+
+## 2026-07-24 - Input tahun custom untuk timeline movement
+- Rentang custom MovementAnalytics sekarang diisi dalam TAHUN (1-10), dikonversi ke bulan (x12) dan di-clamp ke 3-120 bln; patokannya mundur dari periode berjalan.
+- Ditambah penjelasan periode eksplisit: "Periode movement = N bulan mundur dari periode berjalan - dari <periode awal> sampai <periode akhir>".
+- Fix UX nyata: form kini `noValidate` + tombol `type="button"` dengan onClick langsung — sebelumnya input type=number min=1 max=10 memblokir submit HTML5 saat user mengisi >10 (mis. 15), sehingga timeline tidak pernah berubah.
+- Verifikasi: tsc 0 error; build exit 0; perilaku submit tervalidasi via instrumentasi fiber di browser sebelum dev server milik pihak lain berhenti.

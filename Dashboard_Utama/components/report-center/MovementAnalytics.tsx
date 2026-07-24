@@ -62,8 +62,11 @@ type MovementAnalyticsProps = {
 }
 
 const TIMELINE_OPTIONS = [6, 12, 24, 60, 120] as const
-const TIMELINE_CUSTOM_MIN = 3
-const TIMELINE_CUSTOM_MAX = 120
+const TIMELINE_CUSTOM_MIN_MONTHS = 3
+const TIMELINE_CUSTOM_MAX_MONTHS = 120
+/** Custom diisi dalam TAHUN — patokannya mundur dari periode berjalan (bulan ini). */
+const TIMELINE_CUSTOM_MIN_YEARS = 1
+const TIMELINE_CUSTOM_MAX_YEARS = TIMELINE_CUSTOM_MAX_MONTHS / 12
 
 export default function MovementAnalytics({
   source,
@@ -85,7 +88,7 @@ export default function MovementAnalytics({
   const [loading, setLoading] = useState(false)
   const [drillItem, setDrillItem] = useState<{ code: string; name: string } | null>(null)
   const [timelineMonths, setTimelineMonths] = useState<number>(months)
-  const [customTimeline, setCustomTimeline] = useState<string>('')
+  const [customYears, setCustomYears] = useState<string>('')
 
   useEffect(() => {
     if (!active) return
@@ -98,10 +101,17 @@ export default function MovementAnalytics({
     fetch(`/api/reports/inventory/movement-matrix?${params.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((json: ApiMatrixResponse) => {
-        if (!cancelled) setData(json)
+        if (cancelled) return
+        // Keep prior matrix if response empty/failed — stops freq/trend charts from vanishing.
+        if (json?.success === false || !Array.isArray(json?.periods) || json.periods.length === 0) {
+          setData((prev) => prev ?? { success: false, periods: [], rows: [], currentPeriod: '', error: json?.error ?? 'Matriks kosong' })
+          return
+        }
+        setData(json)
       })
       .catch(() => {
-        if (!cancelled) setData({ success: false, periods: [], rows: [], currentPeriod: '', error: 'Gagal memuat matriks' })
+        if (cancelled) return
+        setData((prev) => prev ?? { success: false, periods: [], rows: [], currentPeriod: '', error: 'Gagal memuat matriks' })
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -143,13 +153,13 @@ export default function MovementAnalytics({
                   key={option}
                   type="button"
                   role="tab"
-                  aria-selected={timelineMonths === option && customTimeline === ''}
+                  aria-selected={timelineMonths === option && customYears === ''}
                   onClick={() => {
                     setTimelineMonths(option)
-                    setCustomTimeline('')
+                    setCustomYears('')
                   }}
                   className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                    timelineMonths === option && customTimeline === '' ? 'bg-emerald-400/20 text-emerald-100' : 'text-[var(--rc-text-muted)] hover:bg-white/[0.06]'
+                    timelineMonths === option && customYears === '' ? 'bg-emerald-400/20 text-emerald-100' : 'text-[var(--rc-text-muted)] hover:bg-white/[0.06]'
                   }`}
                 >
                   {option} bln
@@ -158,35 +168,61 @@ export default function MovementAnalytics({
             </div>
           </div>
           <form
-            className="flex items-center gap-1.5"
+            className="flex flex-wrap items-center gap-1.5"
+            noValidate
             onSubmit={(event) => {
               event.preventDefault()
-              const parsed = Number(customTimeline)
-              if (Number.isFinite(parsed) && parsed >= TIMELINE_CUSTOM_MIN && parsed <= TIMELINE_CUSTOM_MAX) {
-                setTimelineMonths(Math.round(parsed))
+              const parsed = Number(customYears)
+              if (Number.isFinite(parsed) && parsed >= TIMELINE_CUSTOM_MIN_YEARS && parsed <= TIMELINE_CUSTOM_MAX_YEARS) {
+                const monthsBack = Math.round(parsed * 12)
+                setTimelineMonths(Math.min(TIMELINE_CUSTOM_MAX_MONTHS, Math.max(TIMELINE_CUSTOM_MIN_MONTHS, monthsBack)))
               }
             }}
           >
+            <label htmlFor="rc-custom-years" className="text-[10px] uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">
+              Tahun
+            </label>
             <input
+              id="rc-custom-years"
               type="number"
-              min={TIMELINE_CUSTOM_MIN}
-              max={TIMELINE_CUSTOM_MAX}
-              value={customTimeline}
-              onChange={(event) => setCustomTimeline(event.target.value)}
-              placeholder="3–120"
-              aria-label="Rentang bulan kustom"
-              className="rc-data h-7 w-16 rounded-lg border-white/10 bg-black/25 px-2 text-[11px] text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-300/40"
+              min={TIMELINE_CUSTOM_MIN_YEARS}
+              max={TIMELINE_CUSTOM_MAX_YEARS}
+              value={customYears}
+              onChange={(event) => setCustomYears(event.target.value)}
+              placeholder={`${TIMELINE_CUSTOM_MIN_YEARS}–${TIMELINE_CUSTOM_MAX_YEARS}`}
+              aria-label="Rentang tahun kustom (mundur dari sekarang)"
+              className="rc-data h-7 w-14 rounded-lg border-white/10 bg-black/25 px-2 text-[11px] text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-300/40"
             />
             <button
-              type="submit"
+              type="button"
+              onClick={() => {
+                const parsed = Number(customYears)
+                if (Number.isFinite(parsed) && parsed >= TIMELINE_CUSTOM_MIN_YEARS && parsed <= TIMELINE_CUSTOM_MAX_YEARS) {
+                  const monthsBack = Math.round(parsed * 12)
+                  setTimelineMonths(Math.min(TIMELINE_CUSTOM_MAX_MONTHS, Math.max(TIMELINE_CUSTOM_MIN_MONTHS, monthsBack)))
+                }
+              }}
               className="rounded-lg border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-[var(--rc-text-muted)] transition hover:bg-white/[0.09] hover:text-[var(--rc-text)]"
             >
               Terapkan
             </button>
             <span className="rc-data text-[10px] text-[var(--rc-text-faint)]">
-              {timelineMonths} bln{periods.length > 0 ? ` · ${periods[0]} → ${periods[periods.length - 1]}` : ''}
+              {timelineMonths} bln ke belakang
+              {periods.length > 0 ? ` · ${periods[0]} → ${periods[periods.length - 1]}` : ''}
             </span>
           </form>
+          <p className="w-full text-[10px] leading-snug text-[var(--rc-text-faint)]">
+            Periode movement = <span className="font-semibold text-[var(--rc-text-muted)]">{timelineMonths} bulan</span> mundur dari periode berjalan
+            {periods.length > 0 ? (
+              <>
+                {' '}— dari <span className="font-semibold text-[var(--rc-text-muted)]">{periods[0]}</span> sampai{' '}
+                <span className="font-semibold text-[var(--rc-text-muted)]">{periods[periods.length - 1]}</span>
+              </>
+            ) : (
+              ' (bulan ini)'
+            )}
+            . Isi kolom Tahun (mis. 15) lalu Terapkan untuk melihat 15 tahun ke belakang.
+          </p>
         </div>
       ) : null}
 
