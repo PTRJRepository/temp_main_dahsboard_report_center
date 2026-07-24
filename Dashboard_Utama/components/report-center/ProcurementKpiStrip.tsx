@@ -1267,6 +1267,7 @@ export default function ProcurementKpiStrip({
             active={!glance}
             months={12}
             top={12}
+            allowTimeline
             costCenters={topLists?.costCenters}
             vehicles={topLists?.vehicles}
             stationQty={monthlyIssuedStationQty}

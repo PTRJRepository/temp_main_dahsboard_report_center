@@ -269,3 +269,10 @@ Sintesis lintas-fase. Semua item di bawah LIVE di kode; branch `feat/report-cent
   - **ItemDrilldown** — metric freq: sparkline pola frekuensi; blok baru "Analisis frekuensi issue" berisi periode aktif x/y, kerutinan %, rata dok/periode aktif, plus satu kalimat interpretasi (fast-moving ≥80% / reguler ≥40% / slow-moving <40%) dan puncak frekuensi.
 - `ChargeBreakdown` menerima fallback `amount` saat mode freq (komponen ini belum punya deret dok).
 - Verifikasi: tsc 0, eslint 0 error baru (1 warning `exhaustive-deps` pre-existing di MovementMatrix), build exit 0.
+
+## 2026-07-23 (lanjut) - Kontrol timeline di movement deck
+
+- \`MovementAnalytics\` menerima prop \`allowTimeline\`; saat aktif muncul bar kontrol timeline di atas grid: preset **6 / 12 / 24 bulan** + input kustom **3–36 bulan** (Enter/"Terapkan"), plus label rentang periode aktual (\`YYYY-MM → YYYY-MM\`).
+- Rentang disetel via state \`timelineMonths\` (default = prop \`months\`); fetch matriks ikut refetch saat timeline berubah. MovementMatrix menerima \`months={timelineMonths}\`.
+- Diaktifkan di \`ProcurementKpiStrip\` (allowTimeline) — satu-satunya pemakaian MovementAnalytics saat ini.
+- Verifikasi: tsc 0, eslint sama persis baseline pre-existing (5 problems di ProcurementKpiStrip), build exit 0.
