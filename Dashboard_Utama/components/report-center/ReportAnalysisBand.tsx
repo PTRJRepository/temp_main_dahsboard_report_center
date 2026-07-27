@@ -287,7 +287,7 @@ export function ReportAnalysisBand({
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/70">Movement Actual · computed</p>
                   <p className="mt-2 truncate text-lg font-black text-emerald-50">{movementTop ? cleanBreakdownLabel(movementTop) : '-'}</p>
                   <p className="mt-1 text-xs font-semibold text-emerald-50/65">
-                    Fast/Slow/Dead/Stale dihitung otomatis dari StockIssue window — bukan kolom master.
+                    Fast/Slow/Dead dihitung otomatis dari StockIssue window — bukan kolom master.
                   </p>
                 </div>
                 <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3">

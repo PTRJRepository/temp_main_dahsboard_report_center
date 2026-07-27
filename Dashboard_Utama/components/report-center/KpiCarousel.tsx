@@ -98,7 +98,7 @@ export default function KpiCarousel({ children, ariaLabel, autoScroll = false }:
 
   return (
     <div
-      className="group/carousel relative"
+      className="group/carousel relative min-w-0"
       aria-roledescription="carousel"
       aria-label={ariaLabel}
       onMouseEnter={() => autoScroll && setPaused(true)}
@@ -110,11 +110,15 @@ export default function KpiCarousel({ children, ariaLabel, autoScroll = false }:
         ref={trackRef}
         onWheel={pauseBriefly}
         onTouchStart={pauseBriefly}
-        className="rc-carousel-track grid auto-cols-[minmax(248px,78%)] grid-flow-col gap-2 overflow-x-auto scroll-smooth pb-1 sm:auto-cols-[minmax(248px,46%)] xl:auto-cols-[minmax(260px,31.5%)]"
+        className="rc-carousel-track grid auto-cols-[minmax(220px,82%)] grid-flow-col items-stretch gap-3 overflow-x-auto overflow-y-hidden scroll-smooth pb-1 sm:auto-cols-[minmax(230px,46%)] xl:auto-cols-[minmax(240px,31%)]"
         style={{ scrollSnapType: 'x mandatory' }}
       >
         {children.map((child, i) => (
-          <div key={i} style={{ scrollSnapAlign: 'start' }} className="min-w-0">
+          <div
+            key={i}
+            style={{ scrollSnapAlign: 'start' }}
+            className="relative isolate min-h-0 min-w-0 max-w-full overflow-hidden"
+          >
             {child}
           </div>
         ))}

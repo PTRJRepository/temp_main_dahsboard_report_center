@@ -3,14 +3,15 @@ export const MOVEMENT_CATEGORY_ORDER = [
   'Moving',
   'Slow Moving',
   'Dead Stock',
-  'Stale',
 ] as const
 
 export type MovementCategory = (typeof MOVEMENT_CATEGORY_ORDER)[number]
 
+/** Legacy labels folded into Dead Stock (0 issue in window). */
 export const LEGACY_NO_MOVEMENT_CATEGORY = 'No Movement'
+export const LEGACY_STALE_CATEGORY = 'Stale'
 
-export const MOVEMENT_CATEGORY_CLASSIFICATION_VERSION = 'movement-category:v4-periodic-window'
+export const MOVEMENT_CATEGORY_CLASSIFICATION_VERSION = 'movement-category:v5-no-stale'
 
 export type MovementCategoryThresholds = {
   fastMinIssueCount: number
@@ -79,12 +80,12 @@ export function normalizeMovementCategoryThresholds(input: MovementCategoryThres
 
 export function movementCategoryThresholdLabel(thresholds: MovementCategoryThresholdInput = {}) {
   const normalized = normalizeMovementCategoryThresholds(thresholds)
-  return `Fast >= ${normalized.fastMinIssueCount}, Moving ${normalized.movingMinIssueCount}-${normalized.movingMaxIssueCount}, Slow = ${normalized.slowIssueCount}, Dead/Stale = 0 issue`
+  return `Fast >= ${normalized.fastMinIssueCount}, Moving ${normalized.movingMinIssueCount}-${normalized.movingMaxIssueCount}, Slow = ${normalized.slowIssueCount}, Dead = 0 issue`
 }
 
 export function normalizeMovementCategoryLabel(value: unknown): MovementCategory | string {
   const label = String(value ?? '').trim()
-  if (label === LEGACY_NO_MOVEMENT_CATEGORY) return 'Stale'
+  if (label === LEGACY_NO_MOVEMENT_CATEGORY || label === LEGACY_STALE_CATEGORY) return 'Dead Stock'
   return (MOVEMENT_CATEGORY_ORDER as readonly string[]).includes(label) ? label : label
 }
 
@@ -105,28 +106,29 @@ export function movementCategoryFromIssueCount(
   if (count >= thresholds.fastMinIssueCount) return 'Fast Moving'
   if (count >= thresholds.movingMinIssueCount && count <= thresholds.movingMaxIssueCount) return 'Moving'
   if (count === thresholds.slowIssueCount) return 'Slow Moving'
-  if (quantity > 0) return 'Dead Stock'
-  return 'Stale'
+  // quantityClosing unused for split — 0 issue always Dead Stock (Stale category removed)
+  void quantity
+  return 'Dead Stock'
 }
 
 export function movementCategorySqlCase(
   issueCountExpression: string,
-  quantityExpression: string,
+  _quantityExpression: string,
   thresholdsInput: MovementCategoryThresholdInput = {},
 ) {
   const thresholds = normalizeMovementCategoryThresholds(thresholdsInput)
+  // quantityExpression kept in signature for call-site compatibility; no longer splits Dead/Stale
   return `CASE
         WHEN ${issueCountExpression} >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving'
         WHEN ${issueCountExpression} BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving'
         WHEN ${issueCountExpression} = ${thresholds.slowIssueCount} THEN 'Slow Moving'
-        WHEN ${quantityExpression} > 0 THEN 'Dead Stock'
-        ELSE 'Stale'
+        ELSE 'Dead Stock'
       END`
 }
 
 export function movementAnalysisSqlCase(
   issueCountExpression: string,
-  quantityExpression: string,
+  _quantityExpression: string,
   thresholdsInput: MovementCategoryThresholdInput = {},
 ) {
   const thresholds = normalizeMovementCategoryThresholds(thresholdsInput)
@@ -134,8 +136,7 @@ export function movementAnalysisSqlCase(
         WHEN ${issueCountExpression} >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving: issue docs >= ${thresholds.fastMinIssueCount} in window'
         WHEN ${issueCountExpression} BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving: issue docs ${thresholds.movingMinIssueCount}-${thresholds.movingMaxIssueCount} in window'
         WHEN ${issueCountExpression} = ${thresholds.slowIssueCount} THEN 'Slow Moving: issue docs = ${thresholds.slowIssueCount} in window'
-        WHEN ${quantityExpression} > 0 THEN 'Dead Stock: no issue in window, ClosingQty > 0 (idle stock)'
-        ELSE 'Stale: no issue in window, ClosingQty = 0 (empty/inactive — not idle stock)'
+        ELSE 'Dead Stock: no issue in window'
       END`
 }
 
@@ -145,8 +146,8 @@ export function movementCategoryRankSqlCase(categoryExpression: string) {
         WHEN 'Moving' THEN 2
         WHEN 'Slow Moving' THEN 3
         WHEN 'Dead Stock' THEN 4
-        WHEN 'Stale' THEN 5
-        WHEN 'No Movement' THEN 5
+        WHEN 'Stale' THEN 4
+        WHEN 'No Movement' THEN 4
         ELSE 9
       END`
 }

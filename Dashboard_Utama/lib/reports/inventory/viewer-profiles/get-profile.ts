@@ -67,7 +67,6 @@ export function getReportViewerProfile(reportId: string, builders: ProfileBuilde
         Moving: 'Moving',
         'Slow Moving': 'Slow Moving',
         'Dead Stock': 'Dead Stock',
-        Stale: 'Stale',
       },
       presets: [
         { label: 'Semua Item', description: 'Reset filter movement', filters: { stale: 'semua', groupBy: undefined, movementCategory: undefined } },
@@ -79,8 +78,7 @@ export function getReportViewerProfile(reportId: string, builders: ProfileBuilde
         { label: 'Fast Moving', description: 'StockIssue >= 6 event', filters: { stale: 'semua', movementCategory: 'Fast Moving' } },
         { label: 'Moving', description: 'StockIssue 2-5 event', filters: { stale: 'semua', movementCategory: 'Moving' } },
         { label: 'Slow Moving', description: 'StockIssue 1 event', filters: { stale: 'semua', movementCategory: 'Slow Moving' } },
-        { label: 'Dead Stock', description: 'Stok ada, 0 movement', filters: { stale: 'semua', movementCategory: 'Dead Stock' } },
-        { label: 'Stale', description: 'Stok dan movement 0', filters: { stale: 'semua', movementCategory: 'Stale' } },
+        { label: 'Dead Stock', description: '0 movement (issue count 0)', filters: { stale: 'semua', movementCategory: 'Dead Stock' } },
         { label: 'Nilai Stok Tinggi', description: 'Prioritas nilai terbesar', filters: { stale: 'semua', sortColumn: 'AmountItem', sortDirection: 'desc', resultLimit: 100 } },
         { label: 'Gudang Tertentu', description: 'Filter per gudang/lokasi', filters: { stale: 'semua', groupBy: 'Gudang' } },
       ],

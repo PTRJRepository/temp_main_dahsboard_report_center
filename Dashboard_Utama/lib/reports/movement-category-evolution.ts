@@ -32,7 +32,7 @@ export type CategoryEvolutionResult = {
 type MatrixRow = {
   code: string
   name: string
-  cells: { qty: number[]; amount: number[]; docs: number[] }
+  cells: { qty: number[]; amount: number[]; docs: number[]; valuation?: number[] }
 }
 
 function emptyCategories(): Record<MovementCategory, { count: number; qty: number; amount: number }> {
@@ -44,6 +44,11 @@ function emptyCategories(): Record<MovementCategory, { count: number; qty: numbe
   }
 }
 
+/**
+ * Build category composition from movement matrix.
+ * Category from docs (issue frequency). Amount prefers stock valuation cells so
+ * Σ categories ≈ month valuation, not issue flow amount.
+ */
 export function buildCategoryEvolutionFromMatrix(
   rows: MatrixRow[],
   periods: string[],
@@ -63,11 +68,15 @@ export function buildCategoryEvolutionFromMatrix(
     const itemPeriods: { period: string; category: MovementCategory; qty: number; amount: number; docs: number }[] = []
     let totalItemQty = 0
     let totalItemAmount = 0
+    const hasValuation = Array.isArray(row.cells.valuation) && row.cells.valuation.some((v) => Number(v) > 0)
 
     for (let i = 0; i < periods.length; i += 1) {
       const docs = row.cells.docs[i] ?? 0
       const qty = row.cells.qty[i] ?? 0
-      const amount = row.cells.amount[i] ?? 0
+      // Prefer stock valuation for composition Amount; fall back to issue amount if missing.
+      const amount = hasValuation
+        ? Number(row.cells.valuation?.[i] ?? 0) || 0
+        : Number(row.cells.amount[i] ?? 0) || 0
       const category = movementCategoryFromIssueCount(docs, 0, thresholds)
 
       byPeriod[i].categories[category].count += 1

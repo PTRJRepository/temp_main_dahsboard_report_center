@@ -163,23 +163,15 @@ const entries: InventoryColumnGlossaryEntry[] = [
     description:
       'Klasifikasi frekuensi issue aktual di movementWindow (ditambatkan ke Actual period). Bukan StockAnalysisCode master. Bukan dasar total valuasi global — nilai bucket = ClosingAmount item di kategori itu.',
     formula:
-      'issue doc count: >=6 Fast Moving; 2-5 Moving; 1 Slow Moving; 0 + ClosingQty>0 Dead Stock; 0 + ClosingQty=0 Stale. Scope = movementWindow.',
-    source: 'IN_STOCKISSUE / IN_FUELISSUE / WS_JOBSTOCK + Closing qty period',
-  },
-  {
-    field: 'Stale',
-    label: 'Stale',
-    description:
-      'Barang tanpa issue document valid di window movement, dan ClosingQty period = 0. Artinya: tidak ada pemakaian tercatat + tidak ada sisa stok di periode itu. Bukan “barang usang di gudang” (itu Dead Stock: issue 0 tapi masih ada stok). Sering item kosong / non-aktif / sudah habis.',
-    formula: 'MovementIssueCountActual = 0 AND ClosingQty = 0',
-    source: 'MovementCategory classifier',
+      'issue doc count: >=6 Fast Moving; 2-5 Moving; 1 Slow Moving; 0 Dead Stock. Scope = movementWindow.',
+    source: 'IN_STOCKISSUE / IN_FUELISSUE / WS_JOBSTOCK',
   },
   {
     field: 'DeadStock',
     label: 'Dead Stock',
     description:
-      'Barang tanpa issue document valid di window movement, tapi ClosingQty period > 0. Artinya: stok masih ada di periode, tapi tidak terpakai/terbit. Risiko idle stock.',
-    formula: 'MovementIssueCountActual = 0 AND ClosingQty > 0',
+      'Barang tanpa issue document valid di window movement (issue count 0). Termasuk item dengan ClosingQty 0 maupun > 0 — kategori Stale dihapus.',
+    formula: 'MovementIssueCountActual = 0',
     source: 'MovementCategory classifier',
   },
   {
@@ -408,36 +400,47 @@ const entries: InventoryColumnGlossaryEntry[] = [
     formula: 'LedgerAmount + IssuedStationAmount + IssuedVehicleAmount',
   },
   {
+    field: 'ReceivedQty',
+    label: 'Inventory Received Qty',
+    description: 'Qty terima modul inventory (IN_STOCKRECEIVE). Bukan purchasing goods receive.',
+    source: 'IN_STOCKRECEIVELN.Qty',
+  },
+  {
+    field: 'ReceivedAmount',
+    label: 'Inventory Received Amount',
+    description: 'Nilai terima inventory module. Bukan PU_GOODSRCV.',
+  },
+  {
     field: 'ReturnQty',
-    label: 'Return Qty',
-    description: 'Qty return workshop/operasional (WS_JOBSTOCK TransType=2).',
+    label: 'Inventory Return Qty',
+    description: 'Qty return ke gudang: IN_STOCKRTN + WS_JOBSTOCK TransType=2. Bukan retur supplier.',
   },
   {
     field: 'ReturnAmount',
-    label: 'Return Amount',
-    description: 'Nilai return workshop/operasional (WS_JOBSTOCK TransType=2).',
+    label: 'Inventory Return Amount',
+    description: 'Nilai return inventory (IN_STOCKRTN + workshop TT2). Bukan PU_GOODSRET.',
   },
   {
     field: 'GoodsReceiveQty',
     label: 'Purchasing Goods Receive Qty',
-    description: 'Qty goods receive purchasing pada accounting period.',
+    description: 'Qty GR purchasing (PU_GOODSRCV) pada accounting period. Status 2/5/6.',
     source: 'PU_GOODSRCVLN.StockQty',
   },
   {
     field: 'GoodsReceiveAmount',
     label: 'Purchasing Goods Receive Amount',
-    description: 'Nilai goods receive.',
+    description: 'Nilai GR purchasing. Formula StockQty × PU_POLN.Cost.',
     formula: 'StockQty * PU_POLN.Cost',
   },
   {
     field: 'GoodsReturnQty',
     label: 'Purchasing Goods Return Qty',
-    description: 'Qty goods return purchasing pada accounting period.',
+    description: 'Qty retur ke supplier (PU_GOODSRET). Bukan inventory stock return.',
   },
   {
     field: 'GoodsReturnAmount',
     label: 'Purchasing Goods Return Amount',
-    description: 'Nilai goods return purchasing pada accounting period.',
+    description: 'Nilai retur purchasing ke supplier.',
   },
   {
     field: 'DispatchAdvQty',

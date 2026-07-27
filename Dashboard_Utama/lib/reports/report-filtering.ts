@@ -63,7 +63,7 @@ export type ReportFilterInput = {
   productModel?: string
   productMaterial?: string
   movementCategory?: string
-  /** Movement Category issue-count window: all | 1m | 3m | 6m | 12m | custom */
+  /** Movement Category issue-count window: all | 1m | 3m | 6m | 12m | 2y | 5y | 10y | custom */
   movementWindow?: string
   /** Dynamic Movement Category issue-count definition. Default: Fast >= 6, Moving 2-5, Slow = 1. */
   movementFastMin?: number

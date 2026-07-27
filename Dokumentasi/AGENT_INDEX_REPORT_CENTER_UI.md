@@ -3,7 +3,7 @@
 **Purpose:** Fast onboarding for any coding/docs agent. Read this first.  
 **Rule for agents:** Prefer this index over scanning all of `Dokumentasi/`.  
 **Code changes:** Only if the human explicitly asks. Many packs below are **docs-only**.  
-**Last updated:** 2026-07-22  
+**Last updated:** 2026-07-24  
 
 ---
 
@@ -69,6 +69,12 @@
 2. `Monthly-Stock-Account-Movement-Details/README.md`
 3. `Report Inventory Kebun/good_receipt_correlation.md`
 4. `INVENTORY_REPORT_REGISTRY_SNAPSHOT_2026-07-21.md`
+5. **Fuel period rule (LIVE):** `FUEL_ISSUE_SELECTED_PERIOD.md` + code `Dashboard_Utama/lib/reports/inventory/fuel-issue-sql.ts`
+
+### G) Metric confusion (Usage vs Issued vs Fuel)
+1. `FUEL_ISSUE_SELECTED_PERIOD.md`
+2. Skill ref: `usage-vs-issued-metric-parity.md` (report-center-development)
+3. Code: `fuel-usage` always live; monthly Issued includes fuel via DocDate not Acc
 
 ---
 

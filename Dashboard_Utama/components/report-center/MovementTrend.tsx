@@ -17,19 +17,10 @@ import {
 /**
  * MovementTrend — grafik tren agregat periode, dinamis mengikuti metric.
  *
- * User meminta "report quantity dan valuasinya secara dinamis dari grafik":
- * satu panel tren di atas matriks, yang berubah saat metric toggle dipakai.
- * Panel ini membawa toggle metric sendiri (sumber kebenaran tetap di parent),
- * jadi dari sini user bisa bolak-balik Qty ↔ Amount ↔ Freq tanpa scroll.
- *
- * Data: agregasi periode dari seluruh baris matriks movement.
- * - qty    → jumlah quantity issue periode.
- * - amount → jumlah nilai (IDR) periode (garis area emerald).
- * - freq   → jumlah dokumen issue periode (batang abu, sumbu kanan).
- *
- * Calm-minimal: emerald = nilai utama; abu = konteks; amber = frekuensi.
- * Bila data kosong (DB tak terjangkau / rentang tak ada data) → empty-state
- * netral, bukan error, agar deck tetap rapi.
+ * Prefer `periodSummary` from movement-matrix (full inventory universe):
+ * - amount/valuation → stock valuation all items (incl. no-movement)
+ * - qty / docs → issue activity full window
+ * Fallback: sum matrix rows (top-N only) when summary missing.
  */
 
 type MatrixMetric = 'qty' | 'amount' | 'freq'
@@ -37,12 +28,22 @@ type MatrixMetric = 'qty' | 'amount' | 'freq'
 type ApiMatrixRow = {
   code: string
   name: string
-  cells: { qty: number[]; amount: number[]; docs: number[] }
+  cells: { qty: number[]; amount: number[]; docs: number[]; valuation?: number[] }
+}
+
+type PeriodSummary = {
+  period: string
+  valuation: number
+  issueQty: number
+  issueAmount: number
+  issueDocs: number
 }
 
 type MovementTrendProps = {
   periods: string[]
   rows: ApiMatrixRow[]
+  /** Full-scope totals from matrix API (all stock items). */
+  periodSummary?: PeriodSummary[]
   metric: MatrixMetric
   onMetricChange: (metric: MatrixMetric) => void
   loading?: boolean
@@ -66,22 +67,49 @@ function periodLabel(period: string): string {
   return `${MONTH_ID[mi] ?? m} ${String(y).slice(2)}`
 }
 
-export default function MovementTrend({ periods, rows, metric, onMetricChange, loading }: MovementTrendProps) {
+export default function MovementTrend({ periods, rows, periodSummary, metric, onMetricChange, loading }: MovementTrendProps) {
   const points = useMemo(() => {
+    const summaryByPeriod = new Map((periodSummary ?? []).map((s) => [s.period, s]))
     return periods.map((period, i) => {
+      const summary = summaryByPeriod.get(period)
+      if (summary) {
+        return {
+          period,
+          label: periodLabel(period),
+          // Valuasi = full stock (all items, incl. no-movement). Qty/docs = issue activity.
+          qty: Number(summary.issueQty) || 0,
+          amount: Number(summary.valuation) || 0,
+          docs: Number(summary.issueDocs) || 0,
+          issueAmount: Number(summary.issueAmount) || 0,
+          scope: 'full' as const,
+        }
+      }
+      // Fallback top-N matrix rows (prefer valuation cells when present)
       let qty = 0
       let amount = 0
       let docs = 0
+      let issueAmount = 0
       for (const row of rows) {
         qty += row.cells.qty[i] ?? 0
-        amount += row.cells.amount[i] ?? 0
         docs += row.cells.docs[i] ?? 0
+        issueAmount += row.cells.amount[i] ?? 0
+        const val = row.cells.valuation?.[i]
+        amount += Number(val != null ? val : row.cells.amount[i] ?? 0) || 0
       }
-      return { period, label: periodLabel(period), qty, amount, docs }
+      return {
+        period,
+        label: periodLabel(period),
+        qty,
+        amount,
+        docs,
+        issueAmount,
+        scope: 'topn' as const,
+      }
     })
-  }, [periods, rows])
+  }, [periods, rows, periodSummary])
 
   const activeKey: 'qty' | 'amount' | 'docs' = metric === 'freq' ? 'docs' : metric
+  const usesFullScope = points.some((p) => p.scope === 'full')
 
   const total = points.reduce((s, p) => s + p[activeKey], 0)
   const peak = points.length > 0 ? points.reduce((acc, p) => (p[activeKey] > acc[activeKey] ? p : acc), points[0]) : null
@@ -104,17 +132,22 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
     return { label: 'datar', pct: drift }
   }, [points, activeKey])
 
-  const metricLabel = metric === 'qty' ? 'quantity' : metric === 'freq' ? 'frekuensi dok' : 'nilai (Rp)'
+  const metricLabel = metric === 'qty'
+    ? 'qty issue'
+    : metric === 'freq'
+      ? 'frekuensi dok'
+      : 'valuasi stok (Rp)'
   const formatValue = (v: number) => (metric === 'amount' ? `Rp ${formatCompact(v)}` : formatCompact(v))
 
   // Analisis lintas-metrik — dibaca dari agregat yang sama, tak peduli toggle aktif.
   const totalQty = points.reduce((s, p) => s + p.qty, 0)
   const totalAmount = points.reduce((s, p) => s + p.amount, 0)
   const totalDocs = points.reduce((s, p) => s + p.docs, 0)
-  const avgUnitPrice = totalQty > 0 ? totalAmount / totalQty : 0 // harga rata-rata per unit
+  const totalIssueAmount = points.reduce((s, p) => s + p.issueAmount, 0)
+  const avgUnitPrice = totalQty > 0 ? totalIssueAmount / totalQty : 0
   const qtyPerDoc = totalDocs > 0 ? totalQty / totalDocs : 0
-  const amountPerDoc = totalDocs > 0 ? totalAmount / totalDocs : 0
-  const peakShare = peak && total > 0 ? (peak[activeKey] / total) * 100 : 0 // konsentrasi periode puncak
+  const amountPerDoc = totalDocs > 0 ? totalIssueAmount / totalDocs : 0
+  const peakShare = peak && total > 0 ? (peak[activeKey] / total) * 100 : 0
 
   if (loading && points.length === 0) {
     return (
@@ -216,14 +249,14 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
               labelStyle={{ color: '#a7f3d0', fontWeight: 700 }}
               formatter={(value, name) => {
                 const v = typeof value === 'number' ? value : Number(value ?? 0)
-                if (name === 'amount') return [`Rp ${formatCompact(v)}`, 'Valuasi']
-                if (name === 'qty') return [formatCompact(v), 'Quantity']
+                if (name === 'amount') return [`Rp ${formatCompact(v)}`, 'Valuasi stok (semua item)']
+                if (name === 'qty') return [formatCompact(v), 'Qty issue']
                 return [formatCompact(v), 'Dok issue']
               }}
             />
             <Legend
               wrapperStyle={{ fontFamily: 'var(--font-data)', fontSize: 10, color: '#8fa89c' }}
-              formatter={(value) => (value === 'amount' ? 'Valuasi' : value === 'qty' ? 'Quantity' : 'Dok issue')}
+              formatter={(value) => (value === 'amount' ? 'Valuasi stok' : value === 'qty' ? 'Qty issue' : 'Dok issue')}
             />
             {/* Batang frekuensi sebagai konteks ritme — disembunyikan bila freq jadi metrik utama. */}
             {metric !== 'freq' && (
@@ -268,20 +301,28 @@ export default function MovementTrend({ periods, rows, metric, onMetricChange, l
         </ResponsiveContainer>
       </div>
       <p className="rc-data mt-2 border-t border-white/[0.06] pt-2 text-[10px] text-[var(--rc-text-faint)]">
-        Agregasi {rows.length} barang teratas · {metricLabel} periode · ganti metrik untuk melihat sisi lain dari
-        pergerakan yang sama.
+        {usesFullScope
+          ? 'Valuasi = seluruh item stok (termasuk tanpa movement). Qty/Freq = aktivitas issue di window.'
+          : `Fallback top ${rows.length} barang matriks · belum full valuation summary.`}
+        {' '}Metrik: {metricLabel}.
       </p>
-      <div className="rc-data mt-1.5 flex-wrap gap-1.5 text-[10px]">
-        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Valuasi total dibagi qty total — harga rata-rata per unit fisik.">
-          Harga rata-rata/unit <strong className="text-emerald-200/90">Rp {formatCompact(avgUnitPrice)}</strong>
+      <div className="rc-data mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+        <span className="rounded-full border-emerald-300/20 bg-emerald-400/10 px-2 py-0.5 text-emerald-100/90" title="Scope valuasi tren.">
+          {usesFullScope ? 'Scope: full valuasi stok' : 'Scope: top-N matriks'}
         </span>
-        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Qty total dibagi jumlah dokumen — volume fisik per dokumen issue.">
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Issue amount total (flow, bukan valuasi stok).">
+          Issue flow <strong className="text-[var(--rc-text)]">Rp {formatCompact(totalIssueAmount)}</strong>
+        </span>
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Issue amount / qty issue.">
+          Avg unit issue <strong className="text-emerald-200/90">Rp {formatCompact(avgUnitPrice)}</strong>
+        </span>
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Qty issue / dokumen.">
           Qty/dok <strong className="text-[var(--rc-text)]">{formatCompact(qtyPerDoc)}</strong>
         </span>
-        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Valuasi total dibagi jumlah dokumen — nilai rata-rata per dokumen issue.">
-          Nilai/dok <strong className="text-[var(--rc-text)]">Rp {formatCompact(amountPerDoc)}</strong>
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Issue amount / dokumen.">
+          Rp issue/dok <strong className="text-[var(--rc-text)]">Rp {formatCompact(amountPerDoc)}</strong>
         </span>
-        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Bagian periode puncak terhadap total — makin besar makin terkonsentrasi.">
+        <span className="rounded-full border-white/10 bg-white/[0.04] px-2 py-0.5" title="Bagian periode puncak terhadap total metrik aktif.">
           Puncak menampung <strong className="text-amber-200/90">{peakShare.toFixed(0)}%</strong> total
         </span>
       </div>

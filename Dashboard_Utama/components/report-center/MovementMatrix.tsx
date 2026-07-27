@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import ScrollArea from './ScrollArea'
 
 /**
  * MovementMatrix — heatmap barang (Y) × periode bulan (X).
@@ -31,6 +32,9 @@ type MovementMatrixProps = {
   months?: number
   top?: number
   itemType?: string
+  itemCode?: string
+  productType?: string
+  q?: string
   /** Aktifkan fetch (false saat glance/tersembunyi agar lazy). */
   active?: boolean
   metric: MatrixMetric
@@ -64,6 +68,9 @@ export default function MovementMatrix({
   months = 12,
   top = 12,
   itemType = '',
+  itemCode = '',
+  productType = '',
+  q = '',
   active = true,
   metric,
   onMetricChange,
@@ -79,16 +86,26 @@ export default function MovementMatrix({
     let cancelled = false
     const params = new URLSearchParams({ source, months: String(months), top: String(top) })
     if (itemType) params.set('itemType', itemType)
+    if (itemCode) params.set('itemCode', itemCode)
+    if (productType) params.set('productType', productType)
+    if (q) params.set('q', q)
     queueMicrotask(() => {
       if (!cancelled) setLoading(true)
     })
     fetch(`/api/reports/inventory/movement-matrix?${params.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((json: ApiMatrixResponse) => {
-        if (!cancelled) setData(json)
+        if (cancelled) return
+        // Keep previous heatmap if refetch fails/empty — avoids blink-out with FrequencyInsights.
+        if (json?.success === false || !Array.isArray(json?.periods) || json.periods.length === 0) {
+          setData((prev) => prev ?? { success: false, periods: [], rows: [], currentPeriod: '', error: json?.error ?? 'Matriks kosong' })
+          return
+        }
+        setData(json)
       })
       .catch(() => {
-        if (!cancelled) setData({ success: false, periods: [], rows: [], currentPeriod: '', error: 'Gagal memuat matriks' })
+        if (cancelled) return
+        setData((prev) => prev ?? { success: false, periods: [], rows: [], currentPeriod: '', error: 'Gagal memuat matriks' })
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -96,7 +113,7 @@ export default function MovementMatrix({
     return () => {
       cancelled = true
     }
-  }, [active, source, months, top, itemType])
+  }, [active, source, months, top, itemType, itemCode, productType, q])
 
   const periods = data?.periods ?? []
   const rows = data?.rows ?? []
@@ -159,7 +176,7 @@ export default function MovementMatrix({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <ScrollArea className="min-h-0 flex-1">
         <div
           className="grid gap-[3px]"
           style={{ gridTemplateColumns: `minmax(120px,1.4fr) repeat(${periods.length}, minmax(30px,1fr))` }}
@@ -217,7 +234,7 @@ export default function MovementMatrix({
             </Fragment>
           ))}
         </div>
-      </div>
+      </ScrollArea>
 
       {/* Tooltip bar (bawah) */}
       <div className="rc-data mt-2 flex min-h-[18px] items-center justify-between gap-2 border-t border-white/[0.06] pt-2 text-[10px] text-[var(--rc-text-muted)]">

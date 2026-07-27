@@ -206,7 +206,7 @@ export const inventoryReports: InventoryReport[] = [
     executiveQuestion: "Berapa jumlah/qty/amount movement dari tiap stock, dan item mana yang paling aktif berdasarkan stock issue?",
     status: "live",
     priority: "critical",
-    tags: ["All Stock", "Movement Analysis", "Real Time", "Valuation", "Stock Issue", "Fast Moving", "Slow Moving", "Stale", "Dead Stock"],
+    tags: ["All Stock", "Movement Analysis", "Real Time", "Valuation", "Stock Issue", "Fast Moving", "Slow Moving", "Dead Stock"],
     sourceTables: ["IN_ITEM", "IN_MTHENDITEM", "IN_PRODTYPE", "IN_STOCKISSUE", "IN_STOCKISSUELN", "WS_JOBSTOCK"],
     lastUpdated: "Real-time current stock mengikuti IN_ITEM; histori valuation hanya saat user memilih periode historis memakai IN_MTHENDITEM AccYear/AccMonth",
     owner: "Inventory Control",

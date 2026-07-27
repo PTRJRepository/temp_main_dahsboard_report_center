@@ -33,9 +33,10 @@ assert.equal(poFillRate(100, 100), 1)
 assert.equal(usageIntensity(25, 500), 0.05)
 assert.equal(usageIntensity(10, 0), 0)
 
-// RiskCount = Slow + Dead + Stale (abaikan NaN)
-assert.equal(riskCount(3, 2, 5), 10)
-assert.equal(riskCount(NaN, 1, 2), 3)
+// RiskCount = Slow + Dead (3rd arg ignored for compat)
+assert.equal(riskCount(3, 2, 5), 5)
+assert.equal(riskCount(NaN, 1, 2), 1)
+assert.equal(riskCount(3, 2), 5)
 
 // percentOf (0..100)
 assert.equal(percentOf(1, 4), 25)

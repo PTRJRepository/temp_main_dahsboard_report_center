@@ -113,11 +113,12 @@ const balancedMovementRows = buildMovementCategoryBalancedRows(
   (row) => row.MovementCategory,
   (left, right) => Number(right.AmountItem) - Number(left.AmountItem),
 )
+// Stale folds into Dead Stock; round-robin: Fast, Slow, Dead(dead-1), Dead(dead-2)
 assert.deepEqual(balancedMovementRows.map((row) => row.MovementCategory), [
   'Fast Moving',
   'Slow Moving',
   'Dead Stock',
-  'Stale',
+  'Dead Stock',
 ])
 
 const movementGroups = buildReportTableGroups(
@@ -126,8 +127,8 @@ const movementGroups = buildReportTableGroups(
   ['MovementCategory', 'StockIssueMovementCount', 'AmountItem'],
   ['StockIssueMovementCount', 'AmountItem'],
 )
-assert.deepEqual(movementGroups.map((group) => group.label), ['Fast Moving', 'Slow Moving', 'Dead Stock', 'Stale'])
-assert.equal(movementGroups.length, 4)
+assert.deepEqual(movementGroups.map((group) => group.label), ['Fast Moving', 'Slow Moving', 'Dead Stock'])
+assert.equal(movementGroups.length, 3)
 
 const summaryTotals = buildReportSummaryTotals(
   {

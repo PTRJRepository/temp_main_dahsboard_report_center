@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   LEGACY_NO_MOVEMENT_CATEGORY,
+  LEGACY_STALE_CATEGORY,
   MOVEMENT_CATEGORY_ORDER,
   MOVEMENT_CATEGORY_THRESHOLDS,
   buildMovementCategoryBalancedRows,
@@ -15,7 +16,7 @@ import {
   normalizeMovementCategoryThresholds,
 } from './movement-category'
 
-assert.deepEqual(MOVEMENT_CATEGORY_ORDER, ['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock', 'Stale'])
+assert.deepEqual(MOVEMENT_CATEGORY_ORDER, ['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock'])
 assert.equal(MOVEMENT_CATEGORY_THRESHOLDS.fastMinIssueCount, 6)
 assert.equal(MOVEMENT_CATEGORY_THRESHOLDS.movingMinIssueCount, 2)
 assert.equal(MOVEMENT_CATEGORY_THRESHOLDS.movingMaxIssueCount, 5)
@@ -25,7 +26,7 @@ assert.equal(movementCategoryFromIssueCount(5, 0), 'Moving')
 assert.equal(movementCategoryFromIssueCount(2, 0), 'Moving')
 assert.equal(movementCategoryFromIssueCount(1, 10), 'Slow Moving')
 assert.equal(movementCategoryFromIssueCount(0, 10), 'Dead Stock')
-assert.equal(movementCategoryFromIssueCount(0, 0), 'Stale')
+assert.equal(movementCategoryFromIssueCount(0, 0), 'Dead Stock')
 assert.equal(
   movementCategoryFromIssueCount(7, 0, {
     fastMinIssueCount: 8,
@@ -45,17 +46,18 @@ assert.equal(
   'Slow Moving',
 )
 
-assert.equal(normalizeMovementCategoryLabel(LEGACY_NO_MOVEMENT_CATEGORY), 'Stale')
+assert.equal(normalizeMovementCategoryLabel(LEGACY_NO_MOVEMENT_CATEGORY), 'Dead Stock')
+assert.equal(normalizeMovementCategoryLabel(LEGACY_STALE_CATEGORY), 'Dead Stock')
 assert.equal(movementCategoryRank('Fast Moving') < movementCategoryRank('Moving'), true)
-assert.equal(movementCategoryRank('Dead Stock') < movementCategoryRank('Stale'), true)
-assert.equal(movementCategoryRank(LEGACY_NO_MOVEMENT_CATEGORY), movementCategoryRank('Stale'))
+assert.equal(movementCategoryRank(LEGACY_STALE_CATEGORY), movementCategoryRank('Dead Stock'))
+assert.equal(movementCategoryRank(LEGACY_NO_MOVEMENT_CATEGORY), movementCategoryRank('Dead Stock'))
 
 const categorySql = movementCategorySqlCase('IssueCount', 'QuantityClosing')
 assert.equal(categorySql.includes("IssueCount >= 6 THEN 'Fast Moving'"), true)
 assert.equal(categorySql.includes("IssueCount BETWEEN 2 AND 5 THEN 'Moving'"), true)
 assert.equal(categorySql.includes("IssueCount = 1 THEN 'Slow Moving'"), true)
-assert.equal(categorySql.includes("QuantityClosing > 0 THEN 'Dead Stock'"), true)
-assert.equal(categorySql.includes("ELSE 'Stale'"), true)
+assert.equal(categorySql.includes("ELSE 'Dead Stock'"), true)
+assert.equal(categorySql.includes("'Stale'"), false)
 
 const customThresholds = normalizeMovementCategoryThresholds({
   fastMinIssueCount: 10,
@@ -70,14 +72,16 @@ assert.deepEqual(customThresholds, {
   slowIssueCount: 2,
   deadStockIssueCount: 0,
 })
-assert.equal(movementCategoryThresholdLabel(customThresholds), 'Fast >= 10, Moving 3-9, Slow = 2, Dead/Stale = 0 issue')
+assert.equal(movementCategoryThresholdLabel(customThresholds), 'Fast >= 10, Moving 3-9, Slow = 2, Dead = 0 issue')
 const customCategorySql = movementCategorySqlCase('IssueCount', 'QuantityClosing', customThresholds)
 assert.equal(customCategorySql.includes("IssueCount >= 10 THEN 'Fast Moving'"), true)
 assert.equal(customCategorySql.includes("IssueCount BETWEEN 3 AND 9 THEN 'Moving'"), true)
 assert.equal(customCategorySql.includes("IssueCount = 2 THEN 'Slow Moving'"), true)
 
 const rankSql = movementCategoryRankSqlCase('MovementCategory')
-assert.equal(rankSql.includes("WHEN 'No Movement' THEN 5"), true)
+assert.equal(rankSql.includes("WHEN 'Dead Stock' THEN 4"), true)
+assert.equal(rankSql.includes("WHEN 'Stale' THEN 4"), true)
+assert.equal(rankSql.includes("WHEN 'No Movement' THEN 4"), true)
 
 const balanced = buildMovementCategoryBalancedRows(
   [
@@ -93,13 +97,13 @@ const balanced = buildMovementCategoryBalancedRows(
   (left, right) => right.priority - left.priority,
 )
 
-assert.deepEqual(balanced.map((row) => row.id), ['fast-1', 'moving-1', 'dead-1', 'stale-1'])
+// stale-1 folds into Dead Stock group; round-robin: Fast, Moving, Dead(dead-1), Dead(dead-2)
+assert.deepEqual(balanced.map((row) => row.id), ['fast-1', 'moving-1', 'dead-1', 'dead-2'])
 
 assert.deepEqual(countMovementCategoryRows(balanced, 'category'), {
   'Fast Moving': 1,
   Moving: 1,
-  'Dead Stock': 1,
-  Stale: 1,
+  'Dead Stock': 2,
 })
 
 const inventoryRouteSource = readFileSync(new URL('../../app/api/reports/inventory/route.ts', import.meta.url), 'utf8')

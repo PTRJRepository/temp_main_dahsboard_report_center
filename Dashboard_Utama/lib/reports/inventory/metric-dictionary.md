@@ -17,20 +17,31 @@ Source of truth: code (`monthly-stock-account-movement.ts`, inventory route, pay
 | Key | User label | Kind | Source field | Notes |
 | --- | --- | --- | --- | --- |
 | opening_amount | Saldo Awal | currency | `OpeningAmount` | Implemented |
-| goods_receive_amount | Penerimaan (GR) | currency | `GoodsReceiveAmount` | Purchasing in |
+| goods_receive_amount | Purchasing GR | currency | `GoodsReceiveAmount` | **PU_GOODSRCV** only (bukan inventory receive) |
 | issued_total_amount | Pengeluaran | currency | `IssuedTotalAmount` | Ledger+Station+Vehicle |
-| return_amount | Retur | currency | `ReturnAmount` | Workshop return |
+| return_amount | Inventory Return | currency | `ReturnAmount` | **IN_STOCKRTN + WS TT2** (bukan PU_GOODSRET) |
 | closing_amount | Saldo Akhir | currency | `ClosingAmount` | Implemented |
 | item_count | Jumlah Item | count | `TotalItem` / row count | Integer |
 
 Context (not KPI cards): `ActualPeriod` → period, `accountingPeriod` → period, Source estate|pabrik → text.
+
+## Istilah receive / return (WAJIB)
+
+| Istilah UI | Modul | Tabel | Bukan |
+| --- | --- | --- | --- |
+| **Inventory Received** (`Received*`) | Inventory | `IN_STOCKRECEIVE` / `LN` | Purchasing GR |
+| **Purchasing Goods Receive** (`GoodsReceive*`) | Purchasing | `PU_GOODSRCV` / `LN` × `PU_POLN.Cost` | Inventory receive |
+| **Inventory Return** (`Return*`) | Inventory | `IN_STOCKRTN` / `LN` + `WS_JOBSTOCK` TT=2 | Retur supplier |
+| **Purchasing Goods Return** (`GoodsReturn*`) | Purchasing | `PU_GOODSRET` / `LN` | Stock return gudang |
+
+GR purchasing: Status **`2/5/6`** (Status=`2` saja → amount 0; mayoritas posted = `5`).
 
 ## Movement measures (from `MONTHLY_MOVEMENT_DEFINITIONS`)
 
 | key | label | status |
 | --- | --- | --- |
 | opening | Opening | implemented |
-| received | Received | placeholder_zero |
+| received | Inventory Received | implemented |
 | return_advice | Return Advice | placeholder_zero |
 | transferred | Transferred | placeholder_zero |
 | adjustment | Adjustment | placeholder_zero |
@@ -38,9 +49,9 @@ Context (not KPI cards): `ActualPeriod` → period, `accountingPeriod` → perio
 | issued_station | Issued - Station | implemented |
 | issued_vehicle | Issued - Vehicle | implemented |
 | issued_total | Issued - Total | implemented |
-| return | Return | implemented |
-| purchasing_goods_receive | Purchasing - Goods Receive | implemented |
-| purchasing_goods_return | Purchasing - Goods Return | implemented |
+| return | Inventory Return | implemented |
+| purchasing_goods_receive | Purchasing Goods Receive | implemented |
+| purchasing_goods_return | Purchasing Goods Return | implemented |
 | purchasing_dispatch_advice | Purchasing - Dispatch Advice | placeholder_zero |
 | closing | Closing | implemented |
 

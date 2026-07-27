@@ -147,7 +147,16 @@ export function classifyPeriodMovement(options: {
   }
 }
 
-export type MovementWindowPreset = 'all' | '1m' | '3m' | '6m' | '12m' | 'custom'
+export type MovementWindowPreset =
+  | 'all'
+  | '1m'
+  | '3m'
+  | '6m'
+  | '12m'
+  | '2y'
+  | '5y'
+  | '10y'
+  | 'custom'
 
 export type MovementWindowInput = {
   movementWindow?: string | null
@@ -163,6 +172,30 @@ export type MovementWindowScope = {
   endExclusive: string
   label: string
   rule: string
+}
+
+/** Shared option list for Movement Category issue-count window (UI). */
+export const MOVEMENT_WINDOW_OPTIONS = [
+  { value: 'all', label: 'All period' },
+  { value: '1m', label: '1 bulan' },
+  { value: '3m', label: '3 bulan' },
+  { value: '6m', label: '6 bulan' },
+  { value: '12m', label: '12 bulan / 1 tahun' },
+  { value: '2y', label: '2 tahun' },
+  { value: '5y', label: '5 tahun' },
+  { value: '10y', label: '10 tahun' },
+  { value: 'custom', label: 'Custom range' },
+] as const
+
+function monthsForMovementWindowPreset(preset: MovementWindowPreset): number | null {
+  if (preset === '1m') return 1
+  if (preset === '3m') return 3
+  if (preset === '6m') return 6
+  if (preset === '12m') return 12
+  if (preset === '2y') return 24
+  if (preset === '5y') return 60
+  if (preset === '10y') return 120
+  return null
 }
 
 function ymd(date: Date) {
@@ -195,6 +228,9 @@ export function normalizeMovementWindowPreset(value?: string | null): MovementWi
   if (raw === '3m' || raw === '3' || raw === '3month' || raw === '3-bulan') return '3m'
   if (raw === '6m' || raw === '6' || raw === '6month' || raw === '6-bulan') return '6m'
   if (raw === '12m' || raw === '12' || raw === '1y' || raw === '12-bulan' || raw === '1-tahun') return '12m'
+  if (raw === '2y' || raw === '2' || raw === '24m' || raw === '24' || raw === '2-tahun' || raw === '24-bulan') return '2y'
+  if (raw === '5y' || raw === '5' || raw === '60m' || raw === '60' || raw === '5-tahun' || raw === '60-bulan') return '5y'
+  if (raw === '10y' || raw === '10' || raw === '120m' || raw === '120' || raw === '10-tahun' || raw === '120-bulan') return '10y'
   if (raw === 'custom' || raw === 'range') return 'custom'
   return 'all'
 }
@@ -288,19 +324,21 @@ export function resolveMovementWindowScope(input: MovementWindowInput = {}): Mov
     }
   }
 
-  if (preset === '3m' || preset === '6m' || preset === '12m') {
-    const months = preset === '3m' ? 3 : preset === '6m' ? 6 : 12
+  const rollingMonths = monthsForMovementWindowPreset(preset)
+  if (rollingMonths != null && rollingMonths > 1) {
     // Roll back from Actual period month (or live month), not always from wall-clock now.
-    const start = new Date(anchor.anchorYear, anchor.anchorMonth - months, 1)
+    const start = new Date(anchor.anchorYear, anchor.anchorMonth - rollingMonths, 1)
     const labelSuffix = anchor.periodLabel ? ` s/d ${anchor.periodLabel}` : ''
+    const years = rollingMonths % 12 === 0 && rollingMonths >= 24 ? rollingMonths / 12 : null
+    const labelCore = years != null ? `${years} tahun terakhir` : `${rollingMonths} bulan terakhir`
     return {
       preset,
       startInclusive: ymd(start),
       endExclusive,
-      label: `${months} bulan terakhir${labelSuffix}`,
+      label: `${labelCore}${labelSuffix}`,
       rule: anchor.anchoredToPeriod
-        ? `Rolling last ${months} calendar months ending at Actual period ${anchor.periodLabel} (capped at today).`
-        : `Rolling last ${months} calendar months through today.`,
+        ? `Rolling last ${rollingMonths} calendar months ending at Actual period ${anchor.periodLabel} (capped at today).`
+        : `Rolling last ${rollingMonths} calendar months through today.`,
     }
   }
 

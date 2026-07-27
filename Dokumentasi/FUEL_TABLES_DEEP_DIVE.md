@@ -1,5 +1,9 @@
 # Fuel Tables Deep-Dive: IN_FUELISSUE, IN_FUELISSUELN, IN_FUELRTN, IN_FUELRTNLN
 
+> **Period filter (LIVE 2026-07):** jangan filter cuma `PostDate`.  
+> Canonical: `Dokumentasi/FUEL_ISSUE_SELECTED_PERIOD.md` · code `lib/reports/inventory/fuel-issue-sql.ts`.  
+> Schema notes below may be older (May 2026); server labels in body may be stale vs current SP2=estate.
+
 **Generated:** 2026-05-16  
 **Servers:** SERVER_PROFILE_1 (Estate, 10.0.0.110:1433) & SERVER_PROFILE_2 (Mill, 103.127.66.32:1888)  
 **Database:** db_ptrj_mill  

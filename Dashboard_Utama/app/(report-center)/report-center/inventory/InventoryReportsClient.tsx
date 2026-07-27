@@ -141,7 +141,7 @@ const INVENTORY_ANALYSIS_GROUP_OPTIONS = [
   { value: 'ProductBrandCode', label: 'Product Brand Code', description: 'IN_ITEM.ProdBrandCode' },
   { value: 'ProductModelCode', label: 'Product Model Code', description: 'IN_ITEM.ProdModelCode' },
   { value: 'ProductMaterialCode', label: 'Product Material Code', description: 'IN_ITEM.ProdMatCode' },
-  { value: 'MovementCategory', label: 'Actual Movement Category', description: 'Fast/Moving/Slow/Dead/Stale aktual' },
+  { value: 'MovementCategory', label: 'Actual Movement Category', description: 'Fast/Moving/Slow/Dead aktual' },
 ] as const
 
 type InventoryAnalysisGroup = (typeof INVENTORY_ANALYSIS_GROUP_OPTIONS)[number]['value']
@@ -2036,7 +2036,7 @@ export default function InventoryReportsClient({
                   className="h-10 rounded-xl border border-[var(--rc-forest-border)] bg-white/[0.04] px-3 text-xs font-extrabold text-[var(--rc-text)] outline-none focus:border-emerald-400"
                 >
                   <option value="">Semua movement category</option>
-                  {['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock', 'Stale'].map((code) => <option key={code} value={code}>{code}</option>)}
+                  {['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock'].map((code) => <option key={code} value={code}>{code}</option>)}
                 </select>
               ) : (
                 <input

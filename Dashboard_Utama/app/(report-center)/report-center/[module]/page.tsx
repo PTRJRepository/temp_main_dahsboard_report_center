@@ -44,11 +44,11 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
           <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end lg:p-6">
             <div>
               <nav className="flex flex-wrap items-center gap-2 text-xs font-bold text-[var(--rc-text-faint)]">
-                <Link href={`/report-center?source=${source}`} className="hover:text-amber-300">Dashboard</Link>
+                <Link href={`/report-center?source=${source}`} className="hover:text-[var(--rc-forest-accent)]">Dashboard</Link>
                 <span>/</span>
-                <span className="text-amber-300">{panel.module.name}</span>
+                <span className="text-[var(--rc-forest-accent)]">{panel.module.name}</span>
               </nav>
-              <p className="mt-5 text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Module workspace</p>
+              <p className="mt-5 text-xs font-bold uppercase tracking-[0.3em] text-[var(--rc-forest-accent)]">Module workspace</p>
               <h1 className="mt-2 text-3xl font-black tracking-tight text-[var(--rc-text)] sm:text-4xl">
                 {panel.module.name}
               </h1>
@@ -60,7 +60,7 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--rc-text-faint)]">Sub-modul</p>
-                <p className="mt-2 text-2xl font-black text-amber-300">{panel.subModules.length}</p>
+                <p className="mt-2 text-2xl font-black text-[var(--rc-forest-accent)]">{panel.subModules.length}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--rc-text-faint)]">Report</p>
@@ -73,7 +73,7 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-amber-300">Sub-module map</p>
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--rc-forest-accent)]">Sub-module map</p>
               <h2 className="mt-1 text-base font-bold text-[var(--rc-text)]">Pilih area kerja</h2>
             </div>
             <Link
@@ -90,16 +90,16 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
               const card = (
                 <div className="group h-full rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-[var(--rc-border-strong)] hover:bg-white/10">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="grid h-11 w-11 place-items-center rounded-xl border border-amber-300/20 bg-amber-400/10 text-amber-300">
+                    <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--rc-forest-border)] bg-[rgba(24,185,107,.1)] text-[var(--rc-forest-accent)]">
                       <Layers3 size={20} />
                     </div>
-                    <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-300">
+                    <span className="rounded-full border border-[var(--rc-forest-border)] bg-[rgba(24,185,107,.1)] px-2 py-1 text-[10px] font-black text-[var(--rc-forest-accent)]">
                       {subModule.count}
                     </span>
                   </div>
                   <h3 className="mt-4 text-base font-black text-[var(--rc-text)]">{subModule.name}</h3>
                   <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--rc-text-muted)]">{subModule.description}</p>
-                  <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-amber-300">
+                  <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[var(--rc-forest-accent)]">
                     {subModule.href ? 'Buka sub-modul' : 'Preview'}
                     <ArrowRight size={13} />
                   </span>
@@ -122,7 +122,7 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
         <section className="rc-panel overflow-hidden rounded-3xl">
           <div className="flex flex-col gap-3 border-b border-[var(--rc-border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-amber-300">Report list</p>
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--rc-forest-accent)]">Report list</p>
               <h2 className="mt-1 text-base font-bold text-[var(--rc-text)]">Daftar laporan dalam modul</h2>
             </div>
             <span className="w-fit rounded-full border border-[var(--rc-border)] px-3 py-1 text-xs font-bold text-[var(--rc-text-muted)]">
@@ -135,10 +135,10 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
               const card = (
                 <div className="flex h-full flex-col rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-[var(--rc-border-strong)] hover:bg-white/10">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-amber-300">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-[var(--rc-forest-accent)]">
                       <FileText size={18} />
                     </div>
-                    <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[10px] font-black uppercase text-amber-300">
+                    <span className="rounded-full border border-[var(--rc-forest-border)] bg-[rgba(24,185,107,.1)] px-2 py-1 text-[10px] font-black uppercase text-[var(--rc-forest-accent)]">
                       {report.status}
                     </span>
                   </div>
@@ -146,7 +146,7 @@ export default async function ModuleDetailPage({ params, searchParams }: PagePro
                   <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--rc-text-muted)]">{report.description}</p>
                   <div className="mt-auto flex items-center justify-between gap-3 pt-4">
                     <span className="truncate text-xs font-semibold text-[var(--rc-text-faint)]">{report.group}</span>
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-300">
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-[var(--rc-forest-accent)]">
                       {report.href ? 'Buka report' : 'Preview'}
                       <ArrowRight size={13} />
                     </span>

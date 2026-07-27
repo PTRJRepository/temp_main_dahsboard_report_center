@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
-import { ArrowRight, CircleDollarSign, ClipboardList, Gauge, Layers3, Package, SlidersHorizontal, TrendingUp, Truck, Wrench } from 'lucide-react'
+import { ArrowRight, CircleDollarSign, ClipboardList, Copy, Fuel, Gauge, Layers3, Package, SlidersHorizontal, TrendingUp, Truck, Wrench, X } from 'lucide-react'
 import { frequencyPerDay, poFillRate, returnRate } from '@/lib/reports/procurement-kpi-math'
 import KpiCarousel from './KpiCarousel'
 import MovementTrendChart from './MovementTrendChart'
 import TopMovementScatter from './TopMovementScatter'
 import StockRiverChart from './StockRiverChart'
+import ValuationBridgeChart from './ValuationBridgeChart'
 import AnalysisDrawer from './AnalysisDrawer'
 import PeriodScrubber from './PeriodScrubber'
 import MovementAnalytics from './MovementAnalytics'
@@ -21,7 +22,7 @@ type DeckSection = 'valuasi' | 'proses' | 'movement'
 
 type DbRow = Record<string, unknown>
 
-type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'movementMonthly' | 'usage' | 'return'
+type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'movementMonthly' | 'usage' | 'fuel' | 'return'
 
 type TopListItem = {
   code?: string
@@ -46,6 +47,7 @@ type Snapshot = {
     items?: TopListItem[]
     costCenters?: TopListItem[]
     vehicles?: TopListItem[]
+    blocks?: TopListItem[]
   }
   trend?: TrendPoint[]
   issueFrequency?: {
@@ -84,7 +86,7 @@ export type ProcurementKpiFilters = {
 
 type ProcurementKpiStripProps = {
   source: ReportSource
-  links: Record<'stock' | 'receive' | 'process' | 'workshop' | 'movement' | 'usage' | 'return', string>
+  links: Record<'stock' | 'receive' | 'process' | 'workshop' | 'movement' | 'usage' | 'fuel' | 'return', string>
   /** Parent-owned filters → one scope for all KPI + sibling overview. */
   filters?: ProcurementKpiFilters
   onFiltersChange?: (next: ProcurementKpiFilters) => void
@@ -129,37 +131,175 @@ function cardTooltip(card: Pick<ProcurementKpiCard, 'label' | 'valueExact' | 'va
   ].filter(Boolean).join('\n')
 }
 
-/** SQL sederhana untuk verifikasi cepat angka kartu KPI — mengikuti periode & mode. */
+/** SQL paste-ready SSMS — sketsa grain/tabel KPI (bukan 1:1 full handler filter scope). */
 function kpiCheckSql(cardId: string, opts: { periodFrom: string; periodTo: string; accYear: number; accMonth: number; isCurrentPeriod: boolean; database: string }): string {
-  const { periodFrom, periodTo, accYear, accMonth, isCurrentPeriod, database } = opts
-  const db = database || 'ESTATE'
+  const { periodFrom, periodTo, database } = opts
+  const db = database || 'db_ptrj'
   const d = (s: string) => `'${s}'`
+  const lineAmt = 'COALESCE(NULLIF(l.Amount, 0), l.Qty * l.Cost, 0)'
+  const wsAmt = 'COALESCE(NULLIF(s.Amount, 0), s.Qty * ISNULL(s.Cost, s.Price), 0)'
+  const wsDate = 'COALESCE(s.PostDate, s.TransDate)'
+  const hdr = (title: string, fields: string) =>
+    `-- KPI: ${title}\n-- DB: [${db}] · window ${periodFrom} .. ${periodTo}\n-- Fields: ${fields}\n`
+
   switch (cardId) {
     case 'total-usage':
+          return `${hdr('Total Usage (Issue)', 'IssuedTotalAmount monthly = Ledger+Station+Vehicle (stock Acc + fuel DocDate + ws Acc)')}
+    -- KPI money source: monthly-stock-account-movement-details.summary.IssuedTotalAmount
+    -- Audit split: pengeluaran-barang (Gudang/Fuel/Workshop) · grain line
+SELECT
+  CAST(SUM(CASE WHEN src = 'STOCK' THEN Amt ELSE 0 END) AS decimal(18,2)) AS GudangIssueAmount,
+  CAST(SUM(CASE WHEN src = 'FUEL' THEN Amt ELSE 0 END) AS decimal(18,2)) AS FuelIssueAmount,
+  CAST(SUM(CASE WHEN src = 'WS' THEN Amt ELSE 0 END) AS decimal(18,2)) AS WorkshopIssueAmount,
+  CAST(SUM(Amt) AS decimal(18,2)) AS TotalUsageAmount
+FROM (
+  SELECT 'STOCK' AS src, ${lineAmt} AS Amt
+  FROM [${db}].dbo.IN_STOCKISSUELN l
+  INNER JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID = h.StockIssueID
+  WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+  UNION ALL
+  SELECT 'FUEL', ${lineAmt}
+  FROM [${db}].dbo.IN_FUELISSUELN l
+  INNER JOIN [${db}].dbo.IN_FUELISSUE h ON l.FuelIssueID = h.FuelIssueID
+  WHERE COALESCE(NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate, h.CreateDate) >= ${d(periodFrom)}
+    AND COALESCE(NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate, h.CreateDate) < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+  UNION ALL
+  SELECT 'WS', ${wsAmt}
+  FROM [${db}].dbo.WS_JOBSTOCK s
+  WHERE RTRIM(ISNULL(s.TransType, '')) = '1'
+    AND ${wsDate} >= ${d(periodFrom)} AND ${wsDate} < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+) u;`
+
     case 'movement-amount':
-      return isCurrentPeriod
-        ? `SELECT SUM(l.Qty*l.Cost) AS Amount FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
-        : `SELECT SUM(m.Amount) AS Amount FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+      return `${hdr('Issue Amount (movement)', 'same issue universe as movement analysis · stock+fuel+ws · window period-locked di deck')}
+-- Report: all-stock-movement-analysis · field summary.TotalStockIssueMovementAmount
+-- Issue universe movement = stock+fuel+ws (sama dgn Total Usage); beda = model agregasi per item/window
+SELECT
+  CAST(SUM(Amt) AS decimal(18,2)) AS IssueAmountApprox
+FROM (
+  SELECT ${lineAmt} AS Amt
+  FROM [${db}].dbo.IN_STOCKISSUELN l
+  INNER JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID = h.StockIssueID
+  WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+    AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
+  UNION ALL
+  SELECT ${lineAmt}
+  FROM [${db}].dbo.IN_FUELISSUELN l
+  INNER JOIN [${db}].dbo.IN_FUELISSUE h ON l.FuelIssueID = h.FuelIssueID
+  WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+  UNION ALL
+  SELECT ${wsAmt}
+  FROM [${db}].dbo.WS_JOBSTOCK s
+  WHERE RTRIM(ISNULL(s.TransType, '')) = '1'
+    AND ${wsDate} >= ${d(periodFrom)} AND ${wsDate} < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+) m;`
+
     case 'movement-qty':
-      return isCurrentPeriod
-        ? `SELECT SUM(l.Qty) AS Qty FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
-        : `SELECT SUM(m.IssuedTotalQty) AS Qty FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+      return `${hdr('Issue Qty', 'SUM(Qty) stock(+fuel/ws di path movement)')}
+SELECT CAST(SUM(l.Qty) AS decimal(18,2)) AS IssueQty
+FROM [${db}].dbo.IN_STOCKISSUELN l
+INNER JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID = h.StockIssueID
+WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+  AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6');`
+
     case 'movement-frequency':
-      return `SELECT COUNT(DISTINCT h.StockIssueID) AS Dok FROM [${db}].dbo.IN_STOCKISSUE h WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
+      return `${hdr('Frekuensi Issue', 'COUNT DISTINCT dokumen IN_STOCKISSUE.StockIssueID')}
+SELECT COUNT(DISTINCT h.StockIssueID) AS IssueDocuments
+FROM [${db}].dbo.IN_STOCKISSUE h
+WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}));`
+
     case 'movement-total':
-      return `SELECT COUNT(*) AS Event FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)}`
+      return `${hdr('Total Issue Movement (event)', 'COUNT baris line issue = event, BUKAN Rupiah')}
+SELECT COUNT(*) AS IssueEvents
+FROM [${db}].dbo.IN_STOCKISSUELN l
+INNER JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID = h.StockIssueID
+WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+  AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6');`
+
     case 'movement-top-frequency':
-      return `SELECT TOP 1 l.ItemCode, COUNT(DISTINCT h.StockIssueID) AS Dok FROM [${db}].dbo.IN_STOCKISSUELN l JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID=h.StockIssueID WHERE h.PostDate>=${d(periodFrom)} AND h.PostDate<=${d(periodTo)} GROUP BY l.ItemCode ORDER BY Dok DESC`
+      return `${hdr('Top frekuensi issue', 'ItemCode + COUNT DISTINCT StockIssueID')}
+SELECT TOP 10 RTRIM(l.ItemCode) AS ItemCode,
+  COUNT(DISTINCT h.StockIssueID) AS Docs,
+  COUNT(*) AS Lines,
+  CAST(SUM(${lineAmt}) AS decimal(18,2)) AS Amount
+FROM [${db}].dbo.IN_STOCKISSUELN l
+INNER JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID = h.StockIssueID
+WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+GROUP BY RTRIM(l.ItemCode)
+ORDER BY Docs DESC, Amount DESC;`
+
     case 'movement-gr-qty':
-      return `SELECT SUM(m.GoodsReceiveQty) AS GRQty FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+      return `${hdr('Goods Receive Qty (monthly path)', 'PU_GOODSRCV + PU_GOODSRCVLN.StockQty · cost dari PU_POLN')}
+SELECT CAST(SUM(ISNULL(gl.StockQty, 0)) AS decimal(18,2)) AS GoodsReceiveQty,
+  CAST(SUM(ISNULL(gl.StockQty, 0) * ISNULL(p.Cost, 0)) AS decimal(18,2)) AS GoodsReceiveAmount
+FROM [${db}].dbo.PU_GOODSRCV g
+INNER JOIN [${db}].dbo.PU_GOODSRCVLN gl ON g.GoodsRcvID = gl.GoodsRcvID
+LEFT JOIN [${db}].dbo.PU_POLN p ON gl.POLnID = p.POLnID
+WHERE g.GoodsRcvRefDate >= ${d(periodFrom)}
+  AND g.GoodsRcvRefDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+  AND RTRIM(ISNULL(g.Status, '')) IN ('2', '5', '6');`
+
     case 'movement-open-close-qty':
-      return `SELECT SUM(m.OpeningQty) AS Opening, SUM(m.ClosingQty) AS Closing FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+      return `${hdr('Opening vs Closing Qty', 'IN_MTHENDITEM snapshot · AccYear/AccMonth accounting (bukan cuma kalender)')}
+-- Ganti AccYear/AccMonth sesuai mapping period UI (helper accounting-period di app)
+SELECT
+  CAST(SUM(ISNULL(m.Qty, 0)) AS decimal(18,2)) AS SnapshotQty,
+  CAST(SUM(ISNULL(m.Amount, ISNULL(m.Qty, 0) * ISNULL(m.AverageCost, 0))) AS decimal(18,2)) AS SnapshotAmount
+FROM [${db}].dbo.IN_MTHENDITEM m
+WHERE RTRIM(CONVERT(varchar(10), m.AccYear)) = '${opts.accYear}'
+  AND RTRIM(CONVERT(varchar(10), m.AccMonth)) = '${opts.accMonth}';`
+
     case 'movement-issued-split':
-      return `SELECT SUM(m.IssuedLedgerQty) AS Ledger, SUM(m.IssuedStationQty) AS Station, SUM(m.IssuedVehicleQty) AS Vehicle FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+      return `${hdr('Issued split Ledger/Station/Vehicle', 'IN_STOCKISSUELN BlkCode/VehCode · monthly IssuedTotal = sum 3 bucket (+fuel/ws di RPTIN)')}
+SELECT
+  CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(l.BlkCode,'')))=0 AND LEN(RTRIM(ISNULL(l.VehCode,'')))=0 THEN ${lineAmt} ELSE 0 END) AS decimal(18,2)) AS LedgerAmount,
+  CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(l.VehCode,'')))=0 AND LEN(RTRIM(ISNULL(l.BlkCode,'')))>0 THEN ${lineAmt} ELSE 0 END) AS decimal(18,2)) AS StationAmount,
+  CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(l.VehCode,'')))>0 THEN ${lineAmt} ELSE 0 END) AS decimal(18,2)) AS VehicleAmount,
+  CAST(SUM(${lineAmt}) AS decimal(18,2)) AS StockIssueOnlyTotal
+FROM [${db}].dbo.IN_STOCKISSUELN l
+INNER JOIN [${db}].dbo.IN_STOCKISSUE h ON l.StockIssueID = h.StockIssueID
+WHERE h.PostDate >= ${d(periodFrom)} AND h.PostDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}))
+  AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6');
+-- Monthly IssuedTotalAmount juga + IN_FUELISSUE + WS_JOBSTOCK (lihat report monthly-stock-account-movement-details)`
+
+    case 'stock':
+    case 'gudang-value':
+    case 'workshop':
+    case 'stock-gudang':
+    case 'stock-workshop':
+      return `${hdr('Valuasi inventory', 'IN_ITEM live (QtyOnHand+QtyOnHold)*AverageCost · opening dari IN_MTHENDITEM')}
+SELECT
+  CAST(SUM((ISNULL(i.QtyOnHand,0)+ISNULL(i.QtyOnHold,0))*ISNULL(i.AverageCost,0)) AS decimal(18,2)) AS CurrentValuation,
+  CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType,''))='1' THEN (ISNULL(i.QtyOnHand,0)+ISNULL(i.QtyOnHold,0))*ISNULL(i.AverageCost,0) ELSE 0 END) AS decimal(18,2)) AS Gudang,
+  CAST(SUM(CASE WHEN RTRIM(ISNULL(i.ItemType,''))='4' THEN (ISNULL(i.QtyOnHand,0)+ISNULL(i.QtyOnHold,0))*ISNULL(i.AverageCost,0) ELSE 0 END) AS decimal(18,2)) AS Workshop
+FROM [${db}].dbo.IN_ITEM i;
+-- Opening: IN_MTHENDITEM AccYear/AccMonth = accounting month SEBELUM period UI`
+
+    case 'receive':
+    case 'receive-value':
+      return `${hdr('Goods Receive Amount', 'PU_GOODSRCV + LN + PU_POLN.Cost')}
+SELECT CAST(SUM(ISNULL(gl.StockQty,0)*ISNULL(p.Cost,0)) AS decimal(18,2)) AS GrAmount,
+  COUNT(DISTINCT g.GoodsRcvID) AS Docs
+FROM [${db}].dbo.PU_GOODSRCV g
+INNER JOIN [${db}].dbo.PU_GOODSRCVLN gl ON g.GoodsRcvID = gl.GoodsRcvID
+LEFT JOIN [${db}].dbo.PU_POLN p ON gl.POLnID = p.POLnID
+WHERE g.GoodsRcvRefDate >= ${d(periodFrom)}
+  AND g.GoodsRcvRefDate < DATEADD(DAY, 1, CONVERT(date, ${d(periodTo)}));`
+
+    case 'pr-outstanding':
+      return `${hdr('PR Outstanding', 'report purchase-request-inventory · qty outstanding lines')}
+-- Lihat report purchase-request-inventory (bukan single table sederhana).
+SELECT TOP 20 * FROM [${db}].dbo.PU_PR ORDER BY 1 DESC; -- placeholder schema probe`
+
+    case 'po-outstanding':
+      return `${hdr('PO Outstanding', 'report purchase-order-history · QtyOrder − QtyReceive')}
+-- Lihat report purchase-order-history.
+SELECT TOP 20 * FROM [${db}].dbo.PU_PO ORDER BY 1 DESC; -- placeholder schema probe`
+
     default:
-      return isCurrentPeriod
-        ? `SELECT SUM((i.QtyOnHand+i.QtyOnHold)*i.AverageCost) AS Amount FROM [${db}].dbo.IN_ITEM i`
-        : `SELECT SUM(m.Amount) AS Amount FROM [${db}].dbo.IN_MTHENDITEM m WHERE m.AccYear=${accYear} AND m.AccMonth=${accMonth}`
+      return `${hdr(cardId, 'fallback valuasi / monthend')}
+SELECT CAST(SUM((ISNULL(i.QtyOnHand,0)+ISNULL(i.QtyOnHold,0))*ISNULL(i.AverageCost,0)) AS decimal(18,2)) AS Amount
+FROM [${db}].dbo.IN_ITEM i;`
   }
 }
 
@@ -177,6 +317,7 @@ const kpiRequests: Array<{ key: KpiKey; report: string }> = [
   { key: 'workshop', report: 'asset-stock-valuasi-listing' },
   { key: 'movement', report: 'all-stock-movement-analysis' },
   { key: 'usage', report: 'pengeluaran-barang' },
+  { key: 'fuel', report: 'fuel-usage' },
   { key: 'return', report: 'return-barang' },
 ]
 
@@ -425,6 +566,13 @@ async function fetchDeckLegacy(
   signal: AbortSignal,
 ): Promise<Partial<Record<KpiKey, Snapshot>>> {
   const baseParams = procurementFilterParams(filters)
+  const isYear = filters.periodMode === 'year' && /^\d{4}$/.test((filters.customYear ?? '').trim())
+  const yearRange = isYear
+    ? {
+        dateFrom: `${(filters.customYear ?? '').trim()}-01-01`,
+        dateTo: `${(filters.customYear ?? '').trim()}-12-31`,
+      }
+    : null
   const results = await Promise.allSettled(kpiRequests.map(async (request) => {
     let extra: Record<string, string> = { ...baseParams }
     // GUARDRAIL(procurement-kpi-inventory-scope):
@@ -437,20 +585,30 @@ async function fetchDeckLegacy(
       }
     } else if (request.key === 'movement') {
       // Samakan timeline movement KPI dengan period (bukan MC all).
-      const isYear = filters.periodMode === 'year' && /^\d{4}$/.test((filters.customYear ?? '').trim())
       extra = {
         ...extra,
         ...analysisScopeParams(filters),
         groupBy: 'MovementCategory',
         chartDimension: 'MovementCategory',
         movementWindow: isYear ? 'custom' : '1m',
-        ...(isYear
-          ? {
-              dateFrom: `${(filters.customYear ?? '').trim()}-01-01`,
-              dateTo: `${(filters.customYear ?? '').trim()}-12-31`,
-            }
-          : { period: filters.period }),
+        ...(yearRange ?? { period: filters.period }),
       }
+    } else if (
+      // Alur proses + usage/fuel: ikut periode terpilih (month period atau year range).
+      yearRange
+      && (request.key === 'usage'
+        || request.key === 'fuel'
+        || request.key === 'receive'
+        || request.key === 'return'
+        || request.key === 'po'
+        || request.key === 'pr'
+        || request.key === 'movementMonthly')
+    ) {
+      extra = {
+        ...extra,
+        ...yearRange,
+      }
+      delete extra.period
     }
     return [request.key, await fetchSummary(source, request.report, signal, extra)] as const
   }))
@@ -553,6 +711,8 @@ export default function ProcurementKpiStrip({
   const [glance, setGlance] = useState(true)
   const [openSection, setOpenSection] = useState<DeckSection>('valuasi')
   const [topDimension, setTopDimension] = useState<'items' | 'costCenters' | 'vehicles'>('items')
+  const [kpiSqlView, setKpiSqlView] = useState<{ label: string; sql: string; source: string; formula: string } | null>(null)
+  const [kpiSqlCopied, setKpiSqlCopied] = useState(false)
   const selectedGroup = analysisGroupOptions.find((option) => option.value === filters.groupBy) ?? analysisGroupOptions[0]
   const periods = periodOptions()
   const isYearMode = filters.periodMode === 'year' && /^\d{4}$/.test((filters.customYear ?? '').trim())
@@ -584,8 +744,16 @@ export default function ProcurementKpiStrip({
         return m ? Number(m[1]) === now.getFullYear() && Number(m[2]) === now.getMonth() + 1 : false
       })()
   const periodKindBadge = isCurrentPeriod
-    ? { label: 'Periode berjalan · live balance', tone: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100' }
-    : { label: 'Periode lampau · snapshot monthend', tone: 'border-amber-300/30 bg-amber-400/10 text-amber-100' }
+    ? {
+        label: 'CURRENT · periode berjalan · live balance',
+        short: 'CURRENT',
+        tone: 'border-sky-300/45 bg-sky-400/20 text-sky-50 shadow-[0_0_14px_rgba(56,189,248,0.18)]',
+      }
+    : {
+        label: 'PAST · periode lampau · snapshot monthend',
+        short: 'PAST',
+        tone: 'border-amber-300/45 bg-amber-400/20 text-amber-50 shadow-[0_0_14px_rgba(245,158,11,0.16)]',
+      }
 
   // Parameter SQL cek data kartu — mengikuti periode terpilih.
   const kpiPeriodMatch = String(filters.period ?? '').trim().match(/^(\d{4})-(\d{1,2})/)
@@ -597,10 +765,25 @@ export default function ProcurementKpiStrip({
     accYear: kpiAccYear,
     accMonth: kpiAccMonth,
     isCurrentPeriod,
-    database: source === 'pabrik' ? 'PABRIK' : 'ESTATE',
+    database: source === 'pabrik' ? 'db_ptrj_mill' : 'db_ptrj',
   }
   const withCheckSql = (card: ProcurementKpiCard): ProcurementKpiCard =>
     card.checkSql ? card : { ...card, checkSql: kpiCheckSql(card.id, checkSqlOpts) }
+  const openKpiSql = (
+    event: { preventDefault: () => void; stopPropagation: () => void },
+    card: ProcurementKpiCard,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const full = withCheckSql(card)
+    setKpiSqlCopied(false)
+    setKpiSqlView({
+      label: full.label,
+      sql: full.checkSql || kpiCheckSql(full.id, checkSqlOpts),
+      source: full.source,
+      formula: full.formula,
+    })
+  }
   const filteredLinks = {
     stock: hrefWithFilters(links.stock, filters, { includeGroupBy: false }),
     receive: hrefWithFilters(links.receive, filters, { includeGroupBy: false }),
@@ -611,6 +794,7 @@ export default function ProcurementKpiStrip({
     }, { includeGroupBy: false }),
     movement: hrefWithFilters(links.movement, filters, { forceMovement: true, includeGroupBy: false }),
     usage: hrefWithFilters(links.usage, filters, { includeGroupBy: false }),
+    fuel: hrefWithFilters(links.fuel, filters, { includeGroupBy: false }),
     return: hrefWithFilters(links.return, filters, { includeGroupBy: false }),
   }
   const updateFilter = <K extends keyof ProcurementKpiFilters>(key: K, value: ProcurementKpiFilters[K]) => {
@@ -682,8 +866,23 @@ export default function ProcurementKpiStrip({
   const movement = snapshots.movement?.summary
   const movementMonthly = snapshots.movementMonthly?.summary
   const usage = snapshots.usage?.summary
-  const stockReturn = snapshots.return?.summary
-  const topUsageItems = (snapshots.usage?.chart ?? []).slice(0, 5)
+    const fuel = snapshots.fuel?.summary
+    const stockReturn = snapshots.return?.summary
+    const topUsageItems = (snapshots.usage?.chart ?? []).slice(0, 5)
+    // Fuel chart dari command-deck = product type breakdown (inventory fuelUsage report).
+    const fuelProductTypeRows = (snapshots.fuel?.chart ?? [])
+      .map((row) => {
+        const code = firstText(row, ['ProductTypeCode', 'code', 'KodeFuel'])
+        const name = firstText(row, ['ProductTypeName', 'name', 'NamaFuel', 'ProductTypeCode']) || code
+        const amount = firstNumber(row, ['NilaiFuel', 'amount', 'TotalAmount', 'Amount'])
+        const qty = firstNumber(row, ['QtyFuel', 'qty', 'TotalQtyFuel'])
+        const docs = firstNumber(row, ['Docs', 'docs', 'TotalDokumen'])
+        const itemCount = firstNumber(row, ['ItemCount', 'itemCount', 'TotalItem'])
+        return { code, name, amount, qty, docs, itemCount }
+      })
+      .filter((row) => row.amount > 0 || row.qty > 0)
+      .sort((a, b) => b.amount - a.amount)
+    const topFuelProductType = fuelProductTypeRows[0]
 
   const poCount = firstNumber(po, ['TotalPO'])
   const prCount = firstNumber(pr, ['TotalPR'])
@@ -739,47 +938,88 @@ export default function ProcurementKpiStrip({
       : inventoryScope === 'workshop' ? 'Workshop'
         : 'Gudang + Workshop'
   const usageWorkshopLines = firstNumber(usage, ['BarisWorkshop'])
-  const usageScopeNote =
-    inventoryScope === 'gudang' ? 'Issue gudang (IN_STOCKISSUE)'
-      : inventoryScope === 'workshop' ? 'Issue workshop (WS_JOBSTOCK)'
-        : 'Issue gudang + workshop (default)'
-  const receiveDocs = firstNumber(receive, ['TotalGoodsReceive', 'TotalBaris'])
-  const receiveQty = firstNumber(receive, ['TotalQuantity'])
-  const receiveAmount = firstNumber(receive, ['TotalAmount'])
-  const receiveSupplier = firstNumber(receive, ['TotalSupplier'])
-  const poAmount = firstNumber(po, ['TotalPOAmount'])
-  const poQtyOrder = firstNumber(po, ['TotalQtyOrder'])
-  const poQtyReceive = firstNumber(po, ['TotalQtyReceive'])
-  const poQtyOutstanding = firstNumber(po, ['TotalQtyOutstanding'])
-  const prAmount = firstNumber(pr, ['TotalAmount'])
-  const prQtyRequest = firstNumber(pr, ['TotalQtyRequest'])
-  const prQtyReceived = firstNumber(pr, ['TotalQtyReceived'])
-  const prQtyOutstanding = firstNumber(pr, ['TotalQtyOutstanding'])
-  const movementEvent = firstNumber(movement, ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'])
-  const movementQty = firstNumber(movement, ['TotalStockIssueMovementQty', 'TotalStockIssueQty'])
-  const movementAmount = firstNumber(movement, ['TotalStockIssueMovementAmount', 'TotalStockIssueAmount'])
-  const usageDocuments = firstNumber(usage, ['TotalDokumen', 'TotalIssueDocuments'])
-  // Amount/qty sudah fallback ke movement; events harus sama —
-  // kalau pengeluaran-barang gagal/timeout, kartu jangan stuck di 0.
-  // Catatan: movement.TotalItem = total item stok, BUKAN item dipakai → jangan fallback items ke situ.
-  const usageEventsRaw = firstNumber(usage, ['TotalBaris', 'TotalIssueEvents', 'totalbaris'])
-  const usageEvents = usageEventsRaw
-    || firstNumber(movement, ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'])
-  const usageItems = firstNumber(usage, ['TotalItem', 'TotalItemsUsed', 'totalitem', 'total_item'])
-  const usageQty = firstNumber(usage, ['TotalQty', 'TotalIssueQty', 'totalqty']) || movementQty
-  const usageAmount = firstNumber(usage, ['TotalAmount', 'TotalIssueAmount', 'totalamount']) || movementAmount
-  const returnAmount = firstNumber(stockReturn, ['TotalAmount', 'TotalReturnAmount'])
-  const regularMovement = firstNumber(movement, ['RegularStockIssueMovementCount'])
-  const workshopMovement = firstNumber(movement, ['WorkshopStockIssueMovementCount'])
-  const activeIssueDays = firstNumber(usage, ['ActiveIssueDays', 'activeissuedays'])
-  const usageFreqPerDay = frequencyPerDay(usageEvents, activeIssueDays)
-  const usageItemsLabel = usageItems > 0
-    ? formatNumber(usageItems)
-    : (snapshots.usage?.ok ? '0' : '—')
-  const usageFreqLabel = activeIssueDays > 0
-    ? `${formatNumber(usageEvents)} event · ${formatQuantity(usageFreqPerDay)}/hari`
-    : `${formatNumber(usageEvents)} event`
-  const returnRateValue = returnRate(returnAmount, usageAmount)
+  const gudangIssueAmount = firstNumber(usage, ['GudangIssueAmount'])
+  const gudangIssueQty = firstNumber(usage, ['GudangIssueQty'])
+  const gudangIssueDocs = firstNumber(usage, ['GudangIssueDocuments'])
+  const workshopIssueAmount = firstNumber(usage, ['WorkshopIssueAmount'])
+  const workshopIssueQty = firstNumber(usage, ['WorkshopIssueQty'])
+  const workshopIssueDocs = firstNumber(usage, ['WorkshopIssueDocuments'])
+  // Fuel yang dijumlahkan ke Total Usage (dari pengeluaran-barang, selaras monthly IssuedTotal).
+    const usageFuelIssueAmount = firstNumber(usage, ['FuelIssueAmount'])
+    const usageFuelIssueQty = firstNumber(usage, ['FuelIssueQty'])
+    const usageFuelIssueDocs = firstNumber(usage, ['FuelIssueDocuments'])
+    const fuelSnapshotOk = snapshots.fuel?.ok === true
+    const fuelIssueAmount = firstNumber(fuel, ['TotalAmount', 'TotalFuelAmount', 'NilaiFuel', 'Aggregate'])
+    const fuelIssueQty = firstNumber(fuel, ['TotalQtyFuel', 'TotalQty', 'QtyFuel'])
+    const fuelIssueDocs = firstNumber(fuel, ['TotalDokumen', 'TotalFuelDocuments', 'TotalBaris'])
+    const fuelIssueLines = firstNumber(fuel, ['TotalBaris', 'TotalLineRows'])
+    const fuelHasRows = fuelSnapshotOk && (fuelIssueDocs > 0 || fuelIssueLines > 0 || fuelIssueAmount > 0)
+    const usageScopeNote =
+      inventoryScope === 'gudang' ? 'Issue gudang (IN_STOCKISSUE)'
+        : inventoryScope === 'workshop' ? 'Issue workshop (WS_JOBSTOCK)'
+          : 'Issue gudang + workshop (default)'
+    const receiveDocs = firstNumber(receive, ['TotalGoodsReceive', 'TotalBaris'])
+    const receiveQty = firstNumber(receive, ['TotalQuantity'])
+    const receiveAmount = firstNumber(receive, ['TotalAmount'])
+    const receiveSupplier = firstNumber(receive, ['TotalSupplier'])
+    const poAmount = firstNumber(po, ['TotalPOAmount'])
+    const poQtyOrder = firstNumber(po, ['TotalQtyOrder'])
+    const poQtyReceive = firstNumber(po, ['TotalQtyReceive'])
+    const poQtyOutstanding = firstNumber(po, ['TotalQtyOutstanding'])
+    const prAmount = firstNumber(pr, ['TotalAmount'])
+    const prQtyRequest = firstNumber(pr, ['TotalQtyRequest'])
+    const prQtyReceived = firstNumber(pr, ['TotalQtyReceived'])
+    const prQtyOutstanding = firstNumber(pr, ['TotalQtyOutstanding'])
+    const movementEvent = firstNumber(movement, ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'])
+    const movementQty = firstNumber(movement, ['TotalStockIssueMovementQty', 'TotalStockIssueQty'])
+    const movementAmount = firstNumber(movement, ['TotalStockIssueMovementAmount', 'TotalStockIssueAmount'])
+    // Source of truth = monthly RPTIN IssuedTotal (same report KPI "Issued total").
+    const monthlyIssuedTotalAmount = firstNumber(movementMonthly, ['IssuedTotalAmount', 'IssuedAmount'])
+    const monthlyIssuedTotalQtyRaw = firstNumber(movementMonthly, ['IssuedTotalQty'])
+    const usageDocuments = firstNumber(usage, ['TotalDokumen', 'TotalIssueDocuments'])
+    // Events/docs detail still from pengeluaran-barang; amount/qty lock ke monthly IssuedTotal.
+    // Catatan: movement.TotalItem = total item stok, BUKAN item dipakai → jangan fallback items ke situ.
+    const usageEventsRaw = firstNumber(usage, ['TotalBaris', 'TotalIssueEvents', 'totalbaris'])
+    const usageEvents = usageEventsRaw
+      || firstNumber(movement, ['TotalStockIssueMovementCount', 'TotalStockIssueEvent'])
+    const usageItems = firstNumber(usage, ['TotalItem', 'TotalItemsUsed', 'totalitem', 'total_item'])
+    const usageAmountFromUsage = firstNumber(usage, ['TotalAmount', 'TotalIssueAmount', 'totalamount'])
+    const usageQtyFromUsage = firstNumber(usage, ['TotalQty', 'TotalIssueQty', 'totalqty'])
+    // CEO: Total Usage = Issued total monthly stock movement analysis (bukan movement window).
+    const usageAmount = monthlyIssuedTotalAmount || usageAmountFromUsage || movementAmount
+    const usageQty = monthlyIssuedTotalQtyRaw || usageQtyFromUsage || movementQty
+    // Proporsi per sumber tabel thd total (IN_STOCKISSUE / IN_FUELISSUE / WS_JOBSTOCK).
+    const usageSourceSplit = usageAmount > 0
+      ? {
+          gudangPct: percentOf(gudangIssueAmount, usageAmountFromUsage || usageAmount),
+          fuelPct: percentOf(usageFuelIssueAmount, usageAmountFromUsage || usageAmount),
+          workshopPct: percentOf(workshopIssueAmount, usageAmountFromUsage || usageAmount),
+        }
+      : null
+    // KPI return source = monthly inventory return (IN_STOCKRTN/LN + WS_JOBSTOCK TransType=2), not purchasing supplier return.
+    const monthlyInventoryReturnAmount = firstNumber(movementMonthly, ['ReturnAmount'])
+    const monthlyInventoryReturnQty = firstNumber(movementMonthly, ['ReturnQty'])
+    const returnAmount = monthlyInventoryReturnAmount || firstNumber(stockReturn, ['TotalAmount', 'TotalReturnAmount'])
+        const returnQty = monthlyInventoryReturnQty || firstNumber(stockReturn, ['TotalQtyReturn', 'TotalQty', 'TotalReturnQty'])
+        const returnDocs = firstNumber(stockReturn, ['TotalDokumen', 'TotalReturnDocuments', 'TotalBaris'])
+        const returnItems = firstNumber(stockReturn, ['TotalItem', 'TotalItems'])
+        const returnRateValue = returnRate(returnAmount, usageAmount)
+        const returnRatePct = formatPercent(returnRateValue * 100)
+        const returnVsIssueQtyPct = usageQty > 0 ? formatPercent((returnQty / usageQty) * 100) : '0%'
+        const returnVsIssueDocPct = usageDocuments > 0 ? formatPercent((returnDocs / usageDocuments) * 100) : '0%'
+        const fuelProductTypeShare = fuelIssueAmount > 0 && topFuelProductType
+          ? formatPercent((topFuelProductType.amount / fuelIssueAmount) * 100)
+          : '0%'
+        const regularMovement = firstNumber(movement, ['RegularStockIssueMovementCount'])
+        const workshopMovement = firstNumber(movement, ['WorkshopStockIssueMovementCount'])
+        const activeIssueDays = firstNumber(usage, ['ActiveIssueDays', 'activeissuedays'])
+        const usageFreqPerDay = frequencyPerDay(usageEvents, activeIssueDays)
+        const usageItemsLabel = usageItems > 0
+          ? formatNumber(usageItems)
+          : (snapshots.usage?.ok ? '0' : '—')
+        const usageFreqLabel = activeIssueDays > 0
+          ? `${formatNumber(usageEvents)} event · ${formatQuantity(usageFreqPerDay)}/hari`
+          : `${formatNumber(usageEvents)} event`
   const topLists = snapshots.usage?.topLists
   const topDimensionRows = topLists?.[topDimension] ?? []
   const topRows = topDimensionRows.length > 0 ? topDimensionRows.slice(0, 5) : topUsageItems
@@ -789,17 +1029,20 @@ export default function ProcurementKpiStrip({
     { id: 'vehicles', label: 'Kendaraan' },
   ]
   const usageTrend = snapshots.usage?.trend ?? []
+  // Only mark failed after fetch finished and usage snapshot explicitly not ok.
+  // During first load (no snapshot yet) charts should show loading, not fail banner.
+  const usageFailed = !loading && snapshots.usage ? !snapshots.usage.ok : false
   const issueFrequency = snapshots.usage?.issueFrequency
   const issueFrequencyTop = (issueFrequency?.topItems ?? []).slice(0, 5)
   const monthlyOpeningQty = firstNumber(movementMonthly, ['OpeningQty'])
-  const monthlyClosingQty = firstNumber(movementMonthly, ['ClosingQty'])
-  const monthlyGoodsReceiveQty = firstNumber(movementMonthly, ['GoodsReceiveQty'])
-  const monthlyLedgerQty = firstNumber(movementMonthly, ['LedgerQty'])
-  const monthlyIssuedStationQty = firstNumber(movementMonthly, ['IssuedStationQty'])
-  const monthlyIssuedVehicleQty = firstNumber(movementMonthly, ['IssuedVehicleQty'])
-  const monthlyIssuedTotalQty = firstNumber(movementMonthly, ['IssuedTotalQty'])
-  const monthlyQtyDelta = monthlyClosingQty - monthlyOpeningQty
-  const hasMovementMonthly = monthlyOpeningQty + monthlyGoodsReceiveQty + monthlyLedgerQty + monthlyIssuedStationQty + monthlyIssuedVehicleQty + monthlyClosingQty > 0
+    const monthlyClosingQty = firstNumber(movementMonthly, ['ClosingQty'])
+    const monthlyGoodsReceiveQty = firstNumber(movementMonthly, ['GoodsReceiveQty'])
+    const monthlyLedgerQty = firstNumber(movementMonthly, ['LedgerQty'])
+    const monthlyIssuedStationQty = firstNumber(movementMonthly, ['IssuedStationQty'])
+    const monthlyIssuedVehicleQty = firstNumber(movementMonthly, ['IssuedVehicleQty'])
+    const monthlyIssuedTotalQty = monthlyIssuedTotalQtyRaw || firstNumber(movementMonthly, ['IssuedTotalQty'])
+    const monthlyQtyDelta = monthlyClosingQty - monthlyOpeningQty
+    const hasMovementMonthly = monthlyOpeningQty + monthlyGoodsReceiveQty + monthlyLedgerQty + monthlyIssuedStationQty + monthlyIssuedVehicleQty + monthlyClosingQty > 0
   const insightItems = (() => {
     const items: string[] = []
     const trend = Array.isArray(usageTrend) ? usageTrend : []
@@ -855,7 +1098,7 @@ export default function ProcurementKpiStrip({
       id: 'return',
       label: 'Return',
       value: loading ? '…' : formatCurrencyCompact(returnAmount),
-      hint: `Rate ${formatPercent(returnRateValue * 100)} (all-time)`,
+      hint: `Rate ${formatPercent(returnRateValue * 100)} · ${activePeriodLabel}`,
       tone: 'return',
     },
   ]
@@ -868,13 +1111,18 @@ export default function ProcurementKpiStrip({
   }
 
   const valuationDeltaLabel = openingValue > 0 || inventoryValue > 0
-    ? `${valuationDelta >= 0 ? '+' : ''}${formatCurrencyCompact(valuationDelta)}${valuationDeltaPct === null ? '' : ` (${valuationDeltaPct >= 0 ? '+' : ''}${valuationDeltaPct.toFixed(1)}%)`}`
+    ? `${valuationDelta >= 0 ? '+' : ''}${formatCurrency(valuationDelta)}${valuationDeltaPct === null ? '' : ` (${valuationDeltaPct >= 0 ? '+' : ''}${valuationDeltaPct.toFixed(2)}%)`}`
     : '—'
+  const valuationDeltaTone = valuationDelta > 0
+    ? 'text-emerald-200'
+    : valuationDelta < 0
+      ? 'text-rose-200'
+      : 'text-[var(--rc-text-muted)]'
   const valuationCards: ProcurementKpiCard[] = [
     {
       id: 'stock',
       label: 'Total Valuasi Inventory',
-      value: formatCurrencyCompact(inventoryValue),
+      value: formatCurrency(inventoryValue),
       valueExact: formatCurrency(inventoryValue),
       description: `Current ${currentPeriodLabel} vs Opening ${openingPeriodLabel} · ${inventoryScopeLabel}. Balance, bukan pemakaian.`,
       formula: 'Current = SUM((QtyOnHand+QtyOnHold)×AvgCost). Opening = IN_MTHENDITEM periode sebelumnya.',
@@ -1047,117 +1295,126 @@ export default function ProcurementKpiStrip({
 
   const movementCards: ProcurementKpiCard[] = [
     {
-      id: 'movement-total',
-      label: 'Total Issue Movement',
-      value: formatNumber(movementEvent),
-      description: 'Jumlah EVENT/baris issue (bukan Rupiah, bukan qty fisik).',
-      formula: 'Event = SUM(StockIssueEventCount) per item di window movement.',
-      source: 'all-stock-movement-analysis · total event',
-      tooltip: [
-        `TOTAL ISSUE MOVEMENT = ${formatNumber(movementEvent)} EVENT`,
-        'Ini HITUNGAN KEJADIAN, bukan amount & bukan qty.',
-        '',
-        `Regular (gudang): ${formatNumber(regularMovement)} event`,
-        `Workshop: ${formatNumber(workshopMovement)} event`,
-        `Dokumen usage: ${formatNumber(usageDocuments)}`,
-        '',
-        '1 event ≈ 1 baris/transaksi issue per item di window movement.',
-        'Beda dari Issue Qty (unit fisik) & Issue Amount (Rupiah).',
-        'Window movement filter (1m/3m/…) bisa beda dari period usage bulanan → angka bisa beda dari Total Usage.',
-      ].join('\n'),
-      breakdown: [
-        { label: 'Regular', value: formatNumber(regularMovement) },
-        { label: 'Workshop', value: formatNumber(workshopMovement) },
-        { label: 'Docs', value: formatNumber(usageDocuments) },
-      ],
-      href: filteredLinks.movement,
-      icon: Gauge,
-      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
-    },
+          id: 'movement-total',
+          label: 'Total Issue Movement',
+          value: formatNumber(movementEvent),
+          description: 'Jumlah EVENT/baris issue (bukan Rupiah, bukan qty fisik).',
+          formula: 'Event = SUM(StockIssueEventCount) per item di window movement.',
+          source: 'all-stock-movement-analysis · total event',
+          tooltip: [
+            `TOTAL ISSUE MOVEMENT = ${formatNumber(movementEvent)} EVENT`,
+            'Ini HITUNGAN KEJADIAN, bukan amount & bukan qty.',
+            '',
+            `Regular (gudang): ${formatNumber(regularMovement)} event`,
+            `Workshop: ${formatNumber(workshopMovement)} event`,
+            `Dokumen usage: ${formatNumber(usageDocuments)}`,
+            '',
+            '=== ANALISIS RETURN ===',
+            `Return docs: ${formatNumber(returnDocs)} · ${returnVsIssueDocPct} vs issue docs`,
+            `Return amount: ${formatCurrency(returnAmount)} · rate ${returnRatePct} vs usage`,
+            `Return qty: ${formatQuantity(returnQty)} · ${returnVsIssueQtyPct} vs issue qty`,
+            '',
+            '1 event ≈ 1 baris/transaksi issue per item di window movement.',
+          ].join('\n'),
+          breakdown: [
+            { label: 'Regular', value: formatNumber(regularMovement) },
+            { label: 'Workshop', value: formatNumber(workshopMovement) },
+            { label: 'Return docs', value: `${formatNumber(returnDocs)} (${returnVsIssueDocPct})` },
+            { label: 'Return rate', value: returnRatePct },
+          ],
+          href: filteredLinks.movement,
+          icon: Gauge,
+          className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
+        },
     {
-      id: 'movement-qty',
-      label: 'Issue Qty',
-      value: formatQuantity(movementQty),
-      description: 'Qty FISIK keluar (unit). Bukan Rupiah.',
-      formula: 'Issue Qty = SUM(StockIssueMovementQty) di movement window.',
-      source: 'all-stock-movement-analysis · qty',
-      tooltip: [
-        `ISSUE QTY = ${formatQuantity(movementQty)} UNIT FISIK`,
-        'Ini BERAPA BANYAK barang keluar (liter/pcs/kg), BUKAN nilai uang.',
-        '',
-        `Usage qty (pengeluaran-barang): ${formatQuantity(usageQty)}`,
-        `Event line: ${formatNumber(usageEvents)} · Docs: ${formatNumber(usageDocuments)}`,
-        '',
-        'Kenapa bisa beda dari Usage qty?',
-        '· Report beda: movement = agregat per item/window; usage = baris transaksi periode.',
-        '· Window movement (1m/3m/all) ≠ period filter usage.',
-        '',
-        'Issue Amount = nilai uang dari qty × cost. Qty kecil + cost mahal → amount besar.',
-      ].join('\n'),
-      breakdown: [
-        { label: 'Usage qty', value: formatQuantity(usageQty) },
-        { label: 'Event line', value: formatNumber(usageEvents) },
-        { label: 'Issue docs', value: formatNumber(usageDocuments) },
-      ],
-      href: filteredLinks.movement,
-      icon: Package,
-      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
-    },
+          id: 'movement-qty',
+          label: 'Issue Qty',
+          value: formatQuantity(usageQty),
+          description: 'Qty FISIK keluar (unit) = IssuedTotalQty monthly. Bukan Rupiah.',
+          formula: 'Issue Qty = IssuedTotalQty (Ledger+Station+Vehicle) monthly-stock-account-movement-details.',
+          source: 'monthly-stock-account-movement-details · IssuedTotalQty',
+          tooltip: [
+            `ISSUE QTY = ${formatQuantity(usageQty)} UNIT FISIK`,
+            '= monthly IssuedTotalQty (sama sumber Total Usage amount).',
+            '',
+            `Issued monthly qty: ${formatQuantity(monthlyIssuedTotalQtyRaw)}`,
+            `pengeluaran-barang qty: ${formatQuantity(usageQtyFromUsage)}`,
+            `Movement window qty (MC): ${formatQuantity(movementQty)}`,
+            `Event line: ${formatNumber(usageEvents)} · Docs: ${formatNumber(usageDocuments)}`,
+          ].join('\n'),
+          breakdown: [
+                      { label: 'Issued monthly qty', value: formatQuantity(monthlyIssuedTotalQtyRaw) },
+                      { label: 'Usage line qty', value: formatQuantity(usageQtyFromUsage) },
+                      { label: 'Return qty', value: `${formatQuantity(returnQty)} (${returnVsIssueQtyPct})` },
+                      { label: 'Issue docs', value: formatNumber(usageDocuments) },
+                    ],
+          href: filteredLinks.movement,
+          icon: Package,
+          className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
+        },
     {
-      id: 'movement-amount',
-      label: 'Issue Amount',
-      value: formatCurrency(movementAmount),
-      description: 'Nilai UANG issue (Rp). Bukan qty unit.',
-      formula: 'Issue Amount = SUM(StockIssueMovementAmount). Timeline deck = period terpilih (1m / tahun).',
-      source: `all-stock-movement-analysis · amount · ${kpiTimelineRange.label}`,
-      tooltip: [
-        `ISSUE AMOUNT = ${formatCurrency(movementAmount)}`,
-        `Timeline KPI: ${kpiTimelineRange.label}`,
-        'Nilai RUPIAH issue di periode terpilih (KPI lock — bukan lookback MC analysis).',
-        '',
-        `Usage amount (pengeluaran-barang): ${formatCurrency(usageAmount)}`,
-        `Qty movement: ${formatQuantity(movementQty)} unit`,
-        '',
-        'Qty ≠ amount: amount = Σ(qty × cost).',
-        'KPI atas seperiode. Movement Category section bawah = lookback terpisah.',
-        'Sisa beda tipis = model agregasi (baris transaksi vs sum per item), bukan timeline beda.',
-      ].join('\n'),
-      breakdown: [
-        { label: 'Usage amount', value: formatCurrency(usageAmount) },
-        { label: 'Qty issue', value: formatQuantity(movementQty) },
-        { label: 'Issue docs', value: formatNumber(usageDocuments) },
-      ],
-      href: filteredLinks.movement,
-      icon: CircleDollarSign,
-      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
-    },
+          id: 'movement-amount',
+          label: 'Issue Amount',
+          value: formatCurrency(usageAmount),
+          description: 'Nilai UANG issue (Rp) = IssuedTotal monthly RPTIN. Sama Total Usage.',
+          formula: 'Issue Amount = IssuedTotalAmount (Ledger+Station+Vehicle+fuel+ws) dari monthly-stock-account-movement-details.',
+          source: `monthly-stock-account-movement-details · IssuedTotalAmount · ${kpiTimelineRange.label}`,
+          tooltip: [
+            `ISSUE AMOUNT = ${formatCurrency(usageAmount)}`,
+            `= Total Usage = monthly IssuedTotalAmount`,
+            `Timeline KPI: ${kpiTimelineRange.label}`,
+            '',
+            `IssuedTotal monthly: ${formatCurrency(monthlyIssuedTotalAmount)}`,
+            `pengeluaran-barang (detail split): ${formatCurrency(usageAmountFromUsage)}`,
+            `Movement window (MC only): ${formatCurrency(movementAmount)}`,
+            `Qty issued monthly: ${formatQuantity(usageQty)}`,
+            '',
+            '=== SPLIT DETAIL (pengeluaran-barang) ===',
+            `Gudang · IN_STOCKISSUE: ${formatCurrency(gudangIssueAmount)}`,
+            `Fuel BBM · IN_FUELISSUE: ${formatCurrency(usageFuelIssueAmount)}`,
+            `Workshop · WS_JOBSTOCK: ${formatCurrency(workshopIssueAmount)}`,
+            '',
+            'MC / all-stock-movement-analysis amount = klasifikasi Fast/Slow saja — bukan KPI money.',
+          ].join('\n'),
+          breakdown: [
+                      { label: 'IssuedTotal monthly', value: formatCurrency(monthlyIssuedTotalAmount) },
+                      { label: 'Return amount', value: `${formatCurrency(returnAmount)} (${returnRatePct})` },
+                      { label: 'Gudang · IN_STOCKISSUE', value: formatCurrency(gudangIssueAmount) },
+                      { label: 'Fuel · IN_FUELISSUE', value: formatCurrency(usageFuelIssueAmount) },
+                      { label: 'Workshop · WS_JOBSTOCK', value: formatCurrency(workshopIssueAmount) },
+                    ],
+          href: filteredLinks.movement,
+          icon: CircleDollarSign,
+          className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
+        },
     {
-      id: 'movement-frequency',
-      label: 'Frekuensi Issue',
-      value: formatNumber(usageDocuments),
-      description: 'Jumlah DOKUMEN issue unik (bukan amount, bukan qty).',
-      formula: 'Docs = COUNT(DISTINCT Dokumen); intensitas = docs / ActiveIssueDays.',
-      source: 'pengeluaran-barang · issueFrequency',
-      tooltip: [
-        `FREKUENSI = ${formatNumber(usageDocuments)} DOKUMEN ISSUE`,
-        'Hitung seberapa SERING issue, bukan seberapa besar.',
-        '',
-        `Hari aktif issue: ${formatNumber(activeIssueDays)}`,
-        `Doc/hari: ${formatQuantity(activeIssueDays > 0 ? usageDocuments / activeIssueDays : 0)}`,
-        `Event line: ${formatNumber(usageEvents)} (baris, bisa > dokumen)`,
-        '',
-        '1 dokumen bisa banyak baris item → docs < events.',
-        'Amount tinggi + frekuensi rendah = issue jarang tapi nilai besar.',
-      ].join('\n'),
-      breakdown: [
-        { label: 'Hari aktif', value: formatNumber(activeIssueDays) },
-        { label: 'Doc/hari', value: formatQuantity(activeIssueDays > 0 ? usageDocuments / activeIssueDays : 0) },
-        { label: 'Event line', value: formatNumber(usageEvents) },
-      ],
-      href: filteredLinks.movement,
-      icon: Gauge,
-      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
-    },
+          id: 'movement-frequency',
+          label: 'Frekuensi Issue',
+          value: formatNumber(usageDocuments),
+          description: 'Jumlah DOKUMEN issue unik + frekuensi return (bukan amount).',
+          formula: 'Docs issue = COUNT(DISTINCT Dokumen); return docs = COUNT(DISTINCT StockRtnID).',
+          source: 'pengeluaran-barang + return-barang · frekuensi',
+          tooltip: [
+            `FREKUENSI ISSUE = ${formatNumber(usageDocuments)} DOKUMEN`,
+            `FREKUENSI RETURN = ${formatNumber(returnDocs)} DOKUMEN (${returnVsIssueDocPct} vs issue)`,
+            '',
+            `Hari aktif issue: ${formatNumber(activeIssueDays)}`,
+            `Doc/hari: ${formatQuantity(activeIssueDays > 0 ? usageDocuments / activeIssueDays : 0)}`,
+            `Event line issue: ${formatNumber(usageEvents)}`,
+            `Return qty: ${formatQuantity(returnQty)} · amount ${formatCurrency(returnAmount)}`,
+            '',
+            'Return = IN_STOCKRTN (kembali ke gudang), bukan retur supplier.',
+          ].join('\n'),
+          breakdown: [
+            { label: 'Issue docs', value: formatNumber(usageDocuments) },
+            { label: 'Return docs', value: `${formatNumber(returnDocs)} (${returnVsIssueDocPct})` },
+            { label: 'Return qty', value: formatQuantity(returnQty) },
+            { label: 'Doc/hari', value: formatQuantity(activeIssueDays > 0 ? usageDocuments / activeIssueDays : 0) },
+          ],
+          href: filteredLinks.return,
+          icon: Gauge,
+          className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
+        },
     {
       id: 'movement-open-close-qty',
       label: 'Opening vs Closing Qty',
@@ -1263,81 +1520,137 @@ export default function ProcurementKpiStrip({
   const heroCards: ProcurementKpiCard[] = [
     valuationCards[0],
     {
-      id: 'total-usage',
-      label: 'Total Usage (Issue)',
-      value: formatCurrencyCompact(usageAmount),
-      valueExact: formatCurrency(usageAmount),
-      description: `Nilai UANG barang KELUAR periode · ${usageScopeNote}.`,
-      formula: 'Usage Amount = SUM(issue Amount) di period terpilih. Qty = SUM(issue Qty). On hand/hold = sisa stok.',
-      source: `pengeluaran-barang · ${inventoryScopeShort} · ${kpiTimelineRange.label}`,
-      tooltip: [
-        `TOTAL USAGE (ISSUE) AMOUNT = ${formatCurrency(usageAmount)}`,
-        `Scope: ${inventoryScopeLabel}`,
-        `Timeline KPI: ${kpiTimelineRange.label}`,
-        'Sumber: pengeluaran-barang (IN_STOCKISSUE + WS_JOBSTOCK default)',
-        '',
-        '=== APA INI ===',
-        'Nilai RUPIAH barang KELUAR / dipakai di periode terpilih.',
-        'Bukan sisa stok (valuasi), bukan receive.',
-        '',
-        '=== QTY vs AMOUNT ===',
-        `Qty issue: ${formatQuantity(usageQty)} unit fisik.`,
-        `Amount: ${formatCurrency(usageAmount)} = Σ (qty × cost).`,
-        'Qty kecil bisa amount besar (item mahal).',
-        '',
-        '=== ON HAND / ON HOLD ===',
-        `On hand: ${formatQuantity(usageOnHand)} · On hold: ${formatQuantity(usageOnHold)} — sisa rak, bukan qty issue.`,
-        '',
-        '=== VS ISSUE AMOUNT ===',
-        `Issue Amount (movement, period-locked): ${formatCurrency(movementAmount)}`,
-        `Issue Qty: ${formatQuantity(movementQty)} · Events: ${formatNumber(movementEvent)}`,
-        'KPI deck samakan timeline ke period → kedua amount seperiode.',
-        '',
-        `Item dipakai: ${usageItemsLabel} · Frekuensi: ${usageFreqLabel}`,
-      ].join('\n'),
-      breakdown: [
-        { label: 'Scope', value: inventoryScopeShort },
-        { label: 'Qty issue', value: formatQuantity(usageQty) },
-        { label: 'On hand stok', value: formatQuantity(usageOnHand) },
-        { label: 'On hold stok', value: formatQuantity(usageOnHold) },
-        { label: 'Item dipakai', value: usageItemsLabel },
-        { label: 'Frekuensi', value: usageFreqLabel },
-        ...(inventoryScope === 'both' && usageWorkshopLines > 0
-          ? [{ label: 'Baris workshop', value: formatNumber(usageWorkshopLines) }]
-          : []),
-      ],
-      href: filteredLinks.usage,
-      icon: Package,
-      className: 'border-white/10 bg-white/[0.045] text-[var(--rc-text)]',
-      spark: (Array.isArray(usageTrend) ? usageTrend : []).map((t) => Number(t?.amount ?? 0)).filter((v) => Number.isFinite(v)),
-    },
-  ]
+          id: 'total-usage',
+          label: 'Total Usage (Stock + Fuel + Job)',
+          value: formatCurrency(usageAmount),
+          valueExact: formatCurrency(usageAmount),
+          description: `= IssuedTotal monthly RPTIN · ${usageScopeNote}. Sama Issue Amount KPI.`,
+          formula: 'Total Usage = IssuedTotalAmount monthly-stock-account-movement-details (Ledger+Station+Vehicle; stock Acc + fuel DocDate + ws Acc).',
+          source: `monthly-stock-account-movement-details · IssuedTotalAmount · ${kpiTimelineRange.label}`,
+          tooltip: [
+                      `TOTAL USAGE = ${formatCurrency(usageAmount)}`,
+                      '= monthly IssuedTotalAmount (report monthly stock account movement).',
+                      `Scope: ${inventoryScopeLabel}`,
+                      `Timeline KPI: ${kpiTimelineRange.label}`,
+                      '',
+                      `IssuedTotal monthly: ${formatCurrency(monthlyIssuedTotalAmount)}`,
+                      `pengeluaran-barang (line audit): ${formatCurrency(usageAmountFromUsage)}`,
+                      '',
+                      '=== SPLIT DETAIL (pengeluaran-barang, audit) ===',
+                      `1) Gudang · IN_STOCKISSUE: ${formatCurrency(gudangIssueAmount)} (${formatPercent(usageSourceSplit?.gudangPct ?? 0)}) · Qty ${formatQuantity(gudangIssueQty)} · Dok ${formatNumber(gudangIssueDocs)}`,
+                      `2) Fuel BBM · IN_FUELISSUE: ${formatCurrency(usageFuelIssueAmount)} (${formatPercent(usageSourceSplit?.fuelPct ?? 0)}) · Qty ${formatQuantity(usageFuelIssueQty)} · Dok ${formatNumber(usageFuelIssueDocs)}`,
+                      `3) Workshop · WS_JOBSTOCK: ${formatCurrency(workshopIssueAmount)} (${formatPercent(usageSourceSplit?.workshopPct ?? 0)}) · Qty ${formatQuantity(workshopIssueQty)} · Dok ${formatNumber(workshopIssueDocs)}`,
+                      '',
+                      '=== ANALISIS RETURN INVENTORY (monthly ReturnAmount) ===',
+                      `Return amount: ${formatCurrency(returnAmount)} · rate ${returnRatePct} vs usage`,
+                      `Return qty: ${formatQuantity(returnQty)} · ${returnVsIssueQtyPct} vs issue qty`,
+                      'Source KPI: monthly-stock-account-movement-details.ReturnAmount = IN_STOCKRTN/LN + WS_JOBSTOCK TransType=2.',
+                      `Return-barang drilldown docs: ${formatNumber(returnDocs)} · item ${formatNumber(returnItems)}`,
+                      '',
+                      `Qty issue: ${formatQuantity(usageQty)} · Item: ${usageItemsLabel} · ${usageFreqLabel}`,
+                    ].join('\n'),
+                    breakdown: [
+                      { label: 'IssuedTotal monthly', value: formatCurrency(monthlyIssuedTotalAmount) },
+                      { label: 'Return', value: `${formatCurrency(returnAmount)} (${returnRatePct})` },
+                      { label: 'Gudang', value: `${formatCurrency(gudangIssueAmount)} (${formatPercent(usageSourceSplit?.gudangPct ?? 0)})` },
+                      { label: 'Fuel BBM', value: `${formatCurrency(usageFuelIssueAmount)} (${formatPercent(usageSourceSplit?.fuelPct ?? 0)})` },
+                      { label: 'Workshop', value: `${formatCurrency(workshopIssueAmount)} (${formatPercent(usageSourceSplit?.workshopPct ?? 0)})` },
+                      { label: 'Return qty/docs', value: `${formatQuantity(returnQty)} · ${formatNumber(returnDocs)} dok` },
+                    ],
+          href: filteredLinks.usage,
+          icon: Package,
+          className: 'border-emerald-300/20 bg-emerald-400/[0.06] text-[var(--rc-text)]',
+          spark: (Array.isArray(usageTrend) ? usageTrend : []).map((t) => Number(t?.amount ?? 0)).filter((v) => Number.isFinite(v)),
+        },
+    {
+          id: 'fuel-issue',
+          label: 'Fuel Issue (BBM)',
+          value: !fuelSnapshotOk && !loading ? '—' : formatCurrency(fuelIssueAmount),
+          valueExact: formatCurrency(fuelIssueAmount),
+          description: !fuelSnapshotOk && !loading
+            ? `Snapshot fuel gagal · cek source ${source} / gateway. Bukan Total Usage.`
+            : fuelHasRows
+              ? `Product type top: ${topFuelProductType ? `${topFuelProductType.code} · ${fuelProductTypeShare}` : '—'} · ${source} · ${kpiTimelineRange.label}.`
+              : `0 baris fuel di ${source} · ${kpiTimelineRange.label}${filters.location ? ` · loc ${filters.location}` : ''}.`,
+          formula: 'Fuel Issue = SUM(line Amount) DocDate. Breakdown KPI = chart product type (IN_ITEM.ProdTypeCode).',
+          source: `fuel-usage · product type · ${source} · ${kpiTimelineRange.label}${filters.location ? ` · ${filters.location}` : ''}`,
+          tooltip: [
+            `FUEL ISSUE = ${formatCurrency(fuelIssueAmount)}`,
+            `Snapshot ok: ${fuelSnapshotOk ? 'yes' : 'no'} · Source: ${source}`,
+            `Timeline: ${kpiTimelineRange.label}`,
+            filters.location ? `Location filter: ${filters.location}` : 'Location filter: (all)',
+            '',
+            `Qty fuel: ${formatQuantity(fuelIssueQty)}`,
+            `Dokumen: ${formatNumber(fuelIssueDocs)} · Baris: ${formatNumber(fuelIssueLines)}`,
+            '',
+            '=== PRODUCT TYPE (charge item fuel) ===',
+            ...(fuelProductTypeRows.length > 0
+              ? fuelProductTypeRows.slice(0, 8).map((row, idx) => {
+                  const share = fuelIssueAmount > 0 ? formatPercent((row.amount / fuelIssueAmount) * 100) : '0%'
+                  return `${idx + 1}) ${row.code} · ${row.name}: ${formatCurrency(row.amount)} (${share}) · qty ${formatQuantity(row.qty)} · ${formatNumber(row.docs)} dok`
+                })
+              : ['(belum ada baris product type di chart fuel)']),
+            '',
+            'Sudah digabung ke Total Usage. Product type = master item, bukan Blk/Veh charge.',
+          ].join('\n'),
+          breakdown: [
+            {
+              label: 'Top product type',
+              value: topFuelProductType
+                ? `${topFuelProductType.code} · ${fuelProductTypeShare}`
+                : (fuelSnapshotOk ? '—' : 'snapshot fail'),
+            },
+            {
+              label: topFuelProductType ? topFuelProductType.name : 'Product types',
+              value: topFuelProductType
+                ? formatCurrency(topFuelProductType.amount)
+                : formatNumber(fuelProductTypeRows.length),
+            },
+            { label: 'Qty fuel', value: formatQuantity(fuelIssueQty) },
+            { label: 'Dokumen', value: formatNumber(fuelIssueDocs) },
+            ...(fuelProductTypeRows.slice(1, 3).map((row) => ({
+              label: row.code || row.name,
+              value: `${formatCurrencyCompact(row.amount)} (${fuelIssueAmount > 0 ? formatPercent((row.amount / fuelIssueAmount) * 100) : '0%'})`,
+            }))),
+          ],
+          href: filteredLinks.fuel,
+          icon: Fuel,
+          className: fuelHasRows
+            ? 'border-amber-300/25 bg-amber-400/[0.07] text-[var(--rc-text)]'
+            : 'border-rose-300/25 bg-rose-400/[0.06] text-[var(--rc-text)]',
+        },
+      ]
 
-  const partial = Object.values(snapshots).some((snapshot) => snapshot && !snapshot.ok)
-  const headlineCard = heroCards[0] ? withCheckSql(heroCards[0]) : heroCards[0]
-  const heroSideCards = heroCards.slice(1)
-  const valuationSideCards = valuationCards.slice(1)
-  // Panel "Jumlah Issue" yang selalu terlihat — ringkasan hitungan issue periode terpilih.
-  const issueCountCards: ProcurementKpiCard[] = [
-    movementCards[0], // Total Issue Movement (event)
-    movementCards[1], // Issue Qty (unit fisik)
-    movementCards[3], // Frekuensi Issue (dokumen)
-    movementCards[7], // Paling Sering Di-issue
-  ].filter(Boolean)
+      const partial = Object.values(snapshots).some((snapshot) => snapshot && !snapshot.ok)
+      const headlineCard = heroCards[0] ? withCheckSql(heroCards[0]) : heroCards[0]
+      const heroSideCards = heroCards.slice(1).filter((card) => card.id === 'total-usage')
+      const fuelIssueCards = heroCards.filter((card) => card.id === 'fuel-issue')
+      const valuationSideCards = valuationCards.slice(1)
+      // Panel "Jumlah Issue" yang selalu terlihat — ringkasan hitungan issue periode terpilih.
+      const issueCountCards: ProcurementKpiCard[] = [
+        movementCards[0], // Total Issue Movement (event)
+        movementCards[1], // Issue Qty (unit fisik)
+        movementCards[3], // Frekuensi Issue (dokumen) + return
+        movementCards[7], // Paling Sering Di-issue
+      ].filter(Boolean)
 
-  // Pita KPI berjalan ala bursa — jumlah issue + metrik utama periode terpilih.
-  const usageSpark = (Array.isArray(usageTrend) ? usageTrend : []).map((t) => Number(t?.amount ?? 0)).filter((v) => Number.isFinite(v))
-  const usageDeltaPct = usageSpark.length > 1 && usageSpark[usageSpark.length - 2] !== 0
-    ? ((usageSpark[usageSpark.length - 1] - usageSpark[usageSpark.length - 2]) / Math.abs(usageSpark[usageSpark.length - 2])) * 100
-    : undefined
-  const marketTickerItems: MarketTickerItem[] = [
-    { label: 'Issue Event', value: formatNumber(movementEvent) },
-    { label: 'Issue Qty', value: formatQuantity(movementQty) },
-    { label: 'Issue Amount', value: formatCurrencyCompact(movementAmount) },
-    { label: 'Dokumen', value: formatNumber(usageDocuments) },
-    { label: 'Total Usage', value: formatCurrencyCompact(usageAmount), deltaPct: usageDeltaPct },
-    { label: 'Top', value: topIssueFreq ? (topIssueFreq.code ?? topIssueFreq.name ?? '—') : '—' },
-  ]
+      // Pita KPI berjalan ala bursa — jumlah issue + metrik utama periode terpilih.
+      const usageSpark = (Array.isArray(usageTrend) ? usageTrend : []).map((t) => Number(t?.amount ?? 0)).filter((v) => Number.isFinite(v))
+      const usageDeltaPct = usageSpark.length > 1 && usageSpark[usageSpark.length - 2] !== 0
+        ? ((usageSpark[usageSpark.length - 1] - usageSpark[usageSpark.length - 2]) / Math.abs(usageSpark[usageSpark.length - 2])) * 100
+        : undefined
+      const marketTickerItems: MarketTickerItem[] = [
+        { label: 'Issue Event', value: formatNumber(movementEvent) },
+        { label: 'Issue Qty', value: formatQuantity(usageQty) },
+        { label: 'Issue Amount', value: formatCurrencyCompact(usageAmount) },
+        { label: 'Dokumen', value: formatNumber(usageDocuments) },
+        { label: 'Return', value: formatCurrencyCompact(returnAmount), deltaPct: returnRateValue * 100 },
+        { label: 'Return docs', value: formatNumber(returnDocs) },
+        { label: 'Total Usage', value: formatCurrencyCompact(usageAmount), deltaPct: usageDeltaPct },
+        { label: 'Fuel Issue', value: formatCurrencyCompact(fuelIssueAmount) },
+        { label: 'Fuel PT', value: topFuelProductType ? (topFuelProductType.code || topFuelProductType.name) : '—' },
+        { label: 'Top', value: topIssueFreq ? (topIssueFreq.code ?? topIssueFreq.name ?? '—') : '—' },
+      ]
   const gudangShare = Math.min(Math.max(percentOf(gudangValue, inventoryValue), 0), 100)
   const workshopShare = Math.min(Math.max(percentOf(workshopValue, inventoryValue), 0), 100)
 
@@ -1347,20 +1660,32 @@ export default function ProcurementKpiStrip({
         const tone = cardTitleTone(card.id)
         const exact = card.valueExact ?? card.value
         const isHeadline = variant === 'headline'
+        const cardWithSql = withCheckSql(card)
+        const radius = isHeadline ? 'rounded-[24px]' : 'rounded-[22px]'
         return (
           <Link
             key={card.id}
             href={card.href}
-            title={cardTooltip(card)}
+            title={cardTooltip(cardWithSql)}
             aria-label={`${card.label}: ${exact}. ${card.description}`}
             className={isHeadline
-              ? 'rc-kpi-surface rc-reveal group relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[24px] p-5'
-              : 'rc-kpi-surface rc-reveal group relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[22px] p-3'}
+              ? `rc-kpi-surface rc-reveal group/card relative isolate flex h-full min-h-[168px] min-w-0 max-w-full flex-col overflow-hidden ${radius} p-4 pt-5`
+              : `rc-kpi-surface rc-reveal group/card relative isolate flex h-full min-h-[156px] min-w-0 max-w-full flex-col overflow-hidden ${radius} p-3 pt-4`}
             style={{ '--reveal-order': cardIndex } as React.CSSProperties}
           >
-            <span className="pointer-events-none absolute -right-8 -top-10 h-20 w-20 rounded-full bg-white/10 blur-2xl transition group-hover:bg-[var(--rc-forest-primary)]/20" aria-hidden="true" />
-            <span className="relative z-10 flex min-w-0 items-start justify-between gap-2">
-              <span className="min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={(event) => openKpiSql(event, cardWithSql)}
+              title="Lihat SQL / tabel / field KPI ini"
+              className="rc-sql-debug absolute right-2 top-2 z-[5] rounded-md border border-white/15 bg-black/60 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white/75 opacity-0 transition-opacity hover:bg-black/75 hover:text-white focus-visible:opacity-100 group-hover/card:opacity-100 group-focus-within/card:opacity-100"
+            >
+              SQL
+            </button>
+            <span className="rc-kpi-glow" aria-hidden="true">
+              <span className="absolute -right-6 -top-8 h-16 w-16 rounded-full bg-white/10 blur-2xl transition group-hover/card:bg-[var(--rc-forest-primary)]/20" />
+            </span>
+            <span className="relative z-[1] flex min-w-0 items-start justify-between gap-2 pr-8">
+              <span className="min-w-0 flex-1 overflow-hidden">
                 {isHeadline ? (
                   <span className="rc-data inline-flex max-w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-[var(--rc-text-faint)]">
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClass}`} />
@@ -1374,27 +1699,27 @@ export default function ProcurementKpiStrip({
                 )}
                 <strong
                   className={isHeadline
-                    ? 'rc-display mt-3 block min-w-0 break-words text-[2.1rem] font-bold leading-none text-[var(--rc-text)] sm:text-[2.4rem]'
-                    : 'rc-metric mt-2 block min-w-0 break-words text-[1.05rem] font-semibold leading-tight text-[var(--rc-text)] sm:text-[1.15rem]'}
+                    ? 'rc-display mt-2 block min-w-0 break-words text-[1.85rem] font-bold leading-none text-[var(--rc-text)] sm:text-[2.1rem]'
+                    : 'rc-metric mt-1.5 block min-w-0 break-words text-[1.02rem] font-semibold leading-tight text-[var(--rc-text)] sm:text-[1.1rem]'}
                   title={cardTooltip(card)}
                 >
                   {loading ? '...' : card.value}
                 </strong>
               </span>
               <span className={isHeadline
-                ? `grid h-12 w-12 shrink-0 place-items-center rounded-2xl border ${card.className}`
-                : `grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${card.className}`}>
-                <Icon size={isHeadline ? 22 : 16} />
+                ? `grid h-11 w-11 shrink-0 place-items-center rounded-2xl border ${card.className}`
+                : `grid h-8 w-8 shrink-0 place-items-center rounded-xl border ${card.className}`}>
+                <Icon size={isHeadline ? 20 : 15} />
               </span>
             </span>
             <span className={isHeadline
-              ? 'relative z-10 mt-2 line-clamp-2 min-w-0 text-xs leading-4 text-[var(--rc-text-muted)]'
-              : 'relative z-10 mt-2 line-clamp-2 min-w-0 text-[11px] leading-4 text-[var(--rc-text-muted)]'}>
+              ? 'relative z-[1] mt-2 line-clamp-2 min-w-0 text-xs leading-4 text-[var(--rc-text-muted)]'
+              : 'relative z-[1] mt-1.5 line-clamp-2 min-w-0 text-[11px] leading-4 text-[var(--rc-text-muted)]'}>
               {loading ? 'Menunggu response gateway' : card.description}
             </span>
             {card.spark && card.spark.length > 1 ? (
-              <span className="relative z-10 mt-2 flex min-w-0 items-center gap-2 overflow-hidden">
-                <Sparkline values={card.spark} width={isHeadline ? 140 : 96} height={isHeadline ? 32 : 24} />
+              <span className="relative z-[1] mt-2 flex min-w-0 items-center gap-2 overflow-hidden">
+                <Sparkline values={card.spark} width={isHeadline ? 120 : 88} height={isHeadline ? 28 : 22} />
                 {(() => {
                   const last = card.spark[card.spark.length - 1]
                   const prev = card.spark[card.spark.length - 2]
@@ -1403,7 +1728,7 @@ export default function ProcurementKpiStrip({
                   const up = pct >= 0
                   return (
                     <span
-                      className={`rc-data inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      className={`rc-data inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                         up ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-400/15 text-amber-300'
                       }`}
                       title={`Perubahan vs periode sebelumnya (${formatPercent(Math.abs(pct))})`}
@@ -1415,15 +1740,15 @@ export default function ProcurementKpiStrip({
                 <MomentumDelta values={card.spark} />
               </span>
             ) : null}
-            <span className="relative z-10 mt-2 flex min-w-0 flex-wrap content-start gap-1">
-              {(isHeadline ? card.breakdown.slice(0, 3) : card.breakdown.slice(0, 5)).map((item) => (
-                <span key={item.label} className="rc-chip max-w-full">
-                  <span>{item.label}: </span>
-                  <strong title={String(item.value)}>{loading ? '...' : item.value}</strong>
+            <span className="relative z-[1] mt-2 flex min-w-0 flex-wrap content-start gap-1 overflow-hidden">
+              {(isHeadline ? card.breakdown.slice(0, 6) : card.breakdown.slice(0, 5)).map((item) => (
+                <span key={item.label} className="rc-chip max-w-[100%]">
+                  <span className="shrink-0">{item.label}: </span>
+                  <strong className="min-w-0 truncate" title={String(item.value)}>{loading ? '...' : item.value}</strong>
                 </span>
               ))}
             </span>
-            <span className="rc-hairline rc-data relative z-10 mt-auto flex min-w-0 items-center justify-between gap-2 pt-2 text-[10px] text-[var(--rc-text-faint)]">
+            <span className="rc-hairline rc-data relative z-[1] mt-auto flex min-w-0 items-center justify-between gap-2 pt-2 text-[10px] text-[var(--rc-text-faint)]">
               <span className="min-w-0 truncate">{loading ? 'Loading' : card.source}</span>
               <ArrowRight size={13} className="shrink-0 text-[var(--rc-forest-accent)]" />
             </span>
@@ -1432,12 +1757,14 @@ export default function ProcurementKpiStrip({
       })
 
   const renderCardGrid = (cards: ProcurementKpiCard[]) => (
-    <div className={`grid min-w-0 gap-3 ${
+    <div className={`rc-kpi-grid ${
       cards.length <= 1
         ? 'grid-cols-1'
         : cards.length === 2
           ? 'grid-cols-1 sm:grid-cols-2'
-          : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
+          : cards.length === 4
+            ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-2'
+            : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
     }`}>
       {renderCardItems(cards)}
     </div>
@@ -1487,26 +1814,48 @@ export default function ProcurementKpiStrip({
 
         {!isYearMode ? (
           <div className="mt-2">
-            <PeriodScrubber value={filters.period} onSelect={(period) => updateFilter('period', period)} />
+            <PeriodScrubber
+              value={filters.period}
+              onSelect={(period) => updateFilter('period', period)}
+              isCurrentPeriod={isCurrentPeriod}
+            />
           </div>
         ) : null}
 
         <div
-          className="mt-2 rounded-2xl border border-sky-300/20 bg-sky-400/[0.07] px-3 py-2"
+          className={`mt-2 rounded-2xl border px-3 py-2 ${
+            isCurrentPeriod
+              ? 'border-sky-300/30 bg-sky-400/[0.10]'
+              : 'border-amber-300/30 bg-amber-400/[0.10]'
+          }`}
           role="status"
           aria-label="Timeline KPI aktif"
         >
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-100/80">Timeline KPI atas (wajib seperiode)</p>
-          <p className="mt-1 text-sm font-bold text-sky-50">{kpiTimelineBadge}</p>
-          <p className="mt-0.5 text-[11px] font-semibold text-sky-100/70">
-            Total Usage · Issue Amount/Qty · Receive · PR/PO outstanding di KPI memakai rentang ini saja.
-            Movement Category (heatmap/tabel di bawah) punya lookback sendiri — jangan disamakan dengan KPI.
+          <div className="flex flex-wrap items-center gap-2">
+            <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${isCurrentPeriod ? 'text-sky-100/85' : 'text-amber-100/85'}`}>
+              Timeline KPI atas (wajib seperiode)
+            </p>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${periodKindBadge.tone}`}>
+              <span className={`h-2 w-2 rounded-full ${isCurrentPeriod ? 'bg-sky-300 animate-pulse' : 'bg-amber-300'}`} />
+              {periodKindBadge.short}
+            </span>
+          </div>
+          <p className={`mt-1 text-sm font-bold ${isCurrentPeriod ? 'text-sky-50' : 'text-amber-50'}`}>{kpiTimelineBadge}</p>
+          <p className={`mt-0.5 text-[11px] font-semibold ${isCurrentPeriod ? 'text-sky-100/75' : 'text-amber-100/75'}`}>
+            {isCurrentPeriod
+              ? 'CURRENT aktif: live balance. Total Usage · Issue · Receive · PR/PO ikut period ini.'
+              : 'PAST aktif: snapshot monthend. Total Usage · Issue · Receive · PR/PO ikut period ini.'}
+            {' '}Movement Category (bawah) lookback terpisah.
           </p>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--rc-text-faint)]" aria-label="Active filter context">
           <span
-            className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-amber-100"
+            className={`rounded-full border px-2.5 py-1 ${
+              isCurrentPeriod
+                ? 'border-sky-300/30 bg-sky-400/15 text-sky-100'
+                : 'border-amber-300/30 bg-amber-400/15 text-amber-100'
+            }`}
             title={`KPI period: ${kpiTimelineRange.label}`}
           >
             Period {activePeriodLabel}{isYearMode ? '' : ` · ${filters.period}`}
@@ -1514,8 +1863,8 @@ export default function ProcurementKpiStrip({
           <span
             className={`rounded-full border px-2.5 py-1 font-black ${periodKindBadge.tone}`}
             title={isCurrentPeriod
-              ? 'Periode berjalan: KPI memakai balance live (monthend belum terbentuk).'
-              : 'Periode lampau: KPI memakai snapshot monthend (IN_MTHENDITEM) — data sudah closing.'}
+              ? 'Periode CURRENT: KPI memakai balance live (monthend belum terbentuk).'
+              : 'Periode PAST: KPI memakai snapshot monthend (IN_MTHENDITEM) — data sudah closing.'}
           >
             {periodKindBadge.label}
           </span>
@@ -1550,7 +1899,9 @@ export default function ProcurementKpiStrip({
       </div>
 
       <div className="relative z-10 border-b border-[var(--rc-border)] px-3 py-3">
-        <p className="mb-2 text-[11px] font-semibold text-[var(--rc-text-faint)]">Alur proses — klik tahap untuk buka detail</p>
+        <p className="mb-2 text-[11px] font-semibold text-[var(--rc-text-faint)]">
+          Alur proses · periode {activePeriodLabel} · klik tahap untuk buka detail
+        </p>
         <ProcurementFlowStrip
           stages={flowStages}
           onSelect={(stageId) => {
@@ -1560,108 +1911,170 @@ export default function ProcurementKpiStrip({
         />
       </div>
 
-      <div className="relative z-10 grid min-w-0 gap-3 p-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
-        {headlineCard ? (
-          <Link
-            href={headlineCard.href}
-            title={cardTooltip(headlineCard)}
-            aria-label={`${headlineCard.label}: ${headlineCard.valueExact ?? headlineCard.value}. ${headlineCard.description}`}
-            className="rc-reveal group relative isolate min-h-0 min-w-0 overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[linear-gradient(145deg,rgba(24,185,107,.2),rgba(4,18,12,.72)_52%,rgba(214,184,92,.13))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:border-[var(--rc-forest-border-strong)]"
-          >
-            <span className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-emerald-300/20 blur-3xl transition group-hover:bg-lime-300/25" aria-hidden="true" />
-            <span className="pointer-events-none absolute bottom-0 left-0 h-20 w-full bg-[linear-gradient(90deg,rgba(155,226,61,.14),transparent)]" aria-hidden="true" />
+      <div className="relative z-10 grid min-w-0 items-stretch gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+        <div className="flex min-h-0 min-w-0 flex-col gap-3">
+          {headlineCard ? (
+            <Link
+              href={headlineCard.href}
+              title={cardTooltip(headlineCard)}
+              aria-label={`${headlineCard.label}: ${headlineCard.valueExact ?? headlineCard.value}. ${headlineCard.description}`}
+              className="rc-kpi-surface rc-reveal group/card relative isolate flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-[24px] border border-emerald-300/25 bg-[linear-gradient(145deg,rgba(24,185,107,.2),rgba(4,18,12,.72)_52%,rgba(214,184,92,.13))] p-3.5 pt-5 shadow-[inset_0_1px_0_rgba(255,255,255,.12)] transition hover:border-[var(--rc-forest-border-strong)]"
+            >
+              <button
+                type="button"
+                onClick={(event) => openKpiSql(event, headlineCard)}
+                title="Lihat SQL / tabel / field KPI valuasi"
+                className="rc-sql-debug absolute right-2.5 top-2.5 z-[5] rounded-md border border-white/15 bg-black/60 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white/75 opacity-0 transition-opacity hover:bg-black/75 hover:text-white focus-visible:opacity-100 group-hover/card:opacity-100 group-focus-within/card:opacity-100"
+              >
+                SQL
+              </button>
+              <span className="rc-kpi-glow" aria-hidden="true">
+                <span className="absolute -right-8 -top-10 h-28 w-28 rounded-full bg-emerald-300/18 blur-3xl transition group-hover/card:bg-lime-300/22" />
+              </span>
 
-            <span className="relative z-10 flex items-start justify-between gap-3">
-              <span className="min-w-0">
-                <span className="rc-data block text-[10px] uppercase tracking-[0.22em] text-[var(--rc-text-faint)]">Master valuation · {inventoryScopeShort} · {kpiTimelineRange.label}</span>
-                <strong
-                  className="rc-display mt-3 block min-w-0 break-words text-[2.2rem] font-bold leading-none text-[var(--rc-text)] sm:text-[2.8rem]"
-                  title={cardTooltip(headlineCard)}
-                >
-                  {loading ? '...' : headlineCard.value}
-                </strong>
-                <span className="mt-2 inline-flex rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">
-                  {inventoryScopeLabel}
+              <span className="relative z-[1] flex min-w-0 items-start justify-between gap-2 pr-8">
+                <span className="min-w-0 flex-1 overflow-hidden">
+                  <span className="rc-data block truncate text-[11px] uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">
+                    Master KPI Global · {inventoryScopeShort}
+                  </span>
+                  <strong
+                    className="rc-display mt-2 block min-w-0 max-w-full break-all text-[clamp(1.7rem,3vw,2.35rem)] font-bold leading-[0.95] text-[var(--rc-text)]"
+                    title={cardTooltip(headlineCard)}
+                  >
+                    {loading ? '...' : headlineCard.value}
+                  </strong>
+                  <span className="mt-2 inline-flex max-w-full truncate rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
+                    {inventoryScopeLabel} · {kpiTimelineRange.label}
+                  </span>
+                </span>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-200/25 bg-emerald-300/10 text-emerald-100">
+                  <Package size={17} />
                 </span>
               </span>
-              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-emerald-200/25 bg-emerald-300/10 text-emerald-100">
-                <Package size={22} />
-              </span>
-            </span>
 
-            <span className="relative z-10 mt-3 block text-xs leading-5 text-[var(--rc-text-muted)]">
-              {headlineCard.formula}
-            </span>
-
-            <span className="relative z-10 mt-3 grid gap-1.5 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
-              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
-                <span>Current · {currentPeriodLabel}</span>
-                <span title={formatCurrency(inventoryValue)}>{loading ? '...' : formatCurrencyCompact(inventoryValue)}</span>
-              </span>
-              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
-                <span>Opening · {openingPeriodLabel}</span>
-                <span title={formatCurrency(openingValue)}>{loading ? '...' : formatCurrencyCompact(openingValue)}</span>
-              </span>
-              <span className="flex items-center justify-between gap-3 border-t border-white/10 pt-1.5 text-[11px] font-bold">
-                <span className="text-[var(--rc-text-faint)]">Delta (Current − Opening)</span>
-                <span
-                  className={valuationDelta > 0 ? 'text-emerald-200' : valuationDelta < 0 ? 'text-rose-200' : 'text-[var(--rc-text-muted)]'}
-                  title={formatCurrency(valuationDelta)}
-                >
-                  {loading ? '...' : valuationDeltaLabel}
+              <span className="relative z-[1] mt-3 overflow-hidden rounded-2xl border border-emerald-300/20 bg-[linear-gradient(160deg,rgba(16,185,129,0.16),rgba(0,0,0,0.28)_55%,rgba(245,158,11,0.10))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <span className="mb-2.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/85">Current vs Opening</span>
+                  <span className={`max-w-[58%] break-all rounded-full border px-2.5 py-1 text-[11px] font-black ${valuationDelta > 0 ? 'border-emerald-300/30 bg-emerald-400/15 text-emerald-100' : valuationDelta < 0 ? 'border-rose-300/30 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-white/5 text-[var(--rc-text-muted)]'}`}>
+                    {loading ? '...' : valuationDeltaLabel}
+                  </span>
+                </span>
+                <span className="grid min-w-0 gap-2">
+                  <span className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-3 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-emerald-200/85">Current</span>
+                      <span className="mt-1 block truncate text-[12px] font-semibold text-emerald-100/75">{currentPeriodLabel}</span>
+                    </span>
+                    <span className="max-w-[62%] shrink-0 break-all text-right text-sm font-black leading-snug text-emerald-50 sm:text-[15px]" title={formatCurrency(inventoryValue)}>
+                      {loading ? '...' : formatCurrency(inventoryValue)}
+                    </span>
+                  </span>
+                  <span className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-amber-300/20 bg-amber-400/10 px-3 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-amber-200/85">Opening</span>
+                      <span className="mt-1 block truncate text-[12px] font-semibold text-amber-100/75">{openingPeriodLabel}</span>
+                    </span>
+                    <span className="max-w-[62%] shrink-0 break-all text-right text-sm font-black leading-snug text-amber-50 sm:text-[15px]" title={formatCurrency(openingValue)}>
+                      {loading ? '...' : formatCurrency(openingValue)}
+                    </span>
+                  </span>
                 </span>
               </span>
-            </span>
 
-            <span className="relative z-10 mt-4 grid gap-2">
-              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
-                <span>Gudang</span>
-                <span title={`Current ${formatCurrency(gudangValue)} · Opening ${formatCurrency(openingGudangValue)}`}>
-                  {loading ? '...' : `${formatCurrencyCompact(gudangValue)} · ${formatPercent(gudangShare)}`}
+              <span className="relative z-[1] mt-2.5 grid min-w-0 gap-1.5">
+                <span className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-semibold text-[var(--rc-text-muted)]">
+                  <span className="shrink-0">Gudang</span>
+                  <span className="min-w-0 truncate text-right" title={`Current ${formatCurrency(gudangValue)} · Opening ${formatCurrency(openingGudangValue)}`}>
+                    {loading ? '...' : `${formatCurrency(gudangValue)} · ${formatPercent(gudangShare)}`}
+                  </span>
+                </span>
+                <span className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <span className="block h-full max-w-full rounded-full bg-[linear-gradient(90deg,#18b96b,#9be23d)]" style={{ width: `${Math.min(100, Math.max(0, gudangShare))}%` }} />
+                </span>
+                <span className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-semibold text-[var(--rc-text-muted)]">
+                  <span className="shrink-0">Workshop</span>
+                  <span className="min-w-0 truncate text-right" title={`Current ${formatCurrency(workshopValue)} · Opening ${formatCurrency(openingWorkshopValue)}`}>
+                    {loading ? '...' : `${formatCurrency(workshopValue)} · ${formatPercent(workshopShare)}`}
+                  </span>
+                </span>
+                <span className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <span className="block h-full max-w-full rounded-full bg-[linear-gradient(90deg,#f59e0b,#d6b85c)]" style={{ width: `${Math.min(100, Math.max(0, workshopShare))}%` }} />
                 </span>
               </span>
-              <span className="h-2 overflow-hidden rounded-full bg-white/10">
-                <span className="block h-full rounded-full bg-[linear-gradient(90deg,#18b96b,#9be23d)]" style={{ width: `${gudangShare}%` }} />
-              </span>
-              <span className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--rc-text-muted)]">
-                <span>Workshop/Mesin</span>
-                <span title={`Current ${formatCurrency(workshopValue)} · Opening ${formatCurrency(openingWorkshopValue)}`}>
-                  {loading ? '...' : `${formatCurrencyCompact(workshopValue)} · ${formatPercent(workshopShare)}`}
-                </span>
-              </span>
-              <span className="h-2 overflow-hidden rounded-full bg-white/10">
-                <span className="block h-full rounded-full bg-[linear-gradient(90deg,#f59e0b,#d6b85c)]" style={{ width: `${workshopShare}%` }} />
-              </span>
-            </span>
 
-            <span className="rc-data relative z-10 mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-[10px] text-[var(--rc-text-faint)]">
-              {headlineCard.source}
-              <ArrowRight size={13} className="text-[var(--rc-forest-accent)]" />
-            </span>
-          </Link>
-        ) : null}
+              <span className="rc-data relative z-[1] mt-auto flex min-w-0 items-center justify-between gap-2 border-t border-white/10 pt-2 text-[10px] text-[var(--rc-text-faint)]">
+                <span className="min-w-0 truncate">{headlineCard.source}</span>
+                <ArrowRight size={13} className="shrink-0 text-[var(--rc-forest-accent)]" />
+              </span>
+            </Link>
+          ) : null}
 
-        <div className="min-w-0 space-y-3">
+          {/* Opening → Current visual bridge under Master KPI */}
+          <div className="min-w-0">
+            <p className="rc-data mb-2 text-[11px] uppercase tracking-[0.16em] text-emerald-100/75">
+              Visual valuasi · Opening vs Current · {activePeriodLabel}
+            </p>
+            <ValuationBridgeChart
+              opening={openingValue}
+              current={inventoryValue}
+              openingGudang={openingGudangValue}
+              openingWorkshop={openingWorkshopValue}
+              currentGudang={gudangValue}
+              currentWorkshop={workshopValue}
+              openingLabel={openingPeriodLabel}
+              currentLabel={currentPeriodLabel}
+              loading={loading}
+            />
+          </div>
+
+          {/* Fill leftover height under Master KPI with split valuation analysis */}
+          <div className="min-w-0">
+            <p className="rc-data mb-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">
+              Analisis valuasi · Gudang vs Workshop
+            </p>
+            <div className="rc-kpi-grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              {renderCardItems(valuationSideCards.map(withCheckSql))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <div className="min-w-0">
             <MarketTicker items={marketTickerItems} />
           </div>
 
           <div className="min-w-0">
-            <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">
-              Always visible · Total Usage · {inventoryScopeShort} · {kpiTimelineRange.label}
+            <p className="rc-data mb-1.5 text-[10px] uppercase tracking-[0.16em] text-emerald-100/70">
+              Total Usage · Stock Issue + Fuel BBM + Job Stock · {kpiTimelineRange.label}
+            </p>
+            <p className="mb-1.5 text-[10px] font-semibold leading-4 text-[var(--rc-text-faint)]">
+              Keterangan: angka ini = IN_STOCKISSUE + IN_FUELISSUE + WS_JOBSTOCK, selaras IssuedTotal monthly detail (include fuel).
             </p>
             {renderCardGrid(heroSideCards.map(withCheckSql))}
           </div>
 
           <div className="min-w-0">
-            <p className="rc-data mb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--rc-text-faint)]">
+            <p className="rc-data mb-1.5 text-[10px] uppercase tracking-[0.16em] text-amber-100/75">
+                          Fuel Issue · product type · {source} · {kpiTimelineRange.label}
+                        </p>
+                        <p className="mb-1.5 text-[10px] font-semibold leading-4 text-[var(--rc-text-faint)]">
+                          Breakdown ringkas di kartu KPI: top product type (+ share). Hover kartu = full list.
+                          {fuelHasRows
+                            ? ` Live: ${formatNumber(fuelIssueDocs)} dok · ${formatQuantity(fuelIssueQty)} qty${topFuelProductType ? ` · top ${topFuelProductType.code}` : ''}.`
+                            : ' Jika 0: cek source estate/pabrik + period.'}
+                        </p>
+            {renderCardGrid(fuelIssueCards.map(withCheckSql))}
+          </div>
+
+          <div className="min-w-0">
+            <p className="rc-data mb-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--rc-text-faint)]">
               Jumlah Issue · {inventoryScopeShort} · {kpiTimelineRange.label}
             </p>
             {renderCardGrid(issueCountCards.map(withCheckSql))}
           </div>
 
           <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="KPI secondary sections">
+            <div className="mb-1.5 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="KPI secondary sections">
               {DECK_SECTIONS.map((section) => (
                 <button
                   key={section.id}
@@ -1700,7 +2113,7 @@ export default function ProcurementKpiStrip({
       <div className="relative z-10 border-t border-[var(--rc-border)] px-3 py-3">
         <div className="rc-reveal min-h-[190px] rounded-[28px] p-1" style={{ '--reveal-order': 2 } as React.CSSProperties}>
           <div className="h-[240px]">
-            <MovementTrendChart trend={usageTrend} frequency={issueFrequency?.byMonth} loading={loading} />
+            <MovementTrendChart trend={usageTrend} frequency={issueFrequency?.byMonth} loading={loading} failed={usageFailed} />
           </div>
         </div>
       </div>
@@ -1712,6 +2125,7 @@ export default function ProcurementKpiStrip({
             <TopMovementScatter
               items={issueFrequencyTop.length > 0 ? issueFrequencyTop : (topLists?.items ?? [])}
               loading={loading}
+              failed={usageFailed}
               top={10}
             />
           </div>
@@ -1756,9 +2170,19 @@ export default function ProcurementKpiStrip({
             allowTimeline
             costCenters={topLists?.costCenters}
             vehicles={topLists?.vehicles}
-            stationQty={monthlyIssuedStationQty}
-            ledgerQty={monthlyLedgerQty}
-            vehicleQty={monthlyIssuedVehicleQty}
+            blocks={topLists?.blocks}
+            stationAmount={firstNumber(usage, ['ChargeStationAmount', 'chargestationamount'])}
+            ledgerAmount={firstNumber(usage, ['ChargeLedgerAmount', 'chargeledgeramount'])}
+            vehicleAmount={firstNumber(usage, ['ChargeVehicleAmount', 'chargevehicleamount'])}
+            stationQty={
+              firstNumber(usage, ['ChargeStationQty', 'chargestationqty']) || monthlyIssuedStationQty
+            }
+            ledgerQty={
+              firstNumber(usage, ['ChargeLedgerQty', 'chargeledgerqty']) || monthlyLedgerQty
+            }
+            vehicleQty={
+              firstNumber(usage, ['ChargeVehicleQty', 'chargevehicleqty']) || monthlyIssuedVehicleQty
+            }
             onFocusPeriod={(period) => updateFilter('period', period)}
             onOpenDetail={() => { window.location.href = filteredLinks.usage }}
           />
@@ -1836,6 +2260,66 @@ export default function ProcurementKpiStrip({
         selectedGroup={selectedGroup}
         preview={{ trend: usageTrend, insightItems }}
       />
-</section>
+
+      {kpiSqlView ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-3 sm:items-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`SQL KPI ${kpiSqlView.label}`}
+          onClick={() => setKpiSqlView(null)}
+        >
+          <div
+            className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[28px] border border-emerald-300/25 bg-[linear-gradient(160deg,#07140f,#0a1a12_55%,#06100c)] shadow-[0_30px_100px_rgba(0,0,0,.55)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <p className="rc-data text-[10px] uppercase tracking-[0.18em] text-emerald-100/70">SQL KPI · paste SSMS</p>
+                <p className="mt-1 truncate text-base font-black text-white sm:text-lg">{kpiSqlView.label}</p>
+                <p className="mt-1 line-clamp-2 text-[11px] font-semibold text-white/55">{kpiSqlView.formula}</p>
+                <p className="mt-1 truncate text-[10px] text-white/40">{kpiSqlView.source}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-bold text-emerald-100 hover:bg-emerald-400/20"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(
+                        [`-- KPI: ${kpiSqlView.label}`, `-- Source: ${kpiSqlView.source}`, kpiSqlView.sql].join('\n'),
+                      )
+                      setKpiSqlCopied(true)
+                      window.setTimeout(() => setKpiSqlCopied(false), 1500)
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                >
+                  <Copy size={13} />
+                  {kpiSqlCopied ? 'Copied' : 'Copy'}
+                </button>
+                <button
+                  type="button"
+                  className="grid h-9 w-9 place-items-center rounded-xl border border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
+                  onClick={() => setKpiSqlView(null)}
+                  aria-label="Tutup"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[min(60vh,520px)] overflow-auto px-4 py-3 sm:px-5">
+              <p className="mb-2 text-[11px] font-semibold leading-5 text-amber-100/80">
+                Sketsa grain/tabel/field. Bukan 1:1 full handler (filter scope/location/itemType bisa beda). Angka UI = API report.
+              </p>
+              <pre className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40 p-3 text-[11px] leading-5 text-emerald-50/90">
+                <code>{kpiSqlView.sql}</code>
+              </pre>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
   )
 }

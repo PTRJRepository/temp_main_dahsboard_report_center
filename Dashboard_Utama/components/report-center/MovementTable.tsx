@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import ScrollArea from './ScrollArea'
 import Sparkline, { MomentumDelta } from './Sparkline'
 
 /**
@@ -139,7 +140,7 @@ export default function MovementTable({
       </div>
 
       {/* Baris */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <ScrollArea className="min-h-0 flex-1">
         <ul className="divide-y divide-white/[0.05]">
           {sorted.map((row) => {
             const series = metric === 'qty' ? row.series : metric === 'freq' ? (row.freqSeries ?? row.series) : row.series
@@ -185,7 +186,7 @@ export default function MovementTable({
             )
           })}
         </ul>
-      </div>
+      </ScrollArea>
     </div>
   )
 }

@@ -246,13 +246,12 @@ async function main() {
   const groupedMovementPayload = {
     ...payload,
     chart: [
-      { Label: 'Dead Stock', TotalRows: 4, Amount: 258691.84, Qty: 255424230.86 },
-      { Label: 'Stale', TotalRows: 1, Amount: 2070, Qty: 2070 },
+      { Label: 'Dead Stock', TotalRows: 5, Amount: 260761.84, Qty: 255426300.86 },
     ],
   }
   const groupedMovementAnalytics = buildMonthlyStockAccountMovementAnalytics(groupedMovementPayload)
   assert.equal(groupedMovementAnalytics.breakdowns.find((entry) => entry.id === 'movement-category-dead-stock')?.dimensionId, 'movement-category')
-  assert.equal(groupedMovementAnalytics.breakdowns.find((entry) => entry.id === 'movement-category-stale')?.dimensionId, 'movement-category')
+  assert.equal(groupedMovementAnalytics.breakdowns.find((entry) => entry.id === 'movement-category-stale'), undefined)
 
   const analyticsPayload = attachInventoryAnalytics(payload, analytics)
   assert.equal(validateInventoryAnalyticsPayload(analyticsPayload).valid, true)

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo } from 'react'
+import ScrollArea from './ScrollArea'
 import Sparkline, { MomentumDelta } from './Sparkline'
 
 /**
@@ -125,7 +126,7 @@ export default function ItemDrilldown({
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-auto px-4 py-3">
+        <ScrollArea className="max-h-[70vh] px-4 py-3">
           {/* Sparkline besar + momentum */}
           <div className="rounded-2xl border-white/10 bg-white/[0.03] p-3">
             <div className="flex items-center justify-between">
@@ -219,7 +220,7 @@ export default function ItemDrilldown({
               </p>
             ) : null}
           </div>
-        </div>
+        </ScrollArea>
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-2 border-t border-white/[0.07] px-4 py-3">

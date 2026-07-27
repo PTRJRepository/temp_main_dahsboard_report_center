@@ -48,10 +48,10 @@ assert.deepEqual(classifyPeriodMovement({
 
 assert.equal(classifyPeriodMovement({ itemType: '4', regularIssueCount: 8, workshopIssueCount: 1, quantityClosing: 10 }).category, 'Slow Moving')
 assert.equal(classifyPeriodMovement({ itemType: '4', workshopIssueCount: 0, quantityClosing: 10 }).category, 'Dead Stock')
-assert.equal(classifyPeriodMovement({ itemType: '4', workshopIssueCount: 0, quantityClosing: 0 }).category, 'Stale')
+assert.equal(classifyPeriodMovement({ itemType: '4', workshopIssueCount: 0, quantityClosing: 0 }).category, 'Dead Stock')
 
 const metadata = buildMovementPeriodMetadata(actualScope)
-assert.equal(metadata.classificationVersion, 'movement-category:v4-periodic-window')
+assert.equal(metadata.classificationVersion, 'movement-category:v5-no-stale')
 assert.equal(metadata.periodScope, 'all-period')
 assert.equal(metadata.movementWindow, 'all')
 assert.match(String(metadata.movementWindowRule), /All valid stock-issue/)
@@ -60,6 +60,8 @@ assert.equal(metadata.thresholds.fastMinIssueCount, 6)
 assert.equal(metadata.sourceSet.some((source) => source.source === 'WS_JOBSTOCK'), true)
 
 assert.equal(normalizeMovementWindowPreset('3-bulan'), '3m')
+assert.equal(normalizeMovementWindowPreset('10-tahun'), '10y')
+assert.equal(normalizeMovementWindowPreset('2y'), '2y')
 assert.equal(normalizeMovementWindowPreset(undefined), 'all')
 const allWindow = resolveMovementWindowScope({ movementWindow: 'all', now: new Date('2026-07-19T00:00:00') })
 assert.equal(allWindow.startInclusive, '2000-01-01')
@@ -67,6 +69,22 @@ assert.equal(allWindow.endExclusive, '2026-07-20')
 const three = resolveMovementWindowScope({ movementWindow: '3m', now: new Date('2026-07-19T00:00:00') })
 assert.equal(three.startInclusive, '2026-05-01')
 assert.equal(three.endExclusive, '2026-07-20')
+// 10y = 120 calendar months: Jul 2026 → start Aug 2016 (same month-index roll as 3m/12m).
+const tenYears = resolveMovementWindowScope({
+  movementWindow: '10y',
+  period: '2026-07',
+  now: new Date('2026-07-19T00:00:00'),
+})
+assert.equal(tenYears.startInclusive, '2016-08-01')
+assert.equal(tenYears.endExclusive, '2026-07-20')
+assert.match(tenYears.label, /10 tahun/)
+const fiveYears = resolveMovementWindowScope({
+  movementWindow: '5y',
+  period: '2026-05',
+  now: new Date('2026-07-19T00:00:00'),
+})
+assert.equal(fiveYears.startInclusive, '2021-06-01')
+assert.equal(fiveYears.endExclusive, '2026-06-01')
 const custom = resolveMovementWindowScope({
   movementWindow: 'custom',
   dateFrom: '2026-01-01',

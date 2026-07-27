@@ -4,11 +4,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, Database, RefreshCw, Search, TrendingUp } from 'lucide-react'
 import ExceptionQueue, { type InventoryExceptionItem } from './ExceptionQueue'
+import FuelUsagePanel from './FuelUsagePanel'
+import MicroReportHeader from './MicroReportHeader'
 import MovementComposition, { movementTone, type MovementCompositionSegment } from './MovementComposition'
 import MovementCategoryEvolution, {
   type CategoryEvolutionPoint,
   type MovementMover,
 } from './MovementCategoryEvolution'
+import MovementWindowTimeline, {
+  lastDayOfMonthPeriod,
+  type MovementWindowValue,
+} from './MovementWindowTimeline'
+import ProductTypeAnalysisPanel from './ProductTypeAnalysisPanel'
+import ProductTypeDrilldown from './ProductTypeDrilldown'
+import ReturnAnalysisPanel from './ReturnAnalysisPanel'
+import UnusedStockPanel from './UnusedStockPanel'
+import ValuationTreemap from './ValuationTreemap'
+import MovementValuationTrend from './MovementValuationTrend'
 
 type ReportSource = 'estate' | 'pabrik'
 type InventoryItemTypeScope = 'gudang' | 'workshop'
@@ -101,13 +113,15 @@ type InventoryOverviewProps = {
   onPeriodChange?: (value: string) => void
   movementWindow?: string
   onMovementWindowChange?: (value: string) => void
+  /** Rentang custom dari timeline (YYYY-MM-01 start / end) saat movementWindow='custom'. */
+  movementWindowRange?: MovementWindowValue
+  onMovementWindowRangeChange?: (value: MovementWindowValue) => void
   itemType?: InventoryItemTypeScope
   /** Hide local period/MC controls when parent already shows global filter bar. */
   hideScopeControls?: boolean
 }
 
 const OVERVIEW_REPORT_ID = 'all-stock-movement-analysis'
-const VALUATION_REPORT_ID = 'asset-stock-valuasi-listing'
 
 const MOVEMENT_WINDOW_OPTIONS = [
   { value: 'all', label: 'All period' },
@@ -118,7 +132,32 @@ const MOVEMENT_WINDOW_OPTIONS = [
   { value: '2y', label: '2 tahun' },
   { value: '5y', label: '5 tahun' },
   { value: '10y', label: '10 tahun' },
+  { value: 'custom', label: 'Custom range' },
 ]
+
+function currentPeriod(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Bulan YYYY-MM N bulan sebelum anchor (inklusif mundur). */
+function shiftMonthsBack(anchor: string, monthsBack: number) {
+  const match = anchor.match(/^(\d{4})-(\d{2})$/)
+  if (!match) return anchor
+  const date = new Date(Number(match[1]), Number(match[2]) - 1 - monthsBack, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * Nilai timeline (start/end YYYY-MM-01 atau null=all) untuk kombinasi
+ * movementWindow + custom range. Hanya untuk tampilan slider.
+ */
+function timelineValueFromWindow(window: string, custom: MovementWindowValue, period: string): MovementWindowValue {
+  if (window === 'custom') return custom
+  if (window === 'all') return { start: null, end: null }
+  const monthsMap: Record<string, number> = { '1m': 1, '3m': 3, '6m': 6, '12m': 12, '2y': 24, '5y': 60, '10y': 120 }
+  const months = monthsMap[window] ?? 1
+  return { start: `${shiftMonthsBack(period, months - 1)}-01`, end: `${period}-01` }
+}
 
 const MOVEMENT_CATEGORY_LABELS = [
   'Fast Moving',
@@ -137,6 +176,16 @@ const MOVEMENT_SUMMARY_KEYS = [
   { label: 'Slow Moving', itemKey: 'SlowMovingItem', amountKey: 'SlowMovingAmount' },
   { label: 'Dead Stock', itemKey: 'DeadMovementItem', amountKey: 'DeadMovementAmount' },
 ] as const
+
+/** Kandidat field summary untuk total valuasi resmi (fallback KPI inventory-total-valuation). */
+const VALUATION_SUMMARY_KEYS = [
+  'TotalAssetAmount',
+  'TotalAmount',
+  'total_amount',
+  'NilaiPersediaan',
+  'NilaiStok',
+  'ClosingAmount',
+]
 
 const DEFAULT_MOVEMENT_DEFINITION: MovementDefinition = {
   fastMin: 6,
@@ -180,10 +229,6 @@ function normalizeMovementDefinitionValue(value: string, fallback: number) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return fallback
   return Math.min(Math.max(Math.trunc(numeric), 1), 999)
-}
-
-function currentPeriod(now = new Date()) {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
 function periodOptions(now = new Date()) {
@@ -338,12 +383,15 @@ export function InventoryOverview({
   onPeriodChange,
   movementWindow: controlledMovementWindow,
   onMovementWindowChange,
+  movementWindowRange: controlledMovementWindowRange,
+  onMovementWindowRangeChange,
   itemType,
   hideScopeControls = false,
 }: InventoryOverviewProps) {
   const router = useRouter()
   const [localPeriod, setLocalPeriod] = useState(() => currentPeriod())
   const [localMovementWindow, setLocalMovementWindow] = useState('all')
+  const [localMovementWindowRange, setLocalMovementWindowRange] = useState<MovementWindowValue>({ start: null, end: null })
   const [movementDefinition, setMovementDefinition] = useState<MovementDefinition>(DEFAULT_MOVEMENT_DEFINITION)
   const period = controlledPeriod ?? localPeriod
   const setPeriod = (value: string) => {
@@ -355,6 +403,15 @@ export function InventoryOverview({
     if (onMovementWindowChange) onMovementWindowChange(value)
     else setLocalMovementWindow(value)
   }
+  const movementWindowRange = controlledMovementWindowRange ?? localMovementWindowRange
+  const setMovementWindowRange = (value: MovementWindowValue) => {
+    if (onMovementWindowRangeChange) onMovementWindowRangeChange(value)
+    else setLocalMovementWindowRange(value)
+  }
+  const customWindowActive = movementWindow === 'custom'
+  /** true begitu user menggeser timeline — timeline jadi sumber kebenaran dateFrom/dateTo,
+   *  terlepas dari preset movementWindow (mengatasi preset 'all' yang mengabaikan timeline). */
+  const [timelineTouched, setTimelineTouched] = useState(false)
   const updateMovementDefinition = (key: keyof MovementDefinition, value: string) => {
     setMovementDefinition((current) => ({
       ...current,
@@ -365,10 +422,59 @@ export function InventoryOverview({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [drillType, setDrillType] = useState<string | null>(null)
   const [evolutionPayload, setEvolutionPayload] = useState<EvolutionApiResponse | null>(null)
   const [evolutionLoading, setEvolutionLoading] = useState(false)
   const [evolutionMetric, setEvolutionMetric] = useState<'count' | 'qty' | 'amount'>('count')
+  /** Mode perhitungan frekuensi: per bulan mandiri vs akumulasi to-date. */
+  const [evolutionMode, setEvolutionMode] = useState<'monthly' | 'cumulative'>('monthly')
+  /** Dimensi analisis evolusi: per item code vs per product type. */
+  const [evolutionDimension, setEvolutionDimension] = useState<'item' | 'product-type'>('product-type')
+  /** Top-N movers yang ditampilkan. */
+  const [evolutionTopN, setEvolutionTopN] = useState(12)
+  /** Jendela frekuensi (indeks ke periods) yang bisa digeser user; null = ikuti analysisPeriods penuh. */
+  const [evolutionRange, setEvolutionRange] = useState<{ start: number; end: number } | null>(null)
+  /** Periode analisis lain (trend) yang di-override manual; null = otomatis ikuti timeline. */
+  const [manualAnalysisPeriods, setManualAnalysisPeriods] = useState<string[] | null>(null)
   const options = useMemo(() => periodOptions(), [])
+
+  // Nilai timeline saat ini (preset atau custom) → range analisis trend.
+  const timelineValue = useMemo(
+    () => timelineValueFromWindow(movementWindow || 'all', movementWindowRange, period),
+    [movementWindow, movementWindowRange, period],
+  )
+  const autoAnalysisPeriods = useMemo(() => {
+    const start = timelineValue.start?.slice(0, 7)
+    const end = timelineValue.end?.slice(0, 7)
+    if (!start || !end) return []
+    const list: string[] = []
+    let [y, m] = start.split('-').map(Number)
+    const [ey, em] = end.split('-').map(Number)
+    while (y < ey || (y === ey && m <= em)) {
+      list.push(`${y}-${String(m).padStart(2, '0')}`)
+      m += 1
+      if (m > 12) { m = 1; y += 1 }
+    }
+    return list
+  }, [timelineValue])
+  const analysisPeriods = manualAnalysisPeriods ?? autoAnalysisPeriods
+  // Ganti preset window / periode → kembali ke mode preset (timeline belum disentuh)
+  // dan lepas override analisis manual agar evolution tidak "nyangkut" di rentang lama.
+  useEffect(() => {
+    setTimelineTouched(false)
+    setManualAnalysisPeriods(null)
+  }, [movementWindow, period])
+  // Jendela frekuensi efektif (geseran slider, else analysisPeriods penuh) — dipakai
+  // sebagai dateFrom/dateTo BERSAMA oleh overview (Movement mix) DAN panel Evolusi,
+  // supaya menggeser slider ikut mengubah valuasi tiap kategori di Movement mix.
+  const effectiveAnalysisPeriods = useMemo(
+    () => (evolutionRange ? analysisPeriods.slice(evolutionRange.start, evolutionRange.end + 1) : analysisPeriods),
+    [analysisPeriods, evolutionRange],
+  )
+  const analysisMode: 'auto' | 'manual' = manualAnalysisPeriods == null ? 'auto' : 'manual'
+  const analysisRangeLabel = analysisPeriods.length > 0
+    ? `${analysisPeriods[0]} → ${analysisPeriods[analysisPeriods.length - 1]} · ${analysisPeriods.length} bulan · ${analysisMode === 'auto' ? 'otomatis' : 'manual'}`
+    : 'Ikuti preset MC window'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -384,6 +490,19 @@ export function InventoryOverview({
       ...movementDefinitionParams(movementDefinition),
     })
     if (itemType) query.set('itemType', itemType)
+    // Rentang eksplisit dari timeline: berlaku begitu timeline digeser (timeline = sumber
+    // kebenaran), tidak lagi tergantung preset 'custom'. Fallback preset lama tetap jalan
+    // bila timeline belum disentuh.
+    const timelineActive = timelineTouched || movementWindow === 'custom'
+    if (timelineActive && movementWindowRange.start && movementWindowRange.end) {
+      query.set('dateFrom', movementWindowRange.start)
+      query.set('dateTo', lastDayOfMonthPeriod(movementWindowRange.end.slice(0, 7)))
+    } else if (effectiveAnalysisPeriods.length > 0) {
+      // Timeline belum disentuh → ikuti jendela frekuensi efektif (slider / analysisPeriods),
+      // sama seperti panel Evolusi, agar Movement mix ikut berubah saat slider digeser.
+      query.set('dateFrom', effectiveAnalysisPeriods[0])
+      query.set('dateTo', lastDayOfMonthPeriod(effectiveAnalysisPeriods[effectiveAnalysisPeriods.length - 1]))
+    }
 
     const loadOverview = async () => {
       setLoading(true)
@@ -413,22 +532,40 @@ export function InventoryOverview({
       active = false
       controller.abort()
     }
-  }, [itemType, movementDefinition, movementWindow, period, refreshKey, source])
+  }, [itemType, movementDefinition, movementWindow, movementWindowRange, timelineTouched, period, refreshKey, source, effectiveAnalysisPeriods])
 
   useEffect(() => {
     const controller = new AbortController()
     let active = true
 
-    const months = movementWindowToMonths(movementWindow || 'all')
     const params = new URLSearchParams({
       source,
-      months: String(months),
       period,
       movementFastMin: String(movementDefinition.fastMin),
       movementMovingMin: String(movementDefinition.movingMin),
       movementMovingMax: String(movementDefinition.movingMax),
       movementSlowCount: String(movementDefinition.slowCount),
     })
+    // Mode akumulasi to-date → klasifikasi dari running total docs sejak awal jendela.
+    if (evolutionMode === 'cumulative') params.set('accumulate', '1')
+    // Dimensi analisis (item vs product type) + jumlah baris teratas.
+    params.set('dimension', evolutionDimension)
+    params.set('top', String(evolutionTopN))
+    // Rentang eksplisit dari timeline (bila sudah digeser) = sumber kebenaran, sama seperti overview.
+    const timelineActive = timelineTouched || movementWindow === 'custom'
+    if (timelineActive && movementWindowRange.start && movementWindowRange.end) {
+      params.set('dateFrom', movementWindowRange.start.slice(0, 7))
+      params.set('dateTo', movementWindowRange.end.slice(0, 7))
+    } else {
+      // Jendela frekuensi efektif (sama dengan overview): geseran slider, else analysisPeriods penuh.
+      // Trend (analisis lain) mengikuti periode analisis: auto=timeline, manual=range yang dipilih.
+      if (effectiveAnalysisPeriods.length > 0) {
+        params.set('dateFrom', effectiveAnalysisPeriods[0])
+        params.set('dateTo', effectiveAnalysisPeriods[effectiveAnalysisPeriods.length - 1])
+      } else {
+        params.set('months', String(movementWindowToMonths(movementWindow || 'all')))
+      }
+    }
     if (itemType) params.set('itemType', itemType)
 
     const loadEvolution = async () => {
@@ -452,13 +589,19 @@ export function InventoryOverview({
       active = false
       controller.abort()
     }
-  }, [source, period, movementWindow, itemType, movementDefinition])
+  }, [source, period, movementWindow, movementWindowRange, timelineTouched, analysisPeriods, effectiveAnalysisPeriods, itemType, movementDefinition, evolutionMode, evolutionRange, evolutionDimension, evolutionTopN])
 
   const openReport = (params?: Record<string, string | undefined>, reportId = OVERVIEW_REPORT_ID) => {
     const movementParams = reportId === OVERVIEW_REPORT_ID
       ? {
           movementWindow: movementWindow || 'all',
           groupBy: 'MovementCategory',
+          ...(customWindowActive && movementWindowRange.start && movementWindowRange.end
+            ? {
+                dateFrom: movementWindowRange.start,
+                dateTo: lastDayOfMonthPeriod(movementWindowRange.end.slice(0, 7)),
+              }
+            : {}),
           ...movementDefinitionParams(movementDefinition),
         }
       : {}
@@ -470,6 +613,12 @@ export function InventoryOverview({
 
   const movementRows = useMemo(() => inventoryMovementBreakdowns(payload), [payload])
   const movementTotal = movementRows.reduce((sum, row) => sum + breakdownValue(row), 0)
+  // Total valuasi resmi = patokan "Total" di header Movement mix (bukan Σ segmen).
+  const valuationTotal = numberValue(inventoryKpiValue(payload, 'inventory-total-valuation', VALUATION_SUMMARY_KEYS))
+  // Inventory Return (IN_STOCKRTN + WS TT2) — info terpisah, TIDAK masuk kategori movement.
+  const returnAmount = numberValue(
+    payload?.summary?.ReturnAmount ?? payload?.summary?.return_amount ?? payload?.summary?.TotalReturnAmount,
+  )
   const movementSegments: MovementCompositionSegment[] = movementRows.slice(0, 6).map((breakdown) => {
     const label = cleanMovementLabel(breakdown.label)
     const value = breakdownValue(breakdown)
@@ -682,6 +831,9 @@ export function InventoryOverview({
               <span>
                 <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Scope</span>
                 {sourceLabel(source)} · {period} · {itemTypeLabel(itemType)} · MC {movementWindow}
+                {customWindowActive && movementWindowRange.start && movementWindowRange.end
+                  ? ` (${movementWindowRange.start.slice(0, 7)} → ${movementWindowRange.end.slice(0, 7)})`
+                  : ''}
               </span>
             </span>
             <span className="sm:col-span-2">
@@ -696,6 +848,27 @@ export function InventoryOverview({
               {empty ? ' · Empty movement scope' : ''}
             </span>
           </div>
+
+          <MovementWindowTimeline
+            className="mt-3"
+            period={period}
+            value={timelineValue}
+            onChange={({ startMonth, endMonth }) => {
+              setMovementWindowRange({ start: `${startMonth}-01`, end: `${endMonth}-01` })
+              // Timeline digeser → jadi sumber kebenaran dateFrom/dateTo (overview + evolution).
+              setTimelineTouched(true)
+              if (!customWindowActive) setMovementWindow('custom')
+              // Timeline berubah → analisis lain kembali ke mode otomatis (ikuti timeline).
+              setManualAnalysisPeriods(null)
+            }}
+            analysisPeriods={analysisPeriods}
+            analysisRangeLabel={analysisRangeLabel}
+            analysisMode={analysisMode}
+            onAnalysisPeriodsChange={(periods) => {
+              // Mode auto → null (ikuti timeline); manual → simpan range timeline saat ini sbg dasar analisis.
+              setManualAnalysisPeriods(periods.length > 0 ? null : autoAnalysisPeriods)
+            }}
+          />
         </div>
 
         <ExceptionQueue
@@ -707,7 +880,14 @@ export function InventoryOverview({
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <MovementComposition segments={movementSegments} loading={loading && !payload} empty={empty} />
+        <MovementComposition
+          segments={movementSegments}
+          loading={loading && !payload}
+          empty={empty}
+          valuationTotal={valuationTotal > 0 ? valuationTotal : undefined}
+          segmentTotal={movementTotal > 0 ? movementTotal : undefined}
+          returnInfo={returnAmount > 0 ? { amount: returnAmount } : undefined}
+        />
         <div className="rounded-[26px] border border-[var(--rc-forest-border)] bg-[rgba(5,17,10,.66)] p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -749,11 +929,222 @@ export function InventoryOverview({
           totals={evolutionPayload?.totals ?? { qty: 0, amount: 0, docs: 0, itemCount: 0 }}
           metric={evolutionMetric}
           onMetricChange={setEvolutionMetric}
+          mode={evolutionMode}
+          onModeChange={(m) => {
+            setEvolutionMode(m)
+            // Ganti mode → kembali ke jendela penuh (reset geseran user).
+            setEvolutionRange(null)
+          }}
+          dimension={evolutionDimension}
+          onDimensionChange={setEvolutionDimension}
+          topN={evolutionTopN}
+          onTopNChange={setEvolutionTopN}
+          range={evolutionRange ?? { start: 0, end: Math.max(0, (evolutionPayload?.periods.length ?? 1) - 1) }}
+          onRangeChange={setEvolutionRange}
           loading={evolutionLoading}
         />
       </div>
+
+      {/* Movement category × valuasi per bulan — tinggi bar = total issue (Rp) bulan itu. */}
+      <div className="mt-5">
+        <MovementValuationTrend
+          periods={evolutionPayload?.periods ?? []}
+          byPeriod={evolutionPayload?.byPeriod ?? []}
+          loading={evolutionLoading}
+        />
+      </div>
+
+
+      {/* Distribusi valuasi + Analisis per Product Type — drilldown KPI (Task 2) */}
+      <div className="grid content-start gap-5 xl:grid-cols-2">
+        <ValuationTreemap
+          filters={{
+            source,
+            months: movementWindowToMonths(movementWindow || 'all'),
+            itemType,
+          }}
+          onDrilldown={setDrillType}
+        />
+        <ProductTypeAnalysisPanel
+          filters={{
+            source,
+            months: movementWindowToMonths(movementWindow || 'all'),
+            itemType,
+          }}
+          onDrilldown={setDrillType}
+        />
+        {/* Fuel usage — item ke-3, melebar penuh di bawah dua kartu di atas. */}
+        <div className="xl:col-span-2">
+          <FuelUsagePanel
+            filters={{
+              source,
+              months: movementWindowToMonths(movementWindow || 'all'),
+              itemType,
+            }}
+          />
+        </div>
+        {/* Analisis return — purchasing vs inventory, melebar penuh di bawah fuel. */}
+        <div className="xl:col-span-2">
+          <ReturnAnalysisPanel
+            filters={{
+              source,
+              months: movementWindowToMonths(movementWindow || 'all'),
+              itemType,
+            }}
+          />
+        </div>
+        {/* Barang tidak terpakai — stok > 0 tanpa issue pada window, melebar penuh di bawah return. */}
+        <div className="xl:col-span-2">
+          <UnusedStockPanel
+            filters={{
+              source,
+              months: movementWindowToMonths(movementWindow || 'all'),
+              itemType,
+            }}
+          />
+        </div>
+      </div>
+      {/* Analisis lain dari payload overview yang sama — ikut rentang timeline/mode analisis. */}
+      <OtherAnalyses payload={payload} analysisRangeLabel={analysisRangeLabel} onOpen={(groupBy) => openReport({ groupBy })} />
+
+      {/* Popup KPI per Product Type (Task 3) */}
+      {drillType && (
+        <ProductTypeDrilldown
+          code={drillType}
+          filters={{
+                      source,
+                      months: movementWindowToMonths(movementWindow || 'all'),
+                      itemType,
+                    }}
+          onClose={() => setDrillType(null)}
+        />
+      )}
     </section>
   )
+}
+
+/** Breakdown + KPI tambahan (product type/category, lokasi, tipe item) yang ikut rentang analisis. */
+function OtherAnalyses({
+  payload,
+  analysisRangeLabel,
+  onOpen,
+}: {
+  payload: InventoryOverviewPayload | null
+  analysisRangeLabel: string
+  onOpen: (groupBy: string) => void
+}) {
+  const breakdowns = payload?.analytics?.breakdowns ?? []
+  const byDimension = new Map<string, ReportBreakdownEntry[]>()
+  for (const entry of breakdowns) {
+    const key = entry.dimensionId ?? 'other'
+    const list = byDimension.get(key) ?? []
+    list.push(entry)
+    byDimension.set(key, list)
+  }
+  const dimensions = [...byDimension.keys()].filter((d) => d !== 'movement-category')
+  const kpis = payload?.analytics?.kpis ?? []
+  const shownKpis = kpis.filter((k) => !/movement/i.test(k.id + k.label)).slice(0, 4)
+
+  if (dimensions.length === 0 && shownKpis.length === 0) return null
+
+  return (
+    <div className="mt-5 rounded-[24px] border-[var(--rc-forest-border)] bg-[rgba(3,14,10,.4)] p-4" aria-label="Analisis lainnya">
+      <div className="mb-3 flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <MicroReportHeader
+            ticker="Analisis lainnya"
+            title="Breakdown & KPI non-movement"
+            subtitle="Ikut rentang analisis yang sama."
+            accent="forest"
+          />
+        </div>
+        <span className="rc-data rounded-full border-[var(--rc-forest-border)] bg-[var(--rc-forest-primary-soft)] px-2.5 py-1 text-[10px] font-bold text-[var(--rc-forest-accent)]">
+          {analysisRangeLabel}
+        </span>
+      </div>
+
+      {shownKpis.length > 0 ? (
+        <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {shownKpis.map((kpi) => (
+            <div key={kpi.id} className="rounded-2xl border-white/10 bg-white/[0.03] px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--rc-text-faint)]">{kpi.label}</p>
+              <p className="mt-1 truncate text-sm font-black text-[var(--rc-text)]">{kpi.value ?? '—'}{kpi.unit ? ` ${kpi.unit}` : ''}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {dimensions.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {dimensions.slice(0, 3).map((dimension) => {
+            const rows = (byDimension.get(dimension) ?? []).slice(0, 5)
+            const total = rows.reduce((sum, row) => sum + breakdownValue(row), 0)
+            const groupBy = groupByForDimension(dimension)
+            return (
+              <div key={dimension} className="rounded-2xl border-white/10 bg-white/[0.03] p-3">
+                <div className="mb-2 items-center justify-between gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--rc-text-muted)]">{dimensionLabel(dimension)}</p>
+                  {groupBy ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpen(groupBy)}
+                      className="text-[10px] font-black text-[var(--rc-forest-accent)] hover:underline"
+                    >
+                      Buka
+                    </button>
+                  ) : null}
+                </div>
+                <ul className="space-y-1.5">
+                  {rows.map((row) => {
+                    const value = breakdownValue(row)
+                    const share = total > 0 ? (value / total) * 100 : 0
+                    return (
+                      <li key={row.id}>
+                        <div className="mb-0.5 flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[11px] font-semibold text-[var(--rc-text)]">{cleanMovementLabel(row.label)}</span>
+                          <span className="rc-data shrink-0 text-[10px] font-bold text-[var(--rc-text-muted)]">{formatMetric(value, row.format ?? 'currency')}</span>
+                        </div>
+                        <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                          <div className="h-full rounded-full bg-[var(--rc-forest-accent)]/70" style={{ width: `${Math.max(2, share)}%` }} />
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function dimensionLabel(dimension: string) {
+  const map: Record<string, string> = {
+    'item-code': 'Kode barang',
+    'item-type': 'Tipe item',
+    'product-type': 'Product type',
+    'product-category': 'Product category',
+    'product-brand': 'Product brand',
+    'product-model': 'Product model',
+    'product-material': 'Product material',
+    'stock-analysis': 'Stock analysis',
+    location: 'Lokasi',
+  }
+  return map[dimension] ?? dimension
+}
+
+function groupByForDimension(dimension: string): string | null {
+  const map: Record<string, string> = {
+    'product-type': 'ProductTypeCode',
+    'product-category': 'ProductCategoryCode',
+    'product-brand': 'ProductBrandCode',
+    'product-model': 'ProductModelCode',
+    'product-material': 'ProductMaterialCode',
+    location: 'Location',
+  }
+  return map[dimension] ?? null
 }
 
 export default InventoryOverview

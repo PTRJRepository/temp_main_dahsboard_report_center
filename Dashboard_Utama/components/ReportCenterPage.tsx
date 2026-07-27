@@ -8,6 +8,7 @@ import RecentPanel from '@/components/dashboard/RecentPanel'
 import SystemInfoPanel from '@/components/dashboard/SystemInfoPanel'
 import { IntelligenceWidget } from '@/components/intelligence/IntelligenceWidget'
 import GlobalModuleNavigator from '@/components/report-center/GlobalModuleNavigator'
+import Sparkline from '@/components/report-center/Sparkline'
 import { REPORT_GLOBAL_MODULES } from '@/lib/reports/module-registry'
 
 const MOCK_RECOMMENDATIONS = [
@@ -15,6 +16,15 @@ const MOCK_RECOMMENDATIONS = [
   { id: '2', reportName: 'Produktivitas Panen Harian', module: 'Financial', reason: 'updated' as const, reasonText: 'Masuk ke sub-modul Produktivitas', confidence: 0.85, subtitle: 'DME Estate', timestamp: '30 menit lalu' },
   { id: '3', reportName: 'Wage Register', module: 'Payroll', reason: 'due' as const, reasonText: 'Payroll dipisah dari HR sebagai modul preview', confidence: 0.95, timestamp: 'Preview' },
   { id: '4', reportName: 'Budget vs Actual', module: 'Budget', reason: 'time_based' as const, reasonText: 'Katalog budget siap ditinjau', confidence: 0.78 },
+]
+
+/** Deret sparkline statis per kartu KPI (dekoratif, menggantikan path SVG hardcode). */
+const SPARK_SERIES: number[][] = [
+  [12, 14, 13, 17, 16, 19, 18, 22, 21, 24],
+  [8, 9, 12, 11, 14, 15, 14, 18, 20, 22],
+  [20, 18, 22, 21, 25, 24, 27, 26, 30, 31],
+  [6, 8, 7, 10, 9, 12, 13, 12, 15, 16],
+  [10, 12, 11, 13, 14, 13, 16, 17, 18, 20],
 ]
 
 export default function ReportCenterPage() {
@@ -27,11 +37,11 @@ export default function ReportCenterPage() {
     const previewReports = totalReports - liveReports
 
     return [
-      { icon: Boxes, value: REPORT_GLOBAL_MODULES.length.toLocaleString('id-ID'), label: 'Modul global', stroke: '#9be23d' },
-      { icon: FileText, value: totalReports.toLocaleString('id-ID'), label: 'Total laporan registry', stroke: '#29c7c8' },
-      { icon: Database, value: liveReports.toLocaleString('id-ID'), label: 'Report live', stroke: '#18b96b' },
-      { icon: Users, value: previewReports.toLocaleString('id-ID'), label: 'Report preview', stroke: '#d6b85c' },
-      { icon: Activity, value: 'Registry', label: 'Source of truth', stroke: '#20ce79' },
+      { icon: Boxes, value: REPORT_GLOBAL_MODULES.length.toLocaleString('id-ID'), label: 'Modul global' },
+      { icon: FileText, value: totalReports.toLocaleString('id-ID'), label: 'Total laporan registry' },
+      { icon: Database, value: liveReports.toLocaleString('id-ID'), label: 'Report live' },
+      { icon: Users, value: previewReports.toLocaleString('id-ID'), label: 'Report preview' },
+      { icon: Activity, value: 'Registry', label: 'Source of truth' },
     ]
   }, [])
 
@@ -42,22 +52,20 @@ export default function ReportCenterPage() {
         <GlobalModuleNavigator />
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Ringkasan registry report center">
-          {stats.map((item) => {
+          {stats.map((item, idx) => {
             const Icon = item.icon
             return (
               <article key={item.label} className="rc-kpi-card min-h-[132px] p-[18px]">
                 <div className="relative z-10 flex items-center gap-3">
-                  <div className="grid h-[42px] w-[42px] place-items-center rounded-[13px] border border-[rgba(155,226,61,.22)] bg-[rgba(24,185,107,.1)] text-[var(--rc-forest-accent)]">
+                  <div className="grid h-[42px] w-[42px] place-items-center rounded-[13px] border-[rgba(155,226,61,.22)] bg-[rgba(24,185,107,.1)] text-[var(--rc-forest-accent)]">
                     <Icon size={22} strokeWidth={1.8} />
                   </div>
                   <div>
-                    <strong className="block text-[26px] leading-none tracking-[-0.04em] text-[var(--rc-text)]">{item.value}</strong>
+                    <strong className="rc-metric block text-[26px] leading-none tracking-[-0.04em] text-[var(--rc-text)]">{item.value}</strong>
                     <p className="mt-1 text-xs text-[var(--rc-text-faint)]">{item.label}</p>
                   </div>
                 </div>
-                <svg className="relative z-10 mt-4 h-9 w-full" viewBox="0 0 220 36" fill="none" aria-hidden="true">
-                  <path d="M2 28c18-4 28 2 42-3s20-14 34-7 25 10 41 2 27-11 45-5 27 5 54-7" stroke={item.stroke} strokeWidth="2" strokeLinecap="round" />
-                </svg>
+                <Sparkline values={SPARK_SERIES[idx % SPARK_SERIES.length]} width={220} height={36} className="relative z-10 mt-4 h-9 w-full" />
               </article>
             )
           })}
@@ -71,12 +79,12 @@ export default function ReportCenterPage() {
             aria-expanded={insightsOpen}
           >
             <span>
-              <span className="block text-xs font-bold uppercase tracking-[0.24em] text-[var(--rc-forest-accent)]">Insight tambahan</span>
+              <span className="rc-eyebrow block text-[var(--rc-forest-accent)]">Insight tambahan</span>
               <span className="mt-1 block text-sm font-semibold text-[var(--rc-text)]">
                 Rekomendasi, favorit, recent, dan status sistem tetap tersedia tanpa memenuhi first viewport.
               </span>
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--rc-border)] px-3 py-1 text-xs font-bold text-[var(--rc-text-muted)]">
+            <span className="inline-flex items-center gap-2 rounded-full border-[var(--rc-border)] px-3 py-1 text-xs font-bold text-[var(--rc-text-muted)]">
               {insightsOpen ? 'Tutup' : 'Buka jika perlu'}
               {insightsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </span>

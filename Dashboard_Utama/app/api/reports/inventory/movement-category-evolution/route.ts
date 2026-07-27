@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
+import { actualToAccountingPeriod } from '@/lib/reports/accounting-period'
 import { validateReadOnlySql } from '@/lib/reports/report-filtering'
 import {
   MOVEMENT_CATEGORY_ORDER,
@@ -42,6 +43,8 @@ type MovementMover = {
   toCategory: MovementCategory
   firstPeriod: string
   lastPeriod: string
+  /** Periode pertama barang mencapai Fast Moving to-date (khusus mode akumulasi). */
+  firstFastPeriod?: string | null
   totalQty: number
   totalAmount: number
 }
@@ -97,6 +100,34 @@ function parseAnchorPeriod(value?: string | null): Date {
   }
   const now = new Date()
   return new Date(now.getFullYear(), now.getMonth(), 1)
+}
+
+/** Parse 'YYYY-MM' jadi Date hari pertama bulan itu; null bila tidak valid. */
+function parseMonthPeriod(value?: string | null): Date | null {
+  const match = String(value ?? '').trim().match(/^(\d{4})-(\d{1,2})$/)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (month < 1 || month > 12) return null
+  return new Date(year, month - 1, 1)
+}
+
+/** Returns chronological 'YYYY-MM' periods dari `from` s/d `anchor` (inklusif). */
+function periodsInRange(from: Date, anchor: Date): string[] {
+  const periods: string[] = []
+  let year = from.getFullYear()
+  let month = from.getMonth() + 1
+  const endYear = anchor.getFullYear()
+  const endMonth = anchor.getMonth() + 1
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    periods.push(`${year}-${pad2(month)}`)
+    month += 1
+    if (month > 12) {
+      month = 1
+      year += 1
+    }
+  }
+  return periods.length > 0 ? periods : [`${endYear}-${pad2(endMonth)}`]
 }
 
 /** Returns `months` chronological 'YYYY-MM' periods ending at `anchor` (inclusive). */
@@ -172,6 +203,7 @@ function buildIssueRowsCte(
     SELECT
       RTRIM(l.ItemCode) AS KodeBarang,
       RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
+      RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductType,
       h.PostDate AS Tanggal,
       RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
       CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
@@ -187,6 +219,7 @@ function buildIssueRowsCte(
     SELECT
       RTRIM(s.ItemCode) AS KodeBarang,
       RTRIM(ISNULL(i.Description, s.ItemCode)) AS NamaBarang,
+      RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductType,
       COALESCE(NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate) AS Tanggal,
       COALESCE(
         NULLIF(RTRIM(CONVERT(varchar(50), s.JobStockIssueID)), ''),
@@ -207,8 +240,29 @@ function buildIssueRowsCte(
           ) = '4'
   `
 
+  // Fuel BBM (IN_FUELISSUE/LN) — samakan universe dengan Issued total & evolution rule.
+  // Status 2/6 (posted), doc-date COALESCE PostDate/RefDate (PostDate 1900 di-skip),
+  // non-workshop (ItemType <> '4'), orphan lines ikut (LEFT JOIN master).
+  const fuelDocDate = `COALESCE(NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate, h.CreateDate)`
+  const fuelQuery = `
+    SELECT
+      RTRIM(l.ItemCode) AS KodeBarang,
+      RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
+      RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductType,
+      ${fuelDocDate} AS Tanggal,
+      RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS Dokumen,
+      CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
+      CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS DECIMAL(18,2)) AS Amount
+    FROM [${database}].[dbo].[IN_FUELISSUELN] l
+    INNER JOIN [${database}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
+    LEFT JOIN [${database}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
+    WHERE ${fuelDocDate} >= '${dateFrom}' AND ${fuelDocDate} < '${dateToExclusive}'
+      AND RTRIM(ISNULL(h.Status, '')) IN ('2', '6')
+      AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'
+  `
+
   const parts: string[] = []
-  if (includeGudang) parts.push(gudangQuery)
+  if (includeGudang) parts.push(gudangQuery, fuelQuery)
   if (includeWorkshop) parts.push(workshopQuery)
   if (parts.length === 0) parts.push('SELECT NULL AS KodeBarang WHERE 1=0')
 
@@ -264,6 +318,147 @@ function buildEvolutionSql(
     FROM classified
     GROUP BY period, category
     ORDER BY period, category
+  `
+}
+
+/**
+ * Mode akumulasi to-date: klasifikasi bulan X dihitung dari total dokumen issue
+ * sejak dateFrom s/d akhir bulan X (running sum), bukan dari bulan itu saja.
+ * Karena to-date monoton naik, kategori barang cenderung naik (Dead→Slow→Moving→Fast).
+ */
+function buildCumulativeEvolutionSql(
+  database: string,
+  dateFrom: string,
+  dateToExclusive: string,
+  thresholds: MovementCategoryThresholds,
+  itemTypeScope: '1' | '4' | 'all',
+): string {
+  const issueRows = buildIssueRowsCte(database, dateFrom, dateToExclusive, itemTypeScope)
+  return `
+    WITH issue_rows AS (
+      ${issueRows}
+    ),
+    item_period AS (
+      SELECT
+        KodeBarang,
+        MAX(NamaBarang) AS NamaBarang,
+        CONVERT(varchar(7), Tanggal, 120) AS period,
+        COUNT(DISTINCT Dokumen) AS docs,
+        CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+        CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+      FROM issue_rows
+      WHERE Tanggal IS NOT NULL
+      GROUP BY KodeBarang, CONVERT(varchar(7), Tanggal, 120)
+    ),
+    cumulative AS (
+      SELECT
+        KodeBarang,
+        NamaBarang,
+        period,
+        qty,
+        amount,
+        SUM(docs) OVER (PARTITION BY KodeBarang ORDER BY period ROWS UNBOUNDED PRECEDING) AS cum_docs
+      FROM item_period
+    ),
+    classified AS (
+      SELECT
+        KodeBarang,
+        period,
+        qty,
+        amount,
+        CASE
+          WHEN cum_docs >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving'
+          WHEN cum_docs BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving'
+          WHEN cum_docs = ${thresholds.slowIssueCount} THEN 'Slow Moving'
+          ELSE 'Dead Stock'
+        END AS category
+      FROM cumulative
+    )
+    SELECT
+      period,
+      category,
+      COUNT(DISTINCT KodeBarang) AS itemCount,
+      CAST(SUM(qty) AS DECIMAL(18,2)) AS qty,
+      CAST(SUM(amount) AS DECIMAL(18,2)) AS amount
+    FROM classified
+    GROUP BY period, category
+    ORDER BY period, category
+  `
+}
+
+/**
+ * Movers to-date: kategori pertama vs terakhir berdasar running docs, plus
+ * periode saat barang mencapai Fast Moving (akumulasi >= fastMin).
+ */
+function buildCumulativeMoversSql(
+  database: string,
+  dateFrom: string,
+  dateToExclusive: string,
+  thresholds: MovementCategoryThresholds,
+  itemTypeScope: '1' | '4' | 'all',
+): string {
+  const issueRows = buildIssueRowsCte(database, dateFrom, dateToExclusive, itemTypeScope)
+  return `
+    WITH issue_rows AS (
+      ${issueRows}
+    ),
+    item_period AS (
+      SELECT
+        KodeBarang,
+        MAX(NamaBarang) AS NamaBarang,
+        CONVERT(varchar(7), Tanggal, 120) AS period,
+        COUNT(DISTINCT Dokumen) AS docs,
+        CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+        CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+      FROM issue_rows
+      WHERE Tanggal IS NOT NULL
+      GROUP BY KodeBarang, CONVERT(varchar(7), Tanggal, 120)
+    ),
+    cumulative AS (
+      SELECT
+        KodeBarang,
+        NamaBarang,
+        period,
+        qty,
+        amount,
+        SUM(docs) OVER (PARTITION BY KodeBarang ORDER BY period ROWS UNBOUNDED PRECEDING) AS cum_docs
+      FROM item_period
+    ),
+    classified AS (
+      SELECT
+        KodeBarang,
+        NamaBarang,
+        period,
+        qty,
+        amount,
+        cum_docs,
+        CASE
+          WHEN cum_docs >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving'
+          WHEN cum_docs BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving'
+          WHEN cum_docs = ${thresholds.slowIssueCount} THEN 'Slow Moving'
+          ELSE 'Dead Stock'
+        END AS category
+      FROM cumulative
+    ),
+    ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (PARTITION BY KodeBarang ORDER BY period ASC) AS rn_asc,
+        ROW_NUMBER() OVER (PARTITION BY KodeBarang ORDER BY period DESC) AS rn_desc
+      FROM classified
+    )
+    SELECT
+      KodeBarang AS code,
+      MAX(NamaBarang) AS name,
+      MAX(CASE WHEN rn_asc = 1 THEN category END) AS fromCategory,
+      MAX(CASE WHEN rn_desc = 1 THEN category END) AS toCategory,
+      MAX(CASE WHEN rn_asc = 1 THEN period END) AS firstPeriod,
+      MAX(CASE WHEN rn_desc = 1 THEN period END) AS lastPeriod,
+      MIN(CASE WHEN cum_docs >= ${thresholds.fastMinIssueCount} THEN period END) AS firstFastPeriod,
+      CAST(SUM(qty) AS DECIMAL(18,2)) AS totalQty,
+      CAST(SUM(amount) AS DECIMAL(18,2)) AS totalAmount
+    FROM ranked
+    GROUP BY KodeBarang
+    ORDER BY totalAmount DESC
   `
 }
 
@@ -336,6 +531,136 @@ function buildMoversSql(
       GROUP BY KodeBarang
       HAVING MAX(CASE WHEN rn_asc = 1 THEN category END) <> MAX(CASE WHEN rn_desc = 1 THEN category END)
     ) m
+    ORDER BY totalAmount DESC
+  `
+}
+
+/**
+ * Analisis per Product Type (per bulan, mandiri): klasifikasi product-type per
+ * bulan dari total docs seluruh item di type itu bulan itu. Movers = product
+ * type yang kategorinya berubah antara bulan aktif pertama vs terakhir.
+ */
+function buildProductTypeEvolutionSql(
+  database: string,
+  dateFrom: string,
+  dateToExclusive: string,
+  thresholds: MovementCategoryThresholds,
+  itemTypeScope: '1' | '4' | 'all',
+): string {
+  const issueRows = buildIssueRowsCte(database, dateFrom, dateToExclusive, itemTypeScope)
+  return `
+    WITH issue_rows AS (
+      ${issueRows}
+    ),
+    type_period AS (
+      SELECT
+        NULLIF(ProductType, '') AS ProductType,
+        CONVERT(varchar(7), Tanggal, 120) AS period,
+        COUNT(DISTINCT Dokumen) AS docs,
+        COUNT(DISTINCT KodeBarang) AS itemCount,
+        CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+        CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+      FROM issue_rows
+      WHERE Tanggal IS NOT NULL AND NULLIF(ProductType, '') IS NOT NULL
+      GROUP BY NULLIF(ProductType, ''), CONVERT(varchar(7), Tanggal, 120)
+    ),
+    classified AS (
+      SELECT
+        ProductType,
+        period,
+        docs,
+        itemCount,
+        qty,
+        amount,
+        CASE
+          WHEN docs >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving'
+          WHEN docs BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving'
+          WHEN docs = ${thresholds.slowIssueCount} THEN 'Slow Moving'
+          ELSE 'Dead Stock'
+        END AS category
+      FROM type_period
+    )
+    SELECT
+      period,
+      category,
+      COUNT(DISTINCT ProductType) AS itemCount,
+      CAST(SUM(qty) AS DECIMAL(18,2)) AS qty,
+      CAST(SUM(amount) AS DECIMAL(18,2)) AS amount
+    FROM classified
+    GROUP BY period, category
+    ORDER BY period, category
+  `
+}
+
+function buildProductTypeMoversSql(
+  database: string,
+  dateFrom: string,
+  dateToExclusive: string,
+  thresholds: MovementCategoryThresholds,
+  itemTypeScope: '1' | '4' | 'all',
+  accumulate: boolean,
+): string {
+  const issueRows = buildIssueRowsCte(database, dateFrom, dateToExclusive, itemTypeScope)
+  const docsExpr = accumulate
+    ? 'SUM(docs) OVER (PARTITION BY ProductType ORDER BY period ROWS UNBOUNDED PRECEDING)'
+    : 'docs'
+  return `
+    WITH issue_rows AS (
+      ${issueRows}
+    ),
+    type_period AS (
+      SELECT
+        NULLIF(ProductType, '') AS ProductType,
+        CONVERT(varchar(7), Tanggal, 120) AS period,
+        COUNT(DISTINCT Dokumen) AS docs,
+        CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+        CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+      FROM issue_rows
+      WHERE Tanggal IS NOT NULL AND NULLIF(ProductType, '') IS NOT NULL
+      GROUP BY NULLIF(ProductType, ''), CONVERT(varchar(7), Tanggal, 120)
+    ),
+    measured AS (
+      SELECT
+        ProductType,
+        period,
+        qty,
+        amount,
+        ${docsExpr} AS measure_docs
+      FROM type_period
+    ),
+    classified AS (
+      SELECT
+        ProductType,
+        period,
+        qty,
+        amount,
+        measure_docs,
+        CASE
+          WHEN measure_docs >= ${thresholds.fastMinIssueCount} THEN 'Fast Moving'
+          WHEN measure_docs BETWEEN ${thresholds.movingMinIssueCount} AND ${thresholds.movingMaxIssueCount} THEN 'Moving'
+          WHEN measure_docs = ${thresholds.slowIssueCount} THEN 'Slow Moving'
+          ELSE 'Dead Stock'
+        END AS category
+      FROM measured
+    ),
+    ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (PARTITION BY ProductType ORDER BY period ASC) AS rn_asc,
+        ROW_NUMBER() OVER (PARTITION BY ProductType ORDER BY period DESC) AS rn_desc
+      FROM classified
+    )
+    SELECT
+      ProductType AS code,
+      ProductType AS name,
+      MAX(CASE WHEN rn_asc = 1 THEN category END) AS fromCategory,
+      MAX(CASE WHEN rn_desc = 1 THEN category END) AS toCategory,
+      MAX(CASE WHEN rn_asc = 1 THEN period END) AS firstPeriod,
+      MAX(CASE WHEN rn_desc = 1 THEN period END) AS lastPeriod,
+      MIN(CASE WHEN measure_docs >= ${thresholds.fastMinIssueCount} THEN period END) AS firstFastPeriod,
+      CAST(SUM(qty) AS DECIMAL(18,2)) AS totalQty,
+      CAST(SUM(amount) AS DECIMAL(18,2)) AS totalAmount
+    FROM ranked
+    GROUP BY ProductType
     ORDER BY totalAmount DESC
   `
 }
@@ -469,7 +794,7 @@ function normalizeCategory(value: unknown): MovementCategory {
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const source = getSource(request)
   const sp = request.nextUrl.searchParams
-  const months = clampInt(sp.get('months'), 1, 120, 12)
+  const monthsParam = clampInt(sp.get('months'), 1, 120, 12)
   const anchor = parseAnchorPeriod(sp.get('period'))
   const itemType = (sp.get('itemType') ?? '').trim().toLowerCase()
   const itemTypeScope = itemTypeScopeFromParam(itemType)
@@ -481,16 +806,30 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     slowIssueCount: sp.get('movementSlowCount'),
   })
 
-  const periods = trailingPeriods(months, anchor)
+  // Mode akumulasi to-date: klasifikasi bulan X dari running total docs sejak dateFrom.
+  const accumulate = sp.get('accumulate') === '1' || sp.get('cumulative') === '1'
+  // Dimensi analisis movers/evolusi: per item code vs per product type.
+  const dimension = (sp.get('dimension') ?? 'item').trim().toLowerCase() === 'product-type' ? 'product-type' : 'item'
+  // Top-N movers yang dikembalikan (atur berapa baris barang/type yang ditampilkan).
+  const topN = clampInt(sp.get('top'), 1, 200, 12)
+
+  // Custom range dari timeline (dateFrom/dateTo 'YYYY-MM') menimpa preset months.
+  const customFrom = parseMonthPeriod(sp.get('dateFrom'))
+  const customTo = parseMonthPeriod(sp.get('dateTo'))
+  const customRange = customFrom && customTo && customFrom.getTime() <= customTo.getTime()
+  const rangeAnchor = customRange ? (customTo ?? anchor) : anchor
+  const periods = customRange
+    ? periodsInRange(customFrom ?? anchor, rangeAnchor)
+    : trailingPeriods(monthsParam, rangeAnchor)
   const firstPeriod = periods[0]
   const lastPeriod = periods[periods.length - 1]
   const dateFrom = `${firstPeriod}-01`
-  const nextMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1)
+  const nextMonth = new Date(rangeAnchor.getFullYear(), rangeAnchor.getMonth() + 1, 1)
   const dateToExclusive = `${nextMonth.getFullYear()}-${pad2(nextMonth.getMonth() + 1)}-01`
   const server = sourceToServer(source)
   const database = databaseForServer(server)
 
-  const cacheKey = `${source}|${months}|${lastPeriod}|${itemTypeScope}|${thresholds.fastMinIssueCount}|${thresholds.movingMinIssueCount}|${thresholds.movingMaxIssueCount}|${thresholds.slowIssueCount}`
+  const cacheKey = `${source}|${firstPeriod}|${lastPeriod}|${itemTypeScope}|${accumulate ? 'cum' : 'monthly'}|${dimension}|${topN}|${thresholds.fastMinIssueCount}|${thresholds.movingMinIssueCount}|${thresholds.movingMaxIssueCount}|${thresholds.slowIssueCount}`
   const hit = cache.get(cacheKey)
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
     return NextResponse.json({ ...hit.payload, cached: true })
@@ -501,14 +840,99 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const evolutionSql = buildEvolutionSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope)
-    const moversSql = buildMoversSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope)
+    let evolutionSql: string
+    let moversSql: string
+    if (dimension === 'product-type') {
+      evolutionSql = buildProductTypeEvolutionSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope)
+      moversSql = buildProductTypeMoversSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope, accumulate)
+    } else {
+      evolutionSql = accumulate
+        ? buildCumulativeEvolutionSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope)
+        : buildEvolutionSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope)
+      moversSql = accumulate
+        ? buildCumulativeMoversSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope)
+        : buildMoversSql(database, dateFrom, dateToExclusive, thresholds, itemTypeScope)
+    }
     const totalItemsSql = buildTotalItemsSql(database, itemTypeScope)
 
-    const [evolutionRows, moversRows, totalItemsRows] = await Promise.all([
+    // Valuation by item×calendar period (monthend past + live current) so Amount ≈ stock valuation.
+    const currentYm = lastPeriod
+    const accPairs = periods
+      .filter((p) => p !== currentYm)
+      .map((period) => {
+        const [y, m] = period.split('-').map(Number)
+        const acc = actualToAccountingPeriod(y, m)
+        return acc ? { period, accYear: acc.accYear, accMonth: acc.accMonth } : null
+      })
+      .filter((row): row is { period: string; accYear: number; accMonth: number } => Boolean(row))
+    const itemTypeSql =
+      itemTypeScope === '4'
+        ? `RTRIM(ISNULL(CONVERT(varchar(10), i.ItemType), '')) = '4'`
+        : itemTypeScope === '1'
+          ? `RTRIM(ISNULL(CONVERT(varchar(10), i.ItemType), '')) = '1'`
+          : `RTRIM(ISNULL(CONVERT(varchar(10), i.ItemType), '')) IN ('1','4')`
+    const valuationSql = `
+      WITH item_scope AS (
+        SELECT RTRIM(i.ItemCode) AS code,
+          CAST(ISNULL(i.QtyOnHand, 0) + ISNULL(i.QtyOnHold, 0) AS DECIMAL(18,2)) AS liveQty,
+          CAST(ISNULL(i.AverageCost, 0) AS DECIMAL(18,4)) AS liveCost
+        FROM [${database}].[dbo].[IN_ITEM] i
+        WHERE ${itemTypeSql} AND RTRIM(ISNULL(i.Status, '0')) = '1'
+      ),
+      monthend_val AS (
+        SELECT RTRIM(m.ItemCode) AS code,
+          CASE
+            ${accPairs.map((p) => `WHEN RTRIM(CONVERT(varchar(10), m.AccYear)) = '${p.accYear}' AND TRY_CONVERT(int, NULLIF(RTRIM(CONVERT(varchar(10), m.AccMonth)), '')) = ${p.accMonth} THEN '${p.period}'`).join('\n            ')}
+            ELSE NULL
+          END AS period,
+          CAST(SUM(
+            ISNULL(m.Qty, 0) * COALESCE(
+              NULLIF(m.AverageCost, 0),
+              CASE WHEN ISNULL(m.Qty, 0) = 0 THEN 0 ELSE ISNULL(m.Amount, 0) / NULLIF(m.Qty, 0) END,
+              0
+            )
+          ) AS DECIMAL(18,2)) AS valuation
+        FROM [${database}].[dbo].[IN_MTHENDITEM] m
+        INNER JOIN item_scope s ON s.code = RTRIM(m.ItemCode)
+        WHERE ${accPairs.length
+          ? accPairs.map((p) => `(RTRIM(CONVERT(varchar(10), m.AccYear)) = '${p.accYear}' AND TRY_CONVERT(int, NULLIF(RTRIM(CONVERT(varchar(10), m.AccMonth)), '')) = ${p.accMonth})`).join(' OR ')
+          : '1=0'}
+        GROUP BY RTRIM(m.ItemCode),
+          CASE
+            ${accPairs.map((p) => `WHEN RTRIM(CONVERT(varchar(10), m.AccYear)) = '${p.accYear}' AND TRY_CONVERT(int, NULLIF(RTRIM(CONVERT(varchar(10), m.AccMonth)), '')) = ${p.accMonth} THEN '${p.period}'`).join('\n            ')}
+            ELSE NULL
+          END
+      ),
+      live_val AS (
+        SELECT code, '${currentYm}' AS period, CAST(SUM(liveQty * liveCost) AS DECIMAL(18,2)) AS valuation
+        FROM item_scope GROUP BY code
+      )
+      SELECT code, period, valuation FROM monthend_val WHERE period IS NOT NULL
+      UNION ALL
+      SELECT code, period, valuation FROM live_val
+    `
+
+    // Item×period docs for category + valuation join (full universe for Dead Stock with stock).
+    const itemDocsSql = `
+      WITH issue_rows AS (
+        ${buildIssueRowsCte(database, dateFrom, dateToExclusive, itemTypeScope)}
+      )
+      SELECT
+        RTRIM(KodeBarang) AS code,
+        CONVERT(varchar(7), Tanggal, 120) AS period,
+        COUNT(DISTINCT Dokumen) AS docs,
+        CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty
+      FROM issue_rows
+      WHERE Tanggal IS NOT NULL
+      GROUP BY RTRIM(KodeBarang), CONVERT(varchar(7), Tanggal, 120)
+    `
+
+    const [evolutionRows, moversRows, totalItemsRows, valuationRows, itemDocsRows] = await Promise.all([
       runQuery(server, database, evolutionSql),
       runQuery(server, database, moversSql),
       runQuery(server, database, totalItemsSql),
+      runQuery(server, database, valuationSql).catch(() => [] as DbRow[]),
+      runQuery(server, database, itemDocsSql).catch(() => [] as DbRow[]),
     ])
 
     const byPeriod: CategoryEvolutionPoint[] = periods.map((period) => ({
@@ -520,19 +944,79 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     let totalAmount = 0
     let totalDocs = 0
 
-    for (const row of evolutionRows) {
+    // Prefer valuation-based amount composition when valuation rows available.
+    const valuationByKey = new Map<string, number>()
+    for (const row of valuationRows) {
+      const code = String(row.code ?? '').trim()
       const period = String(row.period ?? '').trim()
-      const category = normalizeCategory(row.category)
-      const idx = periodIndex.get(period)
-      if (idx === undefined) continue
-      const count = Number(row.itemCount ?? 0)
-      const qty = Number(row.qty ?? 0)
-      const amount = Number(row.amount ?? 0)
-      byPeriod[idx].categories[category].count += count
-      byPeriod[idx].categories[category].qty += qty
-      byPeriod[idx].categories[category].amount += amount
-      totalQty += qty
-      totalAmount += amount
+      if (!code || !period) continue
+      valuationByKey.set(`${code}|${period}`, Number(row.valuation ?? 0) || 0)
+    }
+    const docsByKey = new Map<string, { docs: number; qty: number }>()
+    for (const row of itemDocsRows) {
+      const code = String(row.code ?? '').trim()
+      const period = String(row.period ?? '').trim()
+      if (!code || !period) continue
+      docsByKey.set(`${code}|${period}`, {
+        docs: Number(row.docs ?? 0) || 0,
+        qty: Number(row.qty ?? 0) || 0,
+      })
+    }
+
+    if (valuationByKey.size > 0) {
+      // Rebuild count/qty/amount from item docs + stock valuation.
+      const seenCount = new Map<string, Set<string>>() // period|category -> item codes
+      for (const [key, valuation] of valuationByKey) {
+        const [code, period] = key.split('|')
+        const idx = periodIndex.get(period)
+        if (idx === undefined) continue
+        const issue = docsByKey.get(key)
+        const docs = issue?.docs ?? 0
+        const qty = issue?.qty ?? 0
+        let category: MovementCategory = 'Dead Stock'
+        if (docs >= thresholds.fastMinIssueCount) category = 'Fast Moving'
+        else if (docs >= thresholds.movingMinIssueCount && docs <= thresholds.movingMaxIssueCount) category = 'Moving'
+        else if (docs === thresholds.slowIssueCount) category = 'Slow Moving'
+        const bucket = byPeriod[idx].categories[category]
+        const countKey = `${period}|${category}`
+        if (!seenCount.has(countKey)) seenCount.set(countKey, new Set())
+        if (!seenCount.get(countKey)!.has(code)) {
+          seenCount.get(countKey)!.add(code)
+          bucket.count += 1
+        }
+        bucket.qty += qty
+        bucket.amount += valuation
+        totalQty += qty
+        totalAmount += valuation
+      }
+      // Keep issue-based evolutionRows as fallback for periods with no valuation coverage.
+      for (const row of evolutionRows) {
+        const period = String(row.period ?? '').trim()
+        const idx = periodIndex.get(period)
+        if (idx === undefined) continue
+        // If this period already has valuation amount, skip issue-amount overwrite.
+        const periodHasVal = periods[idx] && Array.from(valuationByKey.keys()).some((k) => k.endsWith(`|${period}`))
+        if (periodHasVal) continue
+        const category = normalizeCategory(row.category)
+        byPeriod[idx].categories[category].count += Number(row.itemCount ?? 0)
+        byPeriod[idx].categories[category].qty += Number(row.qty ?? 0)
+        byPeriod[idx].categories[category].amount += Number(row.amount ?? 0)
+      }
+    } else {
+      for (const row of evolutionRows) {
+        const period = String(row.period ?? '').trim()
+        const category = normalizeCategory(row.category)
+        const idx = periodIndex.get(period)
+        if (idx === undefined) continue
+        const count = Number(row.itemCount ?? 0)
+        const qty = Number(row.qty ?? 0)
+        const amount = Number(row.amount ?? 0)
+        byPeriod[idx].categories[category].count += count
+        byPeriod[idx].categories[category].qty += qty
+        byPeriod[idx].categories[category].amount += amount
+        totalQty += qty
+        totalAmount += amount
+      }
     }
 
     // Docs total isn't returned by the evolution aggregation; derive from movers or keep 0.
@@ -545,6 +1029,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       toCategory: normalizeCategory(row.toCategory),
       firstPeriod: String(row.firstPeriod ?? '').trim(),
       lastPeriod: String(row.lastPeriod ?? '').trim(),
+      firstFastPeriod: row.firstFastPeriod ? String(row.firstFastPeriod).trim() : null,
       totalQty: Number(row.totalQty ?? 0),
       totalAmount: Number(row.totalAmount ?? 0),
     }))
@@ -555,7 +1040,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       success: true,
       periods,
       byPeriod,
-      movers,
+      movers: movers.slice(0, topN),
       totals: {
         qty: totalQty,
         amount: totalAmount,

@@ -34,14 +34,27 @@ type TopListItem = {
 type ApiMatrixRow = {
   code: string
   name: string
-  cells: { qty: number[]; amount: number[]; docs: number[] }
+  productType?: string
+  /** amount = issue value; valuation = stock value for category composition */
+  cells: { qty: number[]; amount: number[]; docs: number[]; valuation?: number[] }
+}
+
+type PeriodSummary = {
+  period: string
+  valuation: number
+  issueQty: number
+  issueAmount: number
+  issueDocs: number
 }
 
 type ApiMatrixResponse = {
   success: boolean
   periods: string[]
   rows: ApiMatrixRow[]
+  /** Full stock valuation + issue activity (all items, not top-N only). */
+  periodSummary?: PeriodSummary[]
   currentPeriod: string
+  productTypes?: Array<{ code: string; name: string }>
   error?: string
 }
 
@@ -55,6 +68,10 @@ type MovementAnalyticsProps = {
   allowTimeline?: boolean
   costCenters?: TopListItem[]
   vehicles?: TopListItem[]
+  blocks?: TopListItem[]
+  stationAmount?: number
+  ledgerAmount?: number
+  vehicleAmount?: number
   stationQty?: number
   ledgerQty?: number
   vehicleQty?: number
@@ -80,6 +97,10 @@ export default function MovementAnalytics({
   allowTimeline = false,
   costCenters,
   vehicles,
+  blocks,
+  stationAmount = 0,
+  ledgerAmount = 0,
+  vehicleAmount = 0,
   stationQty = 0,
   ledgerQty = 0,
   vehicleQty = 0,
@@ -93,12 +114,20 @@ export default function MovementAnalytics({
   const [drillItem, setDrillItem] = useState<{ code: string; name: string } | null>(null)
   const [timelineMonths, setTimelineMonths] = useState<number>(months)
   const [customYears, setCustomYears] = useState<string>('')
+  const [itemCodeDraft, setItemCodeDraft] = useState('')
+  const [itemCode, setItemCode] = useState('')
+  const [productType, setProductType] = useState('')
+  const [qDraft, setQDraft] = useState('')
+  const [q, setQ] = useState('')
 
   useEffect(() => {
     if (!active) return
     let cancelled = false
     const params = new URLSearchParams({ source, months: String(timelineMonths), top: String(top) })
     if (itemType) params.set('itemType', itemType)
+    if (itemCode) params.set('itemCode', itemCode)
+    if (productType) params.set('productType', productType)
+    if (q) params.set('q', q)
     queueMicrotask(() => {
       if (!cancelled) setLoading(true)
     })
@@ -123,7 +152,7 @@ export default function MovementAnalytics({
     return () => {
       cancelled = true
     }
-  }, [active, source, timelineMonths, top, itemType])
+  }, [active, source, timelineMonths, top, itemType, itemCode, productType, q])
 
   const periods = data?.periods ?? []
   const matrixRows = useMemo(() => data?.rows ?? [], [data])
@@ -152,6 +181,106 @@ export default function MovementAnalytics({
 
   return (
     <div className="space-y-3">
+      {/* Cari barang: item code / product type / nama */}
+      <div className="rounded-[20px] border border-white/10 bg-white/[0.03] px-3 py-2.5">
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-[var(--rc-text)]">Cari barang · pola issue</p>
+            <p className="rc-data mt-0.5 text-[10px] text-[var(--rc-text-faint)]">
+              Item code exact · product type list · atau ketik nama/kode. Hasil = list item + pola timeline.
+            </p>
+          </div>
+          {(itemCode || productType || q) ? (
+            <button
+              type="button"
+              onClick={() => {
+                setItemCode('')
+                setItemCodeDraft('')
+                setProductType('')
+                setQ('')
+                setQDraft('')
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-[var(--rc-text-muted)] hover:bg-white/[0.08]"
+            >
+              Reset filter
+            </button>
+          ) : null}
+        </div>
+        <form
+          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_auto]"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setItemCode(itemCodeDraft.trim())
+            setQ(qDraft.trim())
+          }}
+        >
+          <label className="min-w-0">
+            <span className="rc-data mb-1 block text-[9px] uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Item code</span>
+            <input
+              value={itemCodeDraft}
+              onChange={(e) => setItemCodeDraft(e.target.value)}
+              placeholder="mis. FE025"
+              className="rc-data h-9 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-[12px] text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-300/40"
+              aria-label="Cari item code"
+            />
+          </label>
+          <label className="min-w-0">
+            <span className="rc-data mb-1 block text-[9px] uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Product type</span>
+            <select
+              value={productType}
+              onChange={(e) => {
+                setProductType(e.target.value)
+                // product type ganti → clear exact item code biar list type tidak ke-lock 1 item
+                if (e.target.value) {
+                  setItemCode('')
+                  setItemCodeDraft('')
+                }
+              }}
+              className="rc-data h-9 w-full rounded-xl border border-white/10 bg-black/25 px-2 text-[12px] text-[var(--rc-text)] outline-none focus:border-emerald-300/40"
+              aria-label="Filter product type"
+            >
+              <option value="">Semua product type</option>
+              {(data?.productTypes ?? []).map((pt) => (
+                <option key={pt.code} value={pt.code}>
+                  {pt.code}{pt.name && pt.name !== pt.code ? ` · ${pt.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-0">
+            <span className="rc-data mb-1 block text-[9px] uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Cari nama / kode</span>
+            <input
+              value={qDraft}
+              onChange={(e) => setQDraft(e.target.value)}
+              placeholder="ketik sebagian nama atau kode"
+              className="rc-data h-9 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-[12px] text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-300/40"
+              aria-label="Cari nama atau kode barang"
+            />
+          </label>
+          <div className="flex items-end gap-1.5">
+            <button
+              type="submit"
+              className="h-9 rounded-xl border border-emerald-300/30 bg-emerald-400/15 px-3 text-[12px] font-bold text-emerald-100 hover:bg-emerald-400/25"
+            >
+              Cari
+            </button>
+          </div>
+        </form>
+        {(itemCode || productType || q) ? (
+          <p className="rc-data mt-2 text-[10px] text-emerald-100/70">
+            Filter aktif:
+            {itemCode ? ` code=${itemCode}` : ''}
+            {productType ? ` type=${productType}` : ''}
+            {q ? ` q="${q}"` : ''}
+            {loading ? ' · memuat…' : ` · ${matrixRows.length} item`}
+          </p>
+        ) : (
+          <p className="rc-data mt-2 text-[10px] text-[var(--rc-text-faint)]">
+            Default: top {top} barang by amount. Pilih product type untuk list item tipe itu.
+          </p>
+        )}
+      </div>
+
       {allowTimeline ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[20px] border-white/10 bg-white/[0.03] px-3 py-2">
           <div className="flex items-center gap-2">
@@ -221,7 +350,7 @@ export default function MovementAnalytics({
             </span>
           </form>
           <p className="w-full text-[10px] leading-snug text-[var(--rc-text-faint)]">
-            Periode movement = <span className="font-semibold text-[var(--rc-text-muted)]">{timelineMonths} bulan</span> mundur dari periode berjalan
+            Timeline movement menghitung ulang kategori tiap barang dalam <span className="font-semibold text-[var(--rc-text-muted)]">{timelineMonths} bulan</span> mundur dari periode berjalan
             {periods.length > 0 ? (
               <>
                 {' '}— dari <span className="font-semibold text-[var(--rc-text-muted)]">{periods[0]}</span> sampai{' '}
@@ -230,16 +359,17 @@ export default function MovementAnalytics({
             ) : (
               ' (bulan ini)'
             )}
-            . Isi kolom Tahun (mis. 15) lalu Terapkan untuk melihat 15 tahun ke belakang.
+            . Threshold: Fast ≥ 6 · Moving 2–5 · Slow = 1. Isi Tahun (mis. 15) lalu Terapkan untuk scrub horizon panjang.
           </p>
         </div>
       ) : null}
 
-      {/* Tren agregat dinamis — protagonis; mengikuti metric toggle yang sama. */}
+      {/* Tren: Valuasi = full stock (periodSummary); Qty/Freq = issue activity. */}
       <div className="h-[260px]">
         <MovementTrend
           periods={periods}
           rows={matrixRows}
+          periodSummary={data?.periodSummary}
           metric={metric}
           onMetricChange={setMetric}
           loading={loading && !data}
@@ -268,6 +398,9 @@ export default function MovementAnalytics({
             months={timelineMonths}
             top={top}
             itemType={itemType}
+            itemCode={itemCode}
+            productType={productType}
+            q={q}
             active={active}
             metric={metric}
             onMetricChange={setMetric}
@@ -282,6 +415,10 @@ export default function MovementAnalytics({
           <ChargeBreakdown
             costCenters={costCenters}
             vehicles={vehicles}
+            blocks={blocks}
+            stationAmount={stationAmount}
+            ledgerAmount={ledgerAmount}
+            vehicleAmount={vehicleAmount}
             stationQty={stationQty}
             ledgerQty={ledgerQty}
             vehicleQty={vehicleQty}

@@ -34,6 +34,7 @@ type ItemRow = {
 type TopMovementScatterProps = {
   items: ItemRow[]
   loading?: boolean
+  failed?: boolean
   /** Jumlah bar yang ditampilkan. */
   top?: number
 }
@@ -59,7 +60,7 @@ function formatCompact(value: number) {
   return String(Math.round(value))
 }
 
-export default function TopMovementScatter({ items, loading, top = 10 }: TopMovementScatterProps) {
+export default function TopMovementScatter({ items, loading, failed, top = 10 }: TopMovementScatterProps) {
   const [metric, setMetric] = useState<MetricKey>('docs')
 
   const rows = useMemo(() => {
@@ -80,11 +81,13 @@ export default function TopMovementScatter({ items, loading, top = 10 }: TopMove
       <div className="grid h-full min-h-[200px] place-items-center rounded-2xl border-[var(--rc-forest-border)] bg-black/20 p-4 text-center">
         <div>
           <p className="text-sm font-bold text-[var(--rc-text-muted)]">
-            {loading ? 'Memuat sebaran barang…' : 'Belum ada data sebaran barang untuk filter ini.'}
+            {loading ? 'Memuat sebaran barang…' : failed ? 'Data usage gagal dimuat — sebaran tidak dihitung.' : 'Belum ada data sebaran barang untuk filter ini.'}
           </p>
           {!loading ? (
             <p className="mt-1 text-[11px] font-semibold text-[var(--rc-text-faint)]">
-              Sumber: top issue frekuensi / amount pada periode terpilih. Ubah periode, lokasi, atau tipe barang.
+              {failed
+                ? 'Sumber pengeluaran-barang gagal/timeout. Refresh atau cek gateway SQL sebelum membaca top movement.'
+                : 'Sumber: top issue frekuensi / amount pada periode terpilih. Ubah periode, lokasi, atau tipe barang.'}
             </p>
           ) : null}
         </div>

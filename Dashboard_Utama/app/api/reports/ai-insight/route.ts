@@ -301,7 +301,7 @@ function buildStockAgingPayloadInsight(context: InsightRequestContext, hints: Re
       : 'Tidak ada item prioritas yang cukup jelas dari sample row payload.',
     recommendation: topItem
       ? `${topItem.action} Mulai dari item Critical/High bernilai stok terbesar, lalu validasi kebutuhan operasional, stock opname, disposal, atau write-off.`
-      : 'Prioritaskan bucket Dead Stock dan Stale bernilai stok terbesar, lalu lanjutkan ke issue master data.',
+      : 'Prioritaskan bucket Dead Stock bernilai stok terbesar, lalu lanjutkan ke issue master data.',
     dataQualityNote: `Data quality dari payload: stok nol ${formatMetric(zeroStock)}, tanpa kategori ${formatMetric(noCategory)}, tanpa issue valid ${formatMetric(noIssue)}. AI hanya membaca payload UI, bukan menjalankan SQL baru. Sumber: ${source}.`,
   }
 }

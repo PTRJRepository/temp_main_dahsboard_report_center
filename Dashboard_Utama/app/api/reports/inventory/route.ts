@@ -4,6 +4,12 @@ import { getInventoryReport } from '@/lib/reports/inventory/config'
 import { attachInventoryAnalytics, type InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
 import { buildMonthlyStockAccountMovementAnalytics } from '@/lib/reports/inventory/monthly-stock-account-movement'
 import { buildInventoryReportAnalytics } from '@/lib/reports/inventory/report-analytics'
+import {
+  fuelIssueDocumentDateExpression,
+  fuelIssueFiscalPeriodFilter,
+  fuelIssueStatusFilter,
+  FUEL_ISSUE_PERIOD_RULE,
+} from '@/lib/reports/inventory/fuel-issue-sql'
 import { accountingActualPeriodSelectSql, accountingToActualPeriod, actualToAccountingPeriod } from '@/lib/reports/accounting-period'
 import { persistAggregate, serveAggregate } from '@/lib/reports/inventory/monthly-aggregate'
 import {
@@ -107,6 +113,8 @@ type ReportPayload = {
     items?: DbRow[]
     costCenters?: DbRow[]
     vehicles?: DbRow[]
+    /** Blok/station (BlkCode) — charge channel. */
+    blocks?: DbRow[]
   }
   /** Trend bulanan opsional (misal issue command deck) — satu baris per bulan: qty/amount/events. */
   trend?: DbRow[]
@@ -198,6 +206,10 @@ function getTableSort(request: NextRequest) {
 
 function sanitizeLike(value: string) {
   return value.trim().replace(/'/g, "''").slice(0, 80)
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function cleanInventoryCode(value?: string) {
@@ -462,23 +474,38 @@ function cleanLocationCode(value?: string) {
 
 function goodReceiptSqlScope(filters?: ReportFilterInput) {
   const month = monthBounds(filters?.period)
-  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from
+  const dateFrom = cleanSqlDate(filters?.dateFrom)
   const dateTo = cleanSqlDate(filters?.dateTo)
-  const clauses = ["h.CreateDate >= '2000-01-01'"]
-  const applied: Record<string, string> = { dateField: 'PU_GOODSRCV.CreateDate' }
+  const clauses: string[] = []
+  const applied: Record<string, string> = {}
 
-  if (dateFrom) {
-    clauses.push(`h.CreateDate >= '${dateFrom}'`)
-    applied.dateFrom = dateFrom
+  // Selaras monthly-stock-account-movement: kalau tidak ada rentang tanggal
+  // eksplisit, GR difilter pakai fiscal AccYear/AccMonth (bukan CreateDate) dan
+  // hanya status posted (2/5/6). Ini yang bikin KPI 0 saat CreateDate ≠ AccMonth.
+  if (!dateFrom && !dateTo) {
+    const period = resolveAssetValuationPeriod(filters)
+    clauses.push(`RTRIM(CONVERT(varchar(10), h.AccYear)) = '${period.accYear}'`)
+    clauses.push(`RTRIM(CONVERT(varchar(10), h.AccMonth)) = '${period.accMonth}'`)
+    applied.dateField = 'PU_GOODSRCV.AccYear/AccMonth'
+    applied.accYear = String(period.accYear)
+    applied.accMonth = String(period.accMonth)
+    applied.period = period.accountingPeriod
+  } else {
+    clauses.push(`h.CreateDate >= '${dateFrom ?? '2000-01-01'}'`)
+    applied.dateField = 'PU_GOODSRCV.CreateDate'
+    if (dateFrom) applied.dateFrom = dateFrom
+    if (dateTo) {
+      clauses.push(`h.CreateDate < DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))`)
+      applied.dateTo = dateTo
+    } else if (month.toExclusive) {
+      clauses.push(`h.CreateDate < '${month.toExclusive}'`)
+      applied.dateToExclusive = month.toExclusive
+    }
   }
 
-  if (dateTo) {
-    clauses.push(`h.CreateDate < DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))`)
-    applied.dateTo = dateTo
-  } else if (month.toExclusive) {
-    clauses.push(`h.CreateDate < '${month.toExclusive}'`)
-    applied.dateToExclusive = month.toExclusive
-  }
+  // Hanya GR yang sudah confirmed/posted (selaras monthly goods_receive).
+  clauses.push(`RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')`)
+  applied.status = '2,5,6'
 
   const location = sanitizeLike(filters?.location ?? '')
   if (location) {
@@ -512,8 +539,16 @@ function nonWorkshopItemTypeFilter(alias = 'i') {
   return `AND ISNULL(${warehouseInventoryItemTypeExpression(alias)}, '') <> '4'`
 }
 
+function stockIssueDocumentDateExpression(alias = 'h') {
+  // Patokan tanggal = CreateDate; PostDate sering placeholder 1900.
+  // Fallback: CreateDate → PostDate(≠1900) → UpdateDate.
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate)`
+}
+
 function workshopStockIssueDateExpression(alias = 's') {
-  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.TransDate)`
+  // Patokan tanggal = CreateDate (tanggal slip dibuat); PostDate sering placeholder 1900.
+  // Fallback: CreateDate → PostDate(≠1900) → TransDate.
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.TransDate)`
 }
 
 function workshopStockIssueDocumentExpression(alias = 's') {
@@ -526,14 +561,6 @@ function workshopStockIssueDocumentExpression(alias = 's') {
 
 function workshopStockIssueAmountExpression(alias = 's') {
   return `COALESCE(${alias}.Amount, ${alias}.PriceAmount, ISNULL(${alias}.Qty, 0) * ISNULL(${alias}.Price, 0), 0)`
-}
-
-function fuelIssueDocumentDateExpression(alias = 'h') {
-  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.FuelIssueRefDate, ${alias}.UpdateDate, ${alias}.CreateDate)`
-}
-
-function fuelIssueStatusFilter(alias = 'h') {
-  return `AND RTRIM(ISNULL(${alias}.Status, '')) IN ('2', '6')`
 }
 
 /** Issue money: prefer line Amount; if 0/NULL use Qty * Cost (matches official RPTIN valuation). */
@@ -641,7 +668,7 @@ function stockIssueUsageApply(
   const issueDocsSql = `
           SELECT
             RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS StockIssueID,
-            h.PostDate AS PostDate,
+            ${stockIssueDocumentDateExpression('h')} AS PostDate,
             l.Qty AS Qty,
             l.Amount AS Amount
           FROM [${database}].[dbo].[IN_STOCKISSUELN] l
@@ -649,7 +676,20 @@ function stockIssueUsageApply(
           WHERE ISNULL(${itemType}, '') <> '4'
             AND l.ItemCode = ${itemAlias}.ItemCode
             AND h.LocCode = ${itemAlias}.LocCode
-            AND ${stockIssueDateBoundsSql(windowScope, 'h.PostDate')}
+            AND ${stockIssueDateBoundsSql(windowScope, stockIssueDocumentDateExpression('h'))}
+          UNION ALL
+          SELECT
+            RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS StockIssueID,
+            ${fuelIssueDocumentDateExpression('h')} AS PostDate,
+            l.Qty AS Qty,
+            l.Amount AS Amount
+          FROM [${database}].[dbo].[IN_FUELISSUELN] l
+          INNER JOIN [${database}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
+          WHERE ISNULL(${itemType}, '') <> '4'
+            AND l.ItemCode = ${itemAlias}.ItemCode
+            AND h.LocCode = ${itemAlias}.LocCode
+            ${fuelIssueStatusFilter('h')}
+            AND ${stockIssueDateBoundsSql(windowScope, fuelIssueDocumentDateExpression('h'))}
           UNION ALL
           SELECT
             ${workshopDoc} AS StockIssueID,
@@ -1153,6 +1193,40 @@ function monthlyStockAccountMovementCtes({
 
       UNION ALL
 
+      -- Inventory RECEIVE (IN_STOCKRECEIVE) ≠ purchasing GR
+      SELECT
+        RTRIM(l.ItemCode),
+        0, 0,
+        ISNULL(l.Qty, 0),
+        CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS decimal(18, 6)),
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      FROM [${database}].[dbo].[IN_STOCKRECEIVE] h
+      JOIN [${database}].[dbo].[IN_STOCKRECEIVELN] l
+        ON h.StockReceiveID = l.StockReceiveID
+      WHERE RTRIM(h.LocCode) = '${location}'
+        ${accountingPeriodFilter('h', reportAccYear, reportAccMonth)}
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
+        ${transactionAsOfFilter('h', transactionAsOf)}
+
+      UNION ALL
+
+      -- Inventory RETURN (IN_STOCKRTN) — return ke gudang
+      SELECT
+        RTRIM(l.ItemCode),
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ISNULL(l.Qty, 0),
+        CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS decimal(18, 6)),
+        0, 0, 0, 0, 0, 0
+      FROM [${database}].[dbo].[IN_STOCKRTN] h
+      JOIN [${database}].[dbo].[IN_STOCKRTNLN] l
+        ON h.StockRtnID = l.StockRtnID
+      WHERE RTRIM(h.LocCode) = '${location}'
+        ${accountingPeriodFilter('h', reportAccYear, reportAccMonth)}
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
+        ${transactionAsOfFilter('h', transactionAsOf)}
+
+      UNION ALL
+
       SELECT
         RTRIM(gl.ItemCode),
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1189,7 +1263,7 @@ function monthlyStockAccountMovementCtes({
         ON grl.POLnID = p.POLnID
       WHERE RTRIM(gr.LocCode) = '${location}'
         ${accountingPeriodFilter('gr', reportAccYear, reportAccMonth)}
-        AND RTRIM(gr.Status) = '2'
+        AND RTRIM(ISNULL(gr.Status, '')) IN ('2', '5', '6')
         ${transactionAsOfFilter('gr', transactionAsOf)}
     ),
     agg AS (
@@ -1238,12 +1312,14 @@ function monthlyStockAccountMovementCtes({
     movement_issue_doc_sources AS (
       -- GUARDRAIL(mc-issue-parity): MovementCategory count must use same issue universe as Issued totals.
       -- Status 2/5/6 (not Status=2 only), LEFT JOIN master (orphan lines still count), include WS_JOBSTOCK TransType 1.
+      -- SourceTable dipakai untuk breakdown per tabel (IN_STOCKISSUE / IN_FUELISSUE / WS_JOBSTOCK).
       SELECT
         RTRIM(l.ItemCode) AS ItemCode,
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS MovementDocId,
         ISNULL(l.Qty, 0) AS MovementQty,
         ${issueLineAmountExpression('l')} AS MovementAmount,
-        h.PostDate AS MovementDate
+        ${stockIssueDocumentDateExpression('h')} AS MovementDate,
+        'IN_STOCKISSUE' AS SourceTable
       FROM [${database}].[dbo].[IN_STOCKISSUE] h
       JOIN [${database}].[dbo].[IN_STOCKISSUELN] l
         ON h.StockIssueID = l.StockIssueID
@@ -1251,8 +1327,8 @@ function monthlyStockAccountMovementCtes({
         ON issueItem.ItemCode = l.ItemCode
         AND issueItem.LocCode = h.LocCode
       WHERE RTRIM(h.LocCode) = '${location}'
-        AND h.PostDate >= '${movementWindow.startInclusive}'
-        AND h.PostDate < '${movementWindow.endExclusive}'
+        AND ${stockIssueDocumentDateExpression('h')} >= '${movementWindow.startInclusive}'
+        AND ${stockIssueDocumentDateExpression('h')} < '${movementWindow.endExclusive}'
         AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
         AND (
           issueItem.ItemCode IS NULL
@@ -1267,7 +1343,8 @@ function monthlyStockAccountMovementCtes({
         RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS MovementDocId,
         ISNULL(l.Qty, 0) AS MovementQty,
         ${issueLineAmountExpression('l')} AS MovementAmount,
-        ${fuelIssueDocumentDateExpression('h')} AS MovementDate
+        ${fuelIssueDocumentDateExpression('h')} AS MovementDate,
+        'IN_FUELISSUE' AS SourceTable
       FROM [${database}].[dbo].[IN_FUELISSUE] h
       JOIN [${database}].[dbo].[IN_FUELISSUELN] l
         ON h.FuelIssueID = l.FuelIssueID
@@ -1291,7 +1368,8 @@ function monthlyStockAccountMovementCtes({
         ${workshopStockIssueDocumentExpression('s')} AS MovementDocId,
         ISNULL(s.Qty, 0) AS MovementQty,
         ${workshopStockIssueAmountExpression('s')} AS MovementAmount,
-        ${workshopStockIssueDateExpression('s')} AS MovementDate
+        ${workshopStockIssueDateExpression('s')} AS MovementDate,
+        'WS_JOBSTOCK' AS SourceTable
       FROM [${database}].[dbo].[WS_JOBSTOCK] s
       LEFT JOIN [${database}].[dbo].[IN_ITEM] issueItem
         ON issueItem.ItemCode = s.ItemCode
@@ -1309,6 +1387,9 @@ function monthlyStockAccountMovementCtes({
         COUNT(DISTINCT MovementDocId) AS MovementIssueCountActual,
         CAST(SUM(MovementQty) AS decimal(18, 6)) AS MovementIssueQtyActual,
         CAST(SUM(MovementAmount) AS decimal(18, 6)) AS MovementIssueAmountActual,
+        CAST(SUM(CASE WHEN SourceTable = 'IN_STOCKISSUE' THEN MovementAmount ELSE 0 END) AS decimal(18, 6)) AS GudangIssueAmount,
+        CAST(SUM(CASE WHEN SourceTable = 'IN_FUELISSUE' THEN MovementAmount ELSE 0 END) AS decimal(18, 6)) AS FuelIssueAmount,
+        CAST(SUM(CASE WHEN SourceTable = 'WS_JOBSTOCK' THEN MovementAmount ELSE 0 END) AS decimal(18, 6)) AS WorkshopIssueAmount,
         MAX(MovementDate) AS MovementLastIssueDate
       FROM movement_issue_doc_sources
       GROUP BY ItemCode
@@ -1386,6 +1467,9 @@ function monthlyStockAccountMovementCtes({
         CAST(${movementActualCountExpression} AS int) AS MovementIssueCountActual,
         CAST(${movementActualQtyExpression} AS decimal(18, 6)) AS MovementIssueQtyActual,
         CAST(${movementActualAmountExpression} AS decimal(18, 6)) AS MovementIssueAmountActual,
+        CAST(ISNULL(mi.GudangIssueAmount, 0) AS decimal(18, 6)) AS GudangIssueAmount,
+        CAST(ISNULL(mi.FuelIssueAmount, 0) AS decimal(18, 6)) AS FuelIssueAmount,
+        CAST(ISNULL(mi.WorkshopIssueAmount, 0) AS decimal(18, 6)) AS WorkshopIssueAmount,
         mi.MovementLastIssueDate,
         -- GUARDRAIL(mc-qty-period): qty expr kept for call signature; 0 issue always Dead Stock (Stale removed).
         ${movementCategorySqlCase(
@@ -1442,6 +1526,9 @@ function monthlyStockAccountMovementCtes({
         MovementIssueCountActual,
         MovementIssueQtyActual,
         MovementIssueAmountActual,
+        GudangIssueAmount,
+        FuelIssueAmount,
+        WorkshopIssueAmount,
         MovementLastIssueDate,
         MovementIssueCountActual AS StockIssueMovementCount,
         MovementIssueQtyActual AS StockIssueMovementQty,
@@ -1751,7 +1838,7 @@ async function enrichPayloadWithMovementCategory<T extends ReportPayload>(
         capped: pairMap.size > MOVEMENT_ENRICHMENT_LIMIT,
         movementWindow,
         movementCategoryThresholds: movementThresholds,
-        sourceTables: 'IN_ITEM, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+        sourceTables: 'IN_ITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK',
       },
     },
   }
@@ -1947,9 +2034,9 @@ async function stockSummary({ limit, search, ctx, stale, filters }: ReportHandle
     summary,
     chart,
     metadata: metadata(ctx, {
-      sourceTables: 'IN_ITEM, IN_PRODCAT, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+      sourceTables: 'IN_ITEM, IN_PRODCAT, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK',
       quantityRule: 'QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder',
-      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
+      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM memakai IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
       primaryChart: 'Nilai Persediaan per Lokasi',
       availableCharts: [
         'Nilai Persediaan per Lokasi',
@@ -2291,7 +2378,7 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
           l.ItemCode,
           h.LocCode,
           RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS StockIssueID,
-          h.PostDate AS PostDate,
+          ${stockIssueDocumentDateExpression('h')} AS PostDate,
           l.Qty AS Qty,
           l.Amount AS Amount
         FROM [${DATABASE}].[dbo].[IN_STOCKISSUELN] l
@@ -2300,8 +2387,26 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
         INNER JOIN [${DATABASE}].[dbo].[IN_ITEM] issueItem
           ON issueItem.ItemCode = l.ItemCode
           AND issueItem.LocCode = h.LocCode
-        WHERE h.PostDate >= '${movementWindow.startInclusive}'
-          AND h.PostDate < '${movementWindow.endExclusive}'
+        WHERE ${stockIssueDocumentDateExpression('h')} >= '${movementWindow.startInclusive}'
+          AND ${stockIssueDocumentDateExpression('h')} < '${movementWindow.endExclusive}'
+          ${nonWorkshopItemTypeFilter('issueItem')}
+        UNION ALL
+        SELECT
+          l.ItemCode,
+          h.LocCode,
+          RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS StockIssueID,
+          ${fuelIssueDocumentDateExpression('h')} AS PostDate,
+          l.Qty AS Qty,
+          l.Amount AS Amount
+        FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
+        INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h
+          ON l.FuelIssueID = h.FuelIssueID
+        INNER JOIN [${DATABASE}].[dbo].[IN_ITEM] issueItem
+          ON issueItem.ItemCode = l.ItemCode
+          AND issueItem.LocCode = h.LocCode
+        WHERE ${fuelIssueDocumentDateExpression('h')} >= '${movementWindow.startInclusive}'
+          AND ${fuelIssueDocumentDateExpression('h')} < '${movementWindow.endExclusive}'
+          ${fuelIssueStatusFilter('h')}
           ${nonWorkshopItemTypeFilter('issueItem')}
         UNION ALL
         SELECT
@@ -2595,7 +2700,7 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
     summary,
     chart,
     metadata: metadata(ctx, {
-      sourceTables: useMonthEnd ? 'IN_MTHENDITEM, IN_ITEM, IN_PRODTYPE, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK' : 'IN_ITEM, IN_PRODTYPE, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+      sourceTables: useMonthEnd ? 'IN_MTHENDITEM, IN_ITEM, IN_PRODTYPE, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK' : 'IN_ITEM, IN_PRODTYPE, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK',
       period: period.actualPeriod,
       actualPeriod: period.actualPeriod,
       actualYear: period.actualYear,
@@ -2612,7 +2717,7 @@ async function allStockMovementAnalysis({ limit, limitAll, search, ctx, filters 
       movementRule: `MovementCategory dihitung dari StockIssue Movement Count per item: ${movementCategoryThresholdLabel(movementThresholds)}. Dead Stock jika StockIssue Movement 0 (qty closing diabaikan).`,
       movementCategoryThresholds: movementThresholds,
       movementCategoryThresholdLabel: movementCategoryThresholdLabel(movementThresholds),
-      issueUsageRule: 'StockIssue Movement: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1. Asset Amount Real Time tetap berasal dari IN_ITEM (QtyOnHand + QtyOnHold) * AverageCost.',
+      issueUsageRule: 'StockIssue Movement: ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM memakai IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1. Asset Amount Real Time tetap berasal dari IN_ITEM (QtyOnHand + QtyOnHold) * AverageCost.',
       movementSourceRule: 'MovementSource dinormalisasi per row: ItemType 4 = WS_JOBSTOCK, ItemType 1 = STOCK_ISSUE_REGULAR.',
       movementSourceQuality: {
         itemType4WorkshopItem: summary.ItemType4WorkshopItem,
@@ -2721,9 +2826,9 @@ async function stockCard({ limit, search, ctx, stale, filters }: ReportHandlerOp
     summary,
     chart,
     metadata: metadata(ctx, {
-      sourceTables: 'IN_ITEM, IN_ITEMCODE, IN_PRODCAT, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+      sourceTables: 'IN_ITEM, IN_ITEMCODE, IN_PRODCAT, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK',
       quantityRule: 'QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder',
-      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
+      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM memakai IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
       primaryChart: 'Distribusi Quality Flags',
       availableCharts: ['Distribusi Quality Flags', 'Item Stale per Gudang', 'Top Item Stale Bernilai Besar'],
       qualityFocus: ['ItemStokNol', 'ItemTanpaKategori', 'ItemTanpaIssueValid', 'ItemUpdateLebih12Bulan'],
@@ -2780,6 +2885,26 @@ async function stockMovement({ limit, search, ctx }: ReportHandlerOptions): Prom
         AND ${workshopDate} < ${maxTransactionDate}
         AND RTRIM(ISNULL(s.TransType, '')) = '1'
         AND ${workshopStockIssueItemTypeExpression('i', 's')} = '4'
+      UNION ALL
+      SELECT
+        'Keluar BBM' AS JenisMutasi,
+        RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS Dokumen,
+        ${fuelIssueDocumentDateExpression('h')} AS Tanggal,
+        RTRIM(h.LocCode) AS Gudang,
+        RTRIM(l.ItemCode) AS KodeBarang,
+        RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
+        CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
+        CAST(ISNULL(l.Amount, 0) AS DECIMAL(18,2)) AS Amount,
+        RTRIM(ISNULL(l.AccCode, '')) AS AccCode,
+        RTRIM(ISNULL(l.BlkCode, '')) AS BlkCode,
+        RTRIM(ISNULL(l.VehCode, '')) AS VehCode
+      FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
+      INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
+      LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
+      WHERE ${fuelIssueDocumentDateExpression('h')} >= '2000-01-01'
+        AND ${fuelIssueDocumentDateExpression('h')} < ${maxTransactionDate}
+        ${fuelIssueStatusFilter('h')}
+        ${nonWorkshopItemTypeFilter('i')}
       UNION ALL
       SELECT
         'Masuk',
@@ -2872,6 +2997,20 @@ async function stockMovement({ limit, search, ctx }: ReportHandlerOptions): Prom
         AND ${workshopDate} < ${maxTransactionDate}
         AND RTRIM(ISNULL(s.TransType, '')) = '1'
         AND ${workshopStockIssueItemTypeExpression('i', 's')} = '4'
+      UNION ALL
+      SELECT
+        RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS Dokumen,
+        ${fuelIssueDocumentDateExpression('h')} AS Tanggal,
+        l.ItemCode,
+        l.Qty,
+        l.Amount
+      FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
+      INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
+      LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
+      WHERE ${fuelIssueDocumentDateExpression('h')} >= '2000-01-01'
+        AND ${fuelIssueDocumentDateExpression('h')} < ${maxTransactionDate}
+        ${fuelIssueStatusFilter('h')}
+        ${nonWorkshopItemTypeFilter('i')}
     )
     SELECT
       (SELECT COUNT(*) FROM keluar) AS BarisKeluar,
@@ -2915,6 +3054,15 @@ async function stockMovement({ limit, search, ctx }: ReportHandlerOptions): Prom
         AND ${workshopStockIssueItemTypeExpression('i', 's')} = '4'
       GROUP BY CONVERT(char(7), ${workshopDate}, 120)
       UNION ALL
+      SELECT 'Keluar', CONVERT(char(7), ${fuelIssueDocumentDateExpression('h')}, 120), SUM(ISNULL(l.Qty,0)), SUM(ISNULL(l.Amount,0))
+      FROM [${DATABASE}].[dbo].[IN_FUELISSUE] h JOIN [${DATABASE}].[dbo].[IN_FUELISSUELN] l ON l.FuelIssueID=h.FuelIssueID
+      LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
+      WHERE ${fuelIssueDocumentDateExpression('h')} >= '2025-05-01'
+        AND ${fuelIssueDocumentDateExpression('h')} < ${maxTransactionDate}
+        ${fuelIssueStatusFilter('h')}
+        ${nonWorkshopItemTypeFilter('i')}
+      GROUP BY CONVERT(char(7), ${fuelIssueDocumentDateExpression('h')}, 120)
+      UNION ALL
       SELECT 'Masuk', CONVERT(char(7), h.StockRefDate, 120), SUM(ISNULL(l.Qty,0)), SUM(ISNULL(l.Amount,0))
       FROM [${DATABASE}].[dbo].[IN_STOCKRECEIVE] h JOIN [${DATABASE}].[dbo].[IN_STOCKRECEIVELN] l ON l.StockReceiveID=h.StockReceiveID
       WHERE h.StockRefDate >= '2025-05-01'
@@ -2953,7 +3101,7 @@ async function stockMovement({ limit, search, ctx }: ReportHandlerOptions): Prom
     summary,
     chart,
     metadata: metadata(ctx, {
-      sourceTables: 'IN_STOCKISSUE/LN, WS_JOBSTOCK, IN_STOCKRECEIVE/LN, PU_GOODSRCV/LN, IN_STOCKTRANSFER/LN',
+      sourceTables: 'IN_STOCKISSUE/LN, IN_FUELISSUE/LN, WS_JOBSTOCK, IN_STOCKRECEIVE/LN, PU_GOODSRCV/LN, IN_STOCKTRANSFER/LN',
       primaryChart: 'Mutasi Masuk vs Keluar per Bulan',
       availableCharts: ['Mutasi Masuk vs Keluar per Bulan', 'Top Barang Bergerak', 'Bulan Tidak Muncul'],
       qualityFocus: ['ItemType 4 Workshop keluar dibaca dari WS_JOBSTOCK.TransType = 1.', 'Goods receipt masuk memakai PU_GOODSRCV.CreateDate dan PU_GOODSRCVLN.StockQty/ReceiveQty.', 'Tanggal IN_STOCK memakai StockIssueRefDate, StockRefDate, dan StockTransferDate.', 'Tanggal transaksi future dikeluarkan dari movement valid.', 'missing period'],
@@ -3058,6 +3206,9 @@ async function monthlyStockAccountMovementDetails({ limit, limitAll, search, ctx
       CAST(SUM(MovementIssueCountActual) AS DECIMAL(18,2)) AS TotalMovementIssueCountActual,
       CAST(SUM(MovementIssueQtyActual) AS DECIMAL(18,2)) AS TotalMovementIssueQtyActual,
       CAST(SUM(MovementIssueAmountActual) AS DECIMAL(18,2)) AS TotalMovementIssueAmountActual,
+      CAST(SUM(GudangIssueAmount) AS DECIMAL(18,2)) AS GudangIssueAmount,
+      CAST(SUM(FuelIssueAmount) AS DECIMAL(18,2)) AS FuelIssueAmount,
+      CAST(SUM(WorkshopIssueAmount) AS DECIMAL(18,2)) AS WorkshopIssueAmount,
       CAST(SUM(QtyOnHand) AS DECIMAL(18,2)) AS QtyOnHand,
       CAST(SUM(QtyOnHold) AS DECIMAL(18,2)) AS QtyOnHold,
       CAST(SUM(QtyOnHandHold) AS DECIMAL(18,2)) AS QtyOnHandHold,
@@ -3289,9 +3440,9 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
       RTRIM(l.ItemCode) AS ItemCode,
       RTRIM(ISNULL(i.Description, l.ItemCode)) AS ItemDescription,
       RTRIM(l.ReceiveUOM) AS UOM,
-      CAST(ISNULL(l.ReceiveQty, 0) AS DECIMAL(18,2)) AS Quantity,
+      CAST(COALESCE(NULLIF(l.StockQty, 0), l.ReceiveQty, 0) AS DECIMAL(18,2)) AS Quantity,
       CAST(ISNULL(p.Cost, 0) AS DECIMAL(18,2)) AS UnitCost,
-      CAST(ISNULL(l.ReceiveQty, 0) * ISNULL(p.Cost, 0) AS DECIMAL(18,2)) AS TotalAmount,
+      CAST(COALESCE(NULLIF(l.StockQty, 0), l.ReceiveQty, 0) * ISNULL(p.Cost, 0) AS DECIMAL(18,2)) AS TotalAmount,
       RTRIM(l.AccCode) AS ChartOfAccountCode,
       RTRIM(l.ChargeTo) AS ChargeTo,
       RTRIM(l.POLnID) AS POLineID,
@@ -3342,8 +3493,8 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
       COUNT(*) AS TotalBaris,
       COUNT(DISTINCT h.SupplierCode) AS TotalSupplier,
       COUNT(DISTINCT l.ItemCode) AS TotalItem,
-      CAST(SUM(ISNULL(l.ReceiveQty, 0)) AS DECIMAL(18,2)) AS TotalQuantity,
-      CAST(SUM(ISNULL(l.ReceiveQty, 0) * ISNULL(p.Cost, 0)) AS DECIMAL(18,2)) AS TotalAmount,
+      CAST(SUM(COALESCE(NULLIF(l.StockQty, 0), l.ReceiveQty, 0)) AS DECIMAL(18,2)) AS TotalQuantity,
+      CAST(SUM(COALESCE(NULLIF(l.StockQty, 0), l.ReceiveQty, 0) * ISNULL(p.Cost, 0)) AS DECIMAL(18,2)) AS TotalAmount,
       SUM(CASE WHEN p.POLnID IS NULL THEN 1 ELSE 0 END) AS MissingPOLineCostRows,
       SUM(CASE WHEN s.SupplierCode IS NULL THEN 1 ELSE 0 END) AS MissingSupplierNameRows,
       MAX(h.CreateDate) AS TerakhirUpdate
@@ -3369,8 +3520,8 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
       RTRIM(ISNULL(s.Name, h.SupplierCode)) AS SupplierName,
       COUNT(DISTINCT h.GoodsRcvID) AS TotalGoodsReceive,
       COUNT(*) AS TotalRows,
-      CAST(SUM(ISNULL(l.ReceiveQty, 0)) AS DECIMAL(18,2)) AS Qty,
-      CAST(SUM(ISNULL(l.ReceiveQty, 0) * ISNULL(p.Cost, 0)) AS DECIMAL(18,2)) AS Amount
+      CAST(SUM(COALESCE(NULLIF(l.StockQty, 0), l.ReceiveQty, 0)) AS DECIMAL(18,2)) AS Qty,
+      CAST(SUM(COALESCE(NULLIF(l.StockQty, 0), l.ReceiveQty, 0) * ISNULL(p.Cost, 0)) AS DECIMAL(18,2)) AS Amount
     FROM [${DATABASE}].[dbo].[PU_GOODSRCVLN] l
     INNER JOIN [${DATABASE}].[dbo].[PU_GOODSRCV] h ON l.GoodsRcvID = h.GoodsRcvID
     LEFT JOIN [${DATABASE}].[dbo].[PU_POLN] p ON l.POLnID = p.POLnID
@@ -3421,15 +3572,33 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   const itemTypeFilter = filters?.itemType?.toLowerCase()
   const includeGudang = !itemTypeFilter || itemTypeFilter === '1' || itemTypeFilter === 'gudang'
   const includeWorkshop = !itemTypeFilter || itemTypeFilter === '4' || itemTypeFilter === 'workshop'
+  // Align Total Usage with monthly IssuedTotal:
+  // stock + workshop + fuel → AccYear/AccMonth (fiscal) saat periode akuntansi; kalender DocDate hanya utk date range eksplisit.
+  const period = resolveAssetValuationPeriod(filters)
   const month = monthBounds(filters?.period)
-  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? '2000-01-01'
+  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? period.actualPeriod + '-01'
   const dateTo = cleanSqlDate(filters?.dateTo)
   const dateToExclusive = dateTo ? `DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))` : month.toExclusive ? `'${month.toExclusive}'` : null
+  const useAccAxis = !cleanSqlDate(filters?.dateFrom) && !cleanSqlDate(filters?.dateTo)
   const location = sanitizeLike(filters?.location ?? '')
-  const gudangDateSql = `h.PostDate >= '${dateFrom}'${dateToExclusive ? `\n        AND h.PostDate < ${dateToExclusive}` : ''}`
-  const workshopDateSql = `${workshopDate} >= '${dateFrom}'${dateToExclusive ? `\n        AND ${workshopDate} < ${dateToExclusive}` : ''}`
   const gudangLocationSql = location ? `\n        AND RTRIM(h.LocCode) LIKE N'%${location}%'` : ''
   const workshopLocationSql = location ? `\n        AND RTRIM(s.LocCode) LIKE N'%${location}%'` : ''
+  const fuelLocationSql = location ? `\n        AND RTRIM(h.LocCode) LIKE N'%${location}%'` : ''
+  const gudangDocDate = stockIssueDocumentDateExpression('h')
+  const gudangDateSql = useAccAxis
+    ? `RTRIM(CONVERT(varchar(10), h.AccYear)) = '${period.accYear}'\n        AND RTRIM(CONVERT(varchar(10), h.AccMonth)) = '${period.accMonth}'`
+    : `${gudangDocDate} >= '${dateFrom}'${dateToExclusive ? `\n        AND ${gudangDocDate} < ${dateToExclusive}` : ''}`
+  const workshopDateSql = useAccAxis
+    ? `RTRIM(CONVERT(varchar(10), s.AccYear)) = '${period.accYear}'\n        AND RTRIM(CONVERT(varchar(10), s.AccMonth)) = '${period.accMonth}'`
+    : `${workshopDate} >= '${dateFrom}'${dateToExclusive ? `\n        AND ${workshopDate} < ${dateToExclusive}` : ''}`
+  const fuelDocDate = fuelIssueDocumentDateExpression('h')
+  // Fuel periode: FISKAL AccYear/AccMonth saat useAccAxis (parity dgn monthly RPTIN);
+  // kalender DocDate hanya saat user memberi date range eksplisit.
+  const fuelDateSql = useAccAxis
+    ? `RTRIM(CONVERT(varchar(10), h.AccYear)) = '${period.accYear}'\n        AND RTRIM(CONVERT(varchar(10), h.AccMonth)) = '${period.accMonth}'`
+    : `${fuelDocDate} >= '${dateFrom}'${dateToExclusive ? `\n        AND ${fuelDocDate} < ${dateToExclusive}` : ''}`
+  const stockStatusSql = `AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')`
+  const fuelStatusSql = fuelIssueStatusFilter('h')
 
   // Trend window: last USAGE_TREND_MONTHS months ending at selected period month
   // (or dateTo month in year mode). Independent of single-month report filter so
@@ -3439,18 +3608,19 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   const trendEndExclusiveYm = shiftPeriodYm(trendAnchorYm, 1)
   const trendFromSql = `CONVERT(date, '${trendStartYm}-01')`
   const trendToSql = `CONVERT(date, '${trendEndExclusiveYm}-01')`
-  const gudangTrendDateSql = `h.PostDate >= ${trendFromSql}\n        AND h.PostDate < ${trendToSql}`
+  // Trend remains calendar axis (readable month series on deck).
+  const gudangTrendDateSql = `${gudangDocDate} >= ${trendFromSql}\n        AND ${gudangDocDate} < ${trendToSql}`
   const workshopTrendDateSql = `${workshopDate} >= ${trendFromSql}\n        AND ${workshopDate} < ${trendToSql}`
+  const fuelTrendDateSql = `${fuelDocDate} >= ${trendFromSql}\n        AND ${fuelDocDate} < ${trendToSql}`
 
-  // Issue total = LINE only (IN_STOCKISSUELN / WS_JOBSTOCK row).
-  // Header IN_STOCKISSUE is join key only — never SUM header amount.
-  // StockIssueID = header id; StockIssueLnID = line id (detail item).
+  // Issue total = LINE only (IN_STOCKISSUELN / WS_JOBSTOCK / IN_FUELISSUELN row).
+  // Header is join key only — never SUM header amount.
   const gudangQuery = `
       SELECT
-        CAST(h.StockIssueID AS INT) AS StockIssueID,
-        CAST(l.StockIssueLnID AS INT) AS StockIssueLnID,
+        RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS StockIssueID,
+        RTRIM(CONVERT(varchar(50), l.StockIssueLnID)) AS StockIssueLnID,
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
-        h.PostDate AS Tanggal,
+        ${gudangDocDate} AS Tanggal,
         RTRIM(l.ItemCode) AS KodeBarang,
         RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
         RTRIM(ISNULL(i.ProdCatCode, '-')) AS Kategori,
@@ -3467,13 +3637,23 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       INNER JOIN [${DATABASE}].[dbo].[IN_STOCKISSUE] h ON l.StockIssueID = h.StockIssueID
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
       WHERE ${gudangDateSql}${gudangLocationSql}
-        ${nonWorkshopItemTypeFilter('i')}
+        ${stockStatusSql}
+        AND (
+          i.ItemCode IS NULL
+          OR ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'
+        )
   `
 
+  // Keep Job IDs as varchar end-to-end. Mill JobStock IDs look like 'JS2607…'
+  // and must never enter CAST/COALESCE with INT JobID columns.
   const workshopQuery = `
       SELECT
-        CAST(COALESCE(s.JobStockIssueID, s.JobStockID, s.JobID) AS INT) AS StockIssueID,
-        CAST(COALESCE(s.JobStockID, s.JobStockIssueID, s.JobID) AS INT) AS StockIssueLnID,
+        ${workshopDoc} AS StockIssueID,
+        COALESCE(
+          NULLIF(RTRIM(CONVERT(varchar(50), s.JobStockID)), ''),
+          NULLIF(RTRIM(CONVERT(varchar(50), s.JobStockIssueID)), ''),
+          NULLIF(RTRIM(CONVERT(varchar(50), s.JobID)), '')
+        ) AS StockIssueLnID,
         RTRIM(${workshopDoc}) AS Dokumen,
         ${workshopDate} AS Tanggal,
         RTRIM(s.ItemCode) AS KodeBarang,
@@ -3482,24 +3662,53 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
         CAST(ISNULL(s.Qty, 0) AS DECIMAL(18,2)) AS Qty,
         CAST(ISNULL(s.Cost, ISNULL(s.Price, 0)) AS DECIMAL(18,4)) AS Cost,
         CAST(${workshopAmount} AS DECIMAL(18,4)) AS Amount,
-        RTRIM(COALESCE(NULLIF(RTRIM(s.VehCode), ''), NULLIF(RTRIM(j.VehCode), ''), '')) AS VehCode,
+        RTRIM(ISNULL(s.VehCode, '')) AS VehCode,
         RTRIM(ISNULL(s.AccCode, '')) AS AccCode,
-        RTRIM(COALESCE(NULLIF(RTRIM(s.BlkCode), ''), NULLIF(RTRIM(j.BlkCode), ''), '')) AS BlkCode,
+        RTRIM(ISNULL(s.BlkCode, '')) AS BlkCode,
         RTRIM(ISNULL(s.ReferenceNo, '')) AS Remark,
         RTRIM(ISNULL(s.Status, '')) AS Status,
         'WS_JOBSTOCK' AS SourceTable
       FROM [${DATABASE}].[dbo].[WS_JOBSTOCK] s
-      LEFT JOIN [${DATABASE}].[dbo].[WS_JOB] j ON s.JobID = j.JobID
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON s.ItemCode = i.ItemCode AND i.LocCode = s.LocCode
       WHERE ${workshopDateSql}${workshopLocationSql}
         AND RTRIM(ISNULL(s.TransType, '')) = '1'
         AND ${workshopStockIssueItemTypeExpression('i', 's')} = '4'
   `
 
+  // Fuel BBM — DocDate calendar (selaras monthly Issued fuel branch).
+  const fuelQuery = `
+      SELECT
+        RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS StockIssueID,
+        RTRIM(CONVERT(varchar(50), l.FuelIssueLnID)) AS StockIssueLnID,
+        RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS Dokumen,
+        ${fuelDocDate} AS Tanggal,
+        RTRIM(l.ItemCode) AS KodeBarang,
+        RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
+        RTRIM(ISNULL(i.ProdCatCode, '-')) AS Kategori,
+        CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
+        CAST(ISNULL(l.Cost, 0) AS DECIMAL(18,4)) AS Cost,
+        CAST(${issueLineAmountExpression('l')} AS DECIMAL(18,4)) AS Amount,
+        RTRIM(ISNULL(l.VehCode, '')) AS VehCode,
+        RTRIM(ISNULL(l.AccCode, '')) AS AccCode,
+        RTRIM(ISNULL(l.BlkCode, '')) AS BlkCode,
+        RTRIM(ISNULL(h.Remark, '')) AS Remark,
+        RTRIM(ISNULL(h.Status, '')) AS Status,
+        'IN_FUELISSUE' AS SourceTable
+      FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
+      INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
+      LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
+      WHERE ${fuelDateSql}${fuelLocationSql}
+        ${fuelStatusSql}
+        AND (
+          i.ItemCode IS NULL
+          OR ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'
+        )
+  `
+
   const queries = []
-  if (includeGudang) queries.push(gudangQuery)
+  if (includeGudang) queries.push(gudangQuery, fuelQuery)
   if (includeWorkshop) queries.push(workshopQuery)
-  if (queries.length === 0) queries.push(gudangQuery) // fallback
+  if (queries.length === 0) queries.push(gudangQuery, fuelQuery) // fallback
 
   const issueRowsCte = `
     WITH issue_rows AS (
@@ -3508,12 +3717,16 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
 
   // CTE khusus tren — kolom identik, tapi rentang tanggal memakai trend date
   // (N bulan ke belakang dari bulan anchor), BUKAN filter periode report.
-  const gudangTrendQuery = gudangQuery.replace(gudangDateSql, gudangTrendDateSql)
+  const gudangTrendQuery = gudangQuery
+    .replace(gudangDateSql, gudangTrendDateSql)
+    .replace(stockStatusSql, stockStatusSql) // keep status
   const workshopTrendQuery = workshopQuery.replace(workshopDateSql, workshopTrendDateSql)
+  const fuelTrendQuery = fuelQuery
+    .replace(fuelDateSql, fuelTrendDateSql)
   const trendQueries = []
-  if (includeGudang) trendQueries.push(gudangTrendQuery)
+  if (includeGudang) trendQueries.push(gudangTrendQuery, fuelTrendQuery)
   if (includeWorkshop) trendQueries.push(workshopTrendQuery)
-  if (trendQueries.length === 0) trendQueries.push(gudangTrendQuery) // fallback
+  if (trendQueries.length === 0) trendQueries.push(gudangTrendQuery, fuelTrendQuery) // fallback
   const issueTrendRowsCte = `
     WITH issue_rows AS (
       ${trendQueries.join(' UNION ALL ')}
@@ -3540,6 +3753,18 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS TotalQty,
       CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,4)) AS TotalAmount,
       CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,4)) AS TotalIssueAmount,
+      CAST(SUM(CASE WHEN SourceTable = 'IN_STOCKISSUE' THEN ISNULL(Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS GudangIssueQty,
+      CAST(SUM(CASE WHEN SourceTable = 'IN_STOCKISSUE' THEN ISNULL(Amount, 0) ELSE 0 END) AS DECIMAL(18,4)) AS GudangIssueAmount,
+      COUNT(DISTINCT CASE WHEN SourceTable = 'IN_STOCKISSUE' THEN StockIssueID END) AS GudangIssueDocuments,
+      SUM(CASE WHEN SourceTable = 'IN_STOCKISSUE' THEN 1 ELSE 0 END) AS GudangIssueLines,
+      CAST(SUM(CASE WHEN SourceTable = 'IN_FUELISSUE' THEN ISNULL(Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS FuelIssueQty,
+      CAST(SUM(CASE WHEN SourceTable = 'IN_FUELISSUE' THEN ISNULL(Amount, 0) ELSE 0 END) AS DECIMAL(18,4)) AS FuelIssueAmount,
+      COUNT(DISTINCT CASE WHEN SourceTable = 'IN_FUELISSUE' THEN StockIssueID END) AS FuelIssueDocuments,
+      SUM(CASE WHEN SourceTable = 'IN_FUELISSUE' THEN 1 ELSE 0 END) AS FuelIssueLines,
+      CAST(SUM(CASE WHEN SourceTable = 'WS_JOBSTOCK' THEN ISNULL(Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS WorkshopIssueQty,
+      CAST(SUM(CASE WHEN SourceTable = 'WS_JOBSTOCK' THEN ISNULL(Amount, 0) ELSE 0 END) AS DECIMAL(18,4)) AS WorkshopIssueAmount,
+      COUNT(DISTINCT CASE WHEN SourceTable = 'WS_JOBSTOCK' THEN StockIssueID END) AS WorkshopIssueDocuments,
+      SUM(CASE WHEN SourceTable = 'WS_JOBSTOCK' THEN 1 ELSE 0 END) AS WorkshopIssueLines,
       SUM(CASE WHEN RTRIM(ISNULL(AccCode, '')) = '' THEN 1 ELSE 0 END) AS BarisAccCodeKosong,
       SUM(CASE WHEN RTRIM(ISNULL(BlkCode, '')) = '' THEN 1 ELSE 0 END) AS BarisBlkCodeKosong,
       SUM(CASE WHEN RTRIM(ISNULL(VehCode, '')) = '' THEN 1 ELSE 0 END) AS BarisVehCodeKosong,
@@ -3580,9 +3805,11 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   `)
   const topCostCenters = await rows(ctx, `
     ${issueRowsCte}
-    SELECT TOP 5
+    SELECT TOP 8
       RTRIM(AccCode) AS code,
+      RTRIM(AccCode) AS name,
       COUNT(*) AS events,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
       CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
     FROM issue_rows
     WHERE RTRIM(ISNULL(AccCode, '')) <> ''
@@ -3591,20 +3818,57 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
   `)
   const topVehicles = await rows(ctx, `
     ${issueRowsCte}
-    SELECT TOP 5
+    SELECT TOP 8
       RTRIM(VehCode) AS code,
+      RTRIM(VehCode) AS name,
       COUNT(*) AS events,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
       CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
     FROM issue_rows
     WHERE RTRIM(ISNULL(VehCode, '')) <> ''
     GROUP BY RTRIM(VehCode)
     ORDER BY SUM(ISNULL(Amount, 0)) DESC
   `)
+  // Charge channel: BlkCode terisi, VehCode kosong (station/blok).
+  const topBlocks = await rows(ctx, `
+    ${issueRowsCte}
+    SELECT TOP 8
+      RTRIM(BlkCode) AS code,
+      RTRIM(BlkCode) AS name,
+      COUNT(*) AS events,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount
+    FROM issue_rows
+    WHERE RTRIM(ISNULL(BlkCode, '')) <> ''
+      AND RTRIM(ISNULL(VehCode, '')) = ''
+    GROUP BY RTRIM(BlkCode)
+    ORDER BY SUM(ISNULL(Amount, 0)) DESC
+  `)
+  // Proporsi kanal charge (amount+qty) — grain line, sama issue_rows.
+  const chargeChannels = await first(ctx, `
+    ${issueRowsCte}
+    SELECT
+      CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(VehCode, ''))) > 0 THEN ISNULL(Amount, 0) ELSE 0 END) AS DECIMAL(18,2)) AS ChargeVehicleAmount,
+      CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(BlkCode, ''))) > 0 THEN ISNULL(Amount, 0) ELSE 0 END) AS DECIMAL(18,2)) AS ChargeStationAmount,
+      CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(BlkCode, ''))) = 0 THEN ISNULL(Amount, 0) ELSE 0 END) AS DECIMAL(18,2)) AS ChargeLedgerAmount,
+      CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(VehCode, ''))) > 0 THEN ISNULL(Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS ChargeVehicleQty,
+      CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(BlkCode, ''))) > 0 THEN ISNULL(Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS ChargeStationQty,
+      CAST(SUM(CASE WHEN LEN(RTRIM(ISNULL(VehCode, ''))) = 0 AND LEN(RTRIM(ISNULL(BlkCode, ''))) = 0 THEN ISNULL(Qty, 0) ELSE 0 END) AS DECIMAL(18,2)) AS ChargeLedgerQty
+    FROM issue_rows
+  `)
 
   // Trend bulanan — anchored to bulan TERAKHIR yang benar-benar ada issue
   // (bukan periode terpilih), supaya window 12 bulan tidak melewati data kosong.
   // CTE anchor membuang batas tanggal sama sekali agar MAX(Tanggal) tidak ikut kosong.
-  const stripToNoDate = (q: string) => q.replace(/h\.PostDate >= '[^']*'(\s*AND h\.PostDate < [^\n]+)?/g, '1=1').replace(new RegExp(`${workshopDate} >= '[^']*'(\\s*AND ${workshopDate} < [^\\n]+)?`, 'g'), '1=1')
+  // Filter tanggal gudang sekarang memakai ekspresi COALESCE (bukan h.PostDate mentah),
+  // jadi pola strip memakai placeholder dummy [D] lalu diganti ekspresi aktual per sumber.
+  const stripToNoDate = (q: string) => {
+    const pattern = (expr: string) => new RegExp(`${escapeRegExp(expr)} >= '[^']*'(\\s*AND ${escapeRegExp(expr)} < [^\\n]+)?`, 'g')
+    return q
+      .replace(pattern(gudangDocDate), '1=1')
+      .replace(pattern(fuelDocDate), '1=1')
+      .replace(pattern(workshopDate), '1=1')
+  }
   const unboundedQueries = trendQueries.map((q) => stripToNoDate(q))
   const issueUnboundedRowsCte = `
     WITH issue_rows AS (
@@ -3666,12 +3930,16 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
     description: 'Audit pemakaian barang ke operasional, cost center, blok, kendaraan, dan status posting.',
     rows: reportRows,
     columns: columnsFrom(reportRows),
-    summary,
+    summary: {
+      ...(summary ?? {}),
+      ...(chargeChannels ?? {}),
+    },
     chart,
     topLists: {
       items: topItems,
       costCenters: topCostCenters,
       vehicles: topVehicles,
+      blocks: topBlocks,
     },
     trend,
     issueFrequency: {
@@ -3679,13 +3947,18 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
       topItems: issueFrequencyTop,
     },
     metadata: metadata(ctx, {
-      sourceTables: 'IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK, WS_JOB, IN_STOCKISSUELN_ACC',
-      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType = 1.',
-      issueGrain: 'LINE — one row = StockIssueLnID (gudang) or JobStock line (workshop). Totals = SUM(line Amount/Qty). Header StockIssueID is join key only; never sum header amount.',
+      sourceTables: 'IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK, WS_JOB, IN_STOCKISSUELN_ACC',
+      issueUsageRule:
+        'Total Usage = stock+fuel+ws. Stock/WS/Fuel filter AccYear/AccMonth fiskal (parity monthly Issued); kalender DocDate hanya utk date range eksplisit. Status stock 2/5/6, fuel 2/6. Target parity with monthly IssuedTotalAmount (audit live: Rp 0 diff utk 2/2027).',
+      issueGrain: 'LINE — one row = StockIssueLnID (gudang) or FuelIssueLnID or JobStock line. Totals = SUM(line Amount/Qty). Header id is join key only; never sum header amount.',
       issueIdFields: 'StockIssueID = header id; StockIssueLnID = line/detail id. Amount = COALESCE(NULLIF(line.Amount,0), Qty*Cost). Cost = unit cost (not summed).',
+      chargeChannels: 'Vehicle = VehCode filled; Station/Blok = BlkCode filled & Veh empty; Ledger = both empty. AccCode = dept/cost center (NOT GL_ACCOUNT).',
+      periodAxis: useAccAxis ? 'stock_ws_acc + fuel_docdate' : 'calendar_date_range',
+      actualPeriod: period.actualPeriod,
+      accountingPeriod: period.accountingPeriod,
       primaryChart: 'Top Barang Keluar by Amount',
       availableCharts: ['Top Barang Keluar by Amount', 'Pengeluaran per Block / Account', 'Pengeluaran per Kendaraan'],
-      qualityFocus: ['AccCode/BlkCode/VehCode kosong', 'PostDate placeholder'],
+      qualityFocus: ['AccCode/BlkCode/VehCode kosong', 'PostDate 1900 fuel → FuelIssueRefDate', 'Usage Acc axis matches monthly Issued'],
     }),
   }
 }
@@ -3693,10 +3966,11 @@ async function stockIssue({ limit, search, ctx, stale, filters }: ReportHandlerO
 async function stockOpname({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = textSearch(search, ['h.StockAdjID', 'l.ItemCode', 'i.Description', 'l.AccCode', 'h.Remark'])
+  const adjDate = stockIssueDocumentDateExpression('h')
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(h.StockAdjID) AS Dokumen,
-      h.PostDate AS TanggalPosting,
+      ${adjDate} AS TanggalPosting,
       h.StockAdjDate AS TanggalOpname,
       RTRIM(h.AdjType) AS AdjType,
       RTRIM(h.TransType) AS TransType,
@@ -3714,7 +3988,7 @@ async function stockOpname({ limit, search, ctx, stale }: { limit: number; searc
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
     WHERE h.PostDate >= '2000-01-01'
       ${whereSearch}
-    ORDER BY h.PostDate DESC, h.StockAdjID DESC
+    ORDER BY ${adjDate} DESC, h.StockAdjID DESC
   `)
 
   const summary = await first(ctx, `
@@ -3723,7 +3997,7 @@ async function stockOpname({ limit, search, ctx, stale }: { limit: number; searc
       COUNT(*) AS TotalBaris,
       CAST(SUM(ISNULL(l.D_Quantity, 0)) AS DECIMAL(18,2)) AS TotalSelisihQty,
       CAST(SUM(ISNULL(l.D_TotalCost, 0)) AS DECIMAL(18,2)) AS TotalSelisihNilai,
-      MAX(h.PostDate) AS TerakhirUpdate
+      MAX(${adjDate}) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_STOCKADJLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_STOCKADJ] h ON l.StockAdjID = h.StockAdjID
     WHERE h.PostDate >= '2000-01-01'
@@ -3736,11 +4010,11 @@ async function stockOpname({ limit, search, ctx, stale }: { limit: number; searc
       COUNT(*) AS BarisAdjustment,
       CAST(SUM(ISNULL(l.D_Quantity, 0)) AS DECIMAL(18,2)) AS SelisihQty,
       CAST(SUM(ISNULL(l.D_TotalCost, 0)) AS DECIMAL(18,2)) AS SelisihNilai,
-      MAX(h.PostDate) AS LastAdjustmentDate
+      MAX(${adjDate}) AS LastAdjustmentDate
     FROM [${DATABASE}].[dbo].[IN_STOCKADJLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_STOCKADJ] h ON l.StockAdjID = h.StockAdjID
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-    WHERE h.PostDate >= '2000-01-01'
+    WHERE h.PostDate >= '2025-05-01'
     GROUP BY RTRIM(l.ItemCode), RTRIM(ISNULL(i.Description, l.ItemCode))
     ORDER BY ABS(SUM(ISNULL(l.D_TotalCost, 0))) DESC
   `)
@@ -3808,9 +4082,9 @@ async function reorderLevel({ limit, search, ctx, filters }: ReportHandlerOption
     summary,
     chart: [],
     metadata: metadata(ctx, {
-      sourceTables: 'IN_ITEM, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+      sourceTables: 'IN_ITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK',
       quantityRule: 'QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder',
-      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
+      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM memakai IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
     }),
   }
 }
@@ -3978,10 +4252,11 @@ async function purchaseRequestInventory({ limit, search, ctx, filters }: ReportH
 async function transferWarehouse({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = textSearch(search, ['h.StockTransferID', 'h.LocCode', 'h.ToLocCode', 'l.ItemCode', 'i.Description'])
+  const transferDate = stockIssueDocumentDateExpression('h')
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(h.StockTransferID) AS DokumenTransfer,
-      h.PostDate AS Tanggal,
+      ${transferDate} AS Tanggal,
       RTRIM(h.LocCode) AS GudangAsal,
       RTRIM(h.ToLocCode) AS GudangTujuan,
       RTRIM(l.ItemCode) AS KodeBarang,
@@ -3995,7 +4270,7 @@ async function transferWarehouse({ limit, search, ctx, stale }: { limit: number;
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
     WHERE h.PostDate >= '2000-01-01'
       ${whereSearch}
-    ORDER BY h.PostDate DESC, h.StockTransferID DESC
+    ORDER BY ${transferDate} DESC, h.StockTransferID DESC
   `)
 
   const summary = await first(ctx, `
@@ -4006,7 +4281,7 @@ async function transferWarehouse({ limit, search, ctx, stale }: { limit: number;
       CAST(SUM(ISNULL(l.Qty, 0)) AS DECIMAL(18,2)) AS TotalQty,
       CAST(SUM(ISNULL(l.Amount, 0)) AS DECIMAL(18,2)) AS TotalAmount,
       COUNT(DISTINCT RTRIM(h.LocCode) + '->' + RTRIM(h.ToLocCode)) AS TotalRoute,
-      MAX(h.PostDate) AS TerakhirUpdate
+      MAX(${transferDate}) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_STOCKTRANSFERLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_STOCKTRANSFER] h ON l.StockTransferID = h.StockTransferID
     WHERE h.PostDate >= '2000-01-01'
@@ -4018,7 +4293,7 @@ async function transferWarehouse({ limit, search, ctx, stale }: { limit: number;
       COUNT(*) AS BarisTransfer,
       CAST(SUM(ISNULL(l.Qty, 0)) AS DECIMAL(18,2)) AS QtyTransfer,
       CAST(SUM(ISNULL(l.Amount, 0)) AS DECIMAL(18,2)) AS NilaiTransfer,
-      MAX(h.PostDate) AS LastTransferDate
+      MAX(${transferDate}) AS LastTransferDate
     FROM [${DATABASE}].[dbo].[IN_STOCKTRANSFERLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_STOCKTRANSFER] h ON l.StockTransferID = h.StockTransferID
     WHERE h.PostDate >= '2025-05-01'
@@ -4042,86 +4317,151 @@ async function transferWarehouse({ limit, search, ctx, stale }: { limit: number;
   }
 }
 
-async function fuelUsage({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function fuelUsage({ limit, search, ctx, stale, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = textSearch(search, ['h.FuelIssueID', 'l.ItemCode', 'i.Description', 'l.VehCode', 'l.BlkCode'])
+  const period = resolveAssetValuationPeriod(filters)
+  const hasExplicitDateRange = Boolean(cleanSqlDate(filters?.dateFrom) || cleanSqlDate(filters?.dateTo))
+  const month = monthBounds(filters?.period)
+  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? '2000-01-01'
+  const dateTo = cleanSqlDate(filters?.dateTo)
+  const dateToExclusive = dateTo ? `DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))` : month.toExclusive ? `'${month.toExclusive}'` : null
+  // Chosen period = fiscal AccYear/AccMonth, same axis as monthly RPTIN + pengeluaran-barang.
+  // Explicit date range stays calendar DocDate for ad-hoc drilldown.
+  const fuelDocDate = fuelIssueDocumentDateExpression('h')
+  const fuelDateSql = hasExplicitDateRange
+    ? `AND ${fuelDocDate} >= '${dateFrom}'${dateToExclusive ? `\n      AND ${fuelDocDate} < ${dateToExclusive}` : ''}`
+    : fuelIssueFiscalPeriodFilter('h', period.accYear, period.accMonth)
+  const location = sanitizeLike(filters?.location ?? '')
+  const locationSql = location ? `AND RTRIM(h.LocCode) LIKE N'%${location}%'` : ''
+  const fuelAmountSql = issueLineAmountExpression('l')
+  const fuelStatusSql = fuelIssueStatusFilter('h')
   const reportRows = await rows(ctx, `
-    SELECT TOP ${limit}
-      RTRIM(h.FuelIssueID) AS DokumenFuel,
-      h.PostDate AS Tanggal,
-      RTRIM(h.LocCode) AS Gudang,
-      RTRIM(l.ItemCode) AS KodeFuel,
-      RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaFuel,
-      RTRIM(l.VehCode) AS Kendaraan,
-      RTRIM(l.BlkCode) AS Blok,
-      RTRIM(l.AccCode) AS AccCode,
-      CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS QtyFuel,
-      CAST(ISNULL(l.Cost, 0) AS DECIMAL(18,2)) AS Cost,
-      CAST(ISNULL(l.Amount, 0) AS DECIMAL(18,2)) AS Amount,
-      RTRIM(h.Status) AS Status
-    FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
-    INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
-    LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-    WHERE h.PostDate >= '2000-01-01'
-      ${whereSearch}
-    ORDER BY h.PostDate DESC, h.FuelIssueID DESC
-  `)
+      SELECT TOP ${limit}
+        RTRIM(h.FuelIssueID) AS DokumenFuel,
+        ${fuelDocDate} AS Tanggal,
+        RTRIM(h.LocCode) AS Gudang,
+        RTRIM(l.ItemCode) AS KodeFuel,
+        RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaFuel,
+        RTRIM(COALESCE(NULLIF(RTRIM(i.ProdTypeCode), ''), '-')) AS ProductTypeCode,
+        RTRIM(COALESCE(NULLIF(RTRIM(pt.Description), ''), NULLIF(RTRIM(i.ProdTypeCode), ''), '-')) AS ProductTypeName,
+        RTRIM(l.VehCode) AS Kendaraan,
+        RTRIM(l.BlkCode) AS Blok,
+        RTRIM(l.AccCode) AS AccCode,
+        CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS QtyFuel,
+        CAST(ISNULL(l.Cost, 0) AS DECIMAL(18,2)) AS Cost,
+        CAST(${fuelAmountSql} AS DECIMAL(18,2)) AS Amount,
+        RTRIM(h.Status) AS Status
+      FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
+      INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
+      LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
+      LEFT JOIN [${DATABASE}].[dbo].[IN_PRODTYPE] pt ON pt.ProdTypeCode = i.ProdTypeCode
+      WHERE 1=1
+        ${fuelDateSql}
+        ${locationSql}
+        ${fuelStatusSql}
+        ${whereSearch}
+      ORDER BY ${fuelDocDate} DESC, h.FuelIssueID DESC
+    `)
 
-  const summary = await first(ctx, `
-    SELECT
-      COUNT(DISTINCT h.FuelIssueID) AS TotalDokumen,
-      COUNT(*) AS TotalBaris,
-      COUNT(DISTINCT l.VehCode) AS TotalKendaraan,
-      CAST(SUM(ISNULL(l.Qty, 0)) AS DECIMAL(18,2)) AS TotalQtyFuel,
-      CAST(SUM(ISNULL(l.Amount, 0)) AS DECIMAL(18,2)) AS TotalAmount,
-      SUM(CASE WHEN RTRIM(ISNULL(l.VehCode, '')) = '' THEN 1 ELSE 0 END) AS BarisVehCodeKosong,
-      SUM(CASE WHEN RTRIM(ISNULL(l.BlkCode, '')) = '' THEN 1 ELSE 0 END) AS BarisBlkCodeKosong,
-      MAX(h.PostDate) AS TerakhirUpdate
-    FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
-    INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
-    WHERE h.PostDate >= '2000-01-01'
-  `)
+    const summary = await first(ctx, `
+      SELECT
+        COUNT(DISTINCT h.FuelIssueID) AS TotalDokumen,
+        COUNT(*) AS TotalBaris,
+        COUNT(DISTINCT l.VehCode) AS TotalKendaraan,
+        COUNT(DISTINCT RTRIM(COALESCE(NULLIF(RTRIM(i.ProdTypeCode), ''), '-'))) AS TotalProductType,
+        CAST(SUM(ISNULL(l.Qty, 0)) AS DECIMAL(18,2)) AS TotalQtyFuel,
+        CAST(SUM(${fuelAmountSql}) AS DECIMAL(18,2)) AS TotalAmount,
+        SUM(CASE WHEN RTRIM(ISNULL(l.VehCode, '')) = '' THEN 1 ELSE 0 END) AS BarisVehCodeKosong,
+        SUM(CASE WHEN RTRIM(ISNULL(l.BlkCode, '')) = '' THEN 1 ELSE 0 END) AS BarisBlkCodeKosong,
+        MAX(${fuelDocDate}) AS TerakhirUpdate
+      FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
+      INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
+      LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
+      WHERE 1=1
+        ${fuelDateSql}
+        ${locationSql}
+        ${fuelStatusSql}
+    `)
 
-  const chart = await rows(ctx, `
-    SELECT TOP 10
-      RTRIM(l.VehCode) AS Kendaraan,
-      RTRIM(l.ItemCode) AS KodeFuel,
-      RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaFuel,
-      COUNT(*) AS Baris,
-      CAST(SUM(ISNULL(l.Qty,0)) AS DECIMAL(18,2)) AS QtyFuel,
-      CAST(SUM(ISNULL(l.Amount,0)) AS DECIMAL(18,2)) AS NilaiFuel,
-      MAX(h.PostDate) AS LastIssueDate
-    FROM [${DATABASE}].[dbo].[IN_FUELISSUE] h
-    JOIN [${DATABASE}].[dbo].[IN_FUELISSUELN] l ON l.FuelIssueID=h.FuelIssueID
-    LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON i.ItemCode=l.ItemCode AND i.LocCode=h.LocCode
-    WHERE h.PostDate >= '2025-05-01'
-    GROUP BY RTRIM(l.VehCode), RTRIM(l.ItemCode), RTRIM(ISNULL(i.Description,l.ItemCode))
-    ORDER BY NilaiFuel DESC
-  `)
+    const chart = await rows(ctx, `
+      SELECT TOP 15
+        RTRIM(COALESCE(NULLIF(RTRIM(i.ProdTypeCode), ''), '-')) AS ProductTypeCode,
+        RTRIM(COALESCE(NULLIF(RTRIM(pt.Description), ''), NULLIF(RTRIM(i.ProdTypeCode), ''), '-')) AS ProductTypeName,
+        COUNT(DISTINCT h.FuelIssueID) AS Docs,
+        COUNT(DISTINCT l.ItemCode) AS ItemCount,
+        CAST(SUM(ISNULL(l.Qty,0)) AS DECIMAL(18,2)) AS QtyFuel,
+        CAST(SUM(${fuelAmountSql}) AS DECIMAL(18,2)) AS NilaiFuel,
+        MAX(${fuelDocDate}) AS LastIssueDate
+      FROM [${DATABASE}].[dbo].[IN_FUELISSUE] h
+      JOIN [${DATABASE}].[dbo].[IN_FUELISSUELN] l ON l.FuelIssueID = h.FuelIssueID
+      LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON i.ItemCode = l.ItemCode AND i.LocCode = h.LocCode
+      LEFT JOIN [${DATABASE}].[dbo].[IN_PRODTYPE] pt ON pt.ProdTypeCode = i.ProdTypeCode
+      WHERE 1=1
+        ${fuelDateSql}
+        ${locationSql}
+        ${fuelStatusSql}
+      GROUP BY
+        RTRIM(COALESCE(NULLIF(RTRIM(i.ProdTypeCode), ''), '-')),
+        RTRIM(COALESCE(NULLIF(RTRIM(pt.Description), ''), NULLIF(RTRIM(i.ProdTypeCode), ''), '-'))
+      ORDER BY NilaiFuel DESC
+    `)
 
-  return {
-    title: 'Fuel Usage Inventory',
-    description: 'Pemakaian BBM sebagai bagian dari inventory: kendaraan, blok, item fuel, qty, dan nilai.',
-    rows: reportRows,
-    columns: columnsFrom(reportRows),
-    summary,
-    chart,
-    metadata: metadata(ctx, {
-      sourceTables: 'IN_FUELISSUE, IN_FUELISSUELN, IN_FUELISSUELN_ACC',
-      primaryChart: 'Fuel Usage per Kendaraan',
-      availableCharts: ['Fuel Usage per Kendaraan', 'Trend Fuel Usage', 'Fuel per Block'],
-      qualityFocus: ['VehCode/BlkCode kosong', 'PostDate placeholder'],
-    }),
+    return {
+      title: 'Fuel Usage Inventory',
+      description: 'Pemakaian BBM sebagai bagian dari inventory: product type, kendaraan, blok, item fuel, qty, dan nilai.',
+      rows: reportRows,
+      columns: columnsFrom(reportRows),
+      summary: summary ?? {
+        TotalDokumen: 0,
+        TotalBaris: 0,
+        TotalKendaraan: 0,
+        TotalProductType: 0,
+        TotalQtyFuel: 0,
+        TotalAmount: 0,
+        BarisVehCodeKosong: 0,
+        BarisBlkCodeKosong: 0,
+      },
+      chart,
+      metadata: metadata(ctx, {
+        sourceTables: 'IN_FUELISSUE, IN_FUELISSUELN, IN_ITEM, IN_PRODTYPE',
+        primaryChart: 'Fuel Usage per Product Type',
+        availableCharts: ['Fuel Usage per Product Type', 'Fuel Usage per Kendaraan', 'Trend Fuel Usage', 'Fuel per Block'],
+        qualityFocus: ['VehCode/BlkCode kosong', 'PostDate 1900 = pakai FuelIssueRefDate', 'ProdTypeCode kosong → -'],
+        periodAxis: hasExplicitDateRange ? 'calendar_doc_date' : 'fiscal_acc_period',
+        periodRule: FUEL_ISSUE_PERIOD_RULE,
+        productTypeRule: 'Breakdown charge product type = GROUP BY IN_ITEM.ProdTypeCode + IN_PRODTYPE.Description for fuel issue lines in chosen period. Chosen period uses fiscal AccYear/AccMonth; explicit dateFrom/dateTo uses DocDate.',
+        actualPeriod: period.actualPeriod,
+        accountingPeriod: period.accountingPeriod,
+        accYear: period.accYear,
+        accMonth: period.accMonth,
+        appliedPeriodFrom: hasExplicitDateRange ? dateFrom : null,
+        appliedPeriodToExclusive: hasExplicitDateRange && dateToExclusive ? String(dateToExclusive).replace(/^'|'$/g, '') : null,
+        appliedLocation: location || null,
+      }),
+    }
   }
-}
 
-async function stockReturn({ limit, search, ctx, stale }: { limit: number; search: string; ctx: QueryContext; stale: string }): Promise<ReportPayload> {
+async function stockReturn({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
   const DATABASE = ctx.database
   const whereSearch = textSearch(search, ['h.StockRtnID', 'l.ItemCode', 'i.Description', 'l.StockIssueID'])
+  // Follow selected KPI period (or custom year dateFrom/dateTo), not all-time.
+  const month = monthBounds(filters?.period)
+  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? '2000-01-01'
+  const dateTo = cleanSqlDate(filters?.dateTo)
+  const dateToExclusive = dateTo
+    ? `DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))`
+    : month.toExclusive
+      ? `'${month.toExclusive}'`
+      : null
+  const returnDocDate = stockIssueDocumentDateExpression('h')
+  const returnDateSql = `${returnDocDate} >= '${dateFrom}'${dateToExclusive ? `\n      AND ${returnDocDate} < ${dateToExclusive}` : ''}`
+  const location = sanitizeLike(filters?.location ?? '')
+  const locationSql = location ? `\n      AND RTRIM(h.LocCode) LIKE N'%${location}%'` : ''
   const reportRows = await rows(ctx, `
     SELECT TOP ${limit}
       RTRIM(h.StockRtnID) AS DokumenReturn,
-      h.PostDate AS Tanggal,
+      ${returnDocDate} AS Tanggal,
       RTRIM(h.LocCode) AS Gudang,
       RTRIM(l.StockIssueID) AS ReferensiIssue,
       RTRIM(l.StockIssueLNID) AS ReferensiIssueLine,
@@ -4134,9 +4474,9 @@ async function stockReturn({ limit, search, ctx, stale }: { limit: number; searc
     FROM [${DATABASE}].[dbo].[IN_STOCKRTNLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_STOCKRTN] h ON l.StockRtnID = h.StockRtnID
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-    WHERE h.PostDate >= '2000-01-01'
+    WHERE ${returnDateSql}${locationSql}
       ${whereSearch}
-    ORDER BY h.PostDate DESC, h.StockRtnID DESC
+    ORDER BY ${returnDocDate} DESC, h.StockRtnID DESC
   `)
 
   const summary = await first(ctx, `
@@ -4146,10 +4486,11 @@ async function stockReturn({ limit, search, ctx, stale }: { limit: number; searc
       COUNT(DISTINCT l.ItemCode) AS TotalItem,
       CAST(SUM(ISNULL(l.Qty, 0)) AS DECIMAL(18,2)) AS TotalQtyReturn,
       CAST(SUM(ISNULL(l.Amount, 0)) AS DECIMAL(18,2)) AS TotalAmount,
-      MAX(h.PostDate) AS TerakhirUpdate
+      CAST(SUM(ISNULL(l.Amount, 0)) AS DECIMAL(18,2)) AS TotalReturnAmount,
+      MAX(${returnDocDate}) AS TerakhirUpdate
     FROM [${DATABASE}].[dbo].[IN_STOCKRTNLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_STOCKRTN] h ON l.StockRtnID = h.StockRtnID
-    WHERE h.PostDate >= '2000-01-01'
+    WHERE ${returnDateSql}${locationSql}
   `)
 
   const chart = await rows(ctx, `
@@ -4159,27 +4500,128 @@ async function stockReturn({ limit, search, ctx, stale }: { limit: number; searc
       COUNT(*) AS BarisReturn,
       CAST(SUM(ISNULL(l.Qty, 0)) AS DECIMAL(18,2)) AS QtyReturn,
       CAST(SUM(ISNULL(l.Amount, 0)) AS DECIMAL(18,2)) AS NilaiReturn,
-      MAX(h.PostDate) AS LastReturnDate
+      MAX(${returnDocDate}) AS LastReturnDate
     FROM [${DATABASE}].[dbo].[IN_STOCKRTNLN] l
     INNER JOIN [${DATABASE}].[dbo].[IN_STOCKRTN] h ON l.StockRtnID = h.StockRtnID
     LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-    WHERE h.PostDate >= '2000-01-01'
+    WHERE ${returnDateSql}${locationSql}
     GROUP BY RTRIM(l.ItemCode), RTRIM(ISNULL(i.Description, l.ItemCode))
     ORDER BY NilaiReturn DESC
   `)
 
   return {
-    title: 'Return Barang',
-    description: 'Pengembalian barang dari stock issue, termasuk referensi dokumen issue dan nilai return.',
+    title: 'Return Barang Inventory',
+    description: 'Return inventory dari stock issue (IN_STOCKRTN). Bukan retur ke supplier (PU_GOODSRET).',
     rows: reportRows,
     columns: columnsFrom(reportRows),
     summary,
     chart,
     metadata: metadata(ctx, {
       sourceTables: 'IN_STOCKRTN, IN_STOCKRTNLN',
-      primaryChart: 'Top Item Return',
-      availableCharts: ['Top Item Return', 'Trend Return', 'Return per Lokasi'],
+      returnDomain: 'inventory',
+      primaryChart: 'Top Item Return Inventory',
+      availableCharts: ['Top Item Return Inventory', 'Trend Return Inventory', 'Return per Lokasi'],
       qualityFocus: ['PostDate placeholder', 'volume data lebih kecil dari issue utama'],
+    }),
+  }
+}
+
+/** Purchasing goods return to supplier — PU_GOODSRET / PU_GOODSRETLN. Not inventory stock return. */
+async function goodsReturnToSupplier({ limit, search, ctx, filters }: ReportHandlerOptions): Promise<ReportPayload> {
+  const DATABASE = ctx.database
+  const whereSearch = textSearch(search, ['gr.GoodsRetId', 'grl.ItemCode', 'i.Description', 'gr.SupplierCode', 'gr.POID'])
+  const month = monthBounds(filters?.period)
+  const dateFrom = cleanSqlDate(filters?.dateFrom) ?? month.from ?? '2000-01-01'
+  const dateTo = cleanSqlDate(filters?.dateTo)
+  const dateToExclusive = dateTo
+    ? `DATEADD(DAY, 1, CONVERT(date, '${dateTo}'))`
+    : month.toExclusive
+      ? `'${month.toExclusive}'`
+      : null
+  // Patokan tanggal = CreateDate; PostDate sering placeholder 1900.
+  // Fallback: CreateDate → PostDate(≠1900) → GoodsRetRefDate(≠1900) → UpdateDate.
+  const grDocDate = `COALESCE(NULLIF(gr.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(gr.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(gr.GoodsRetRefDate, CONVERT(datetime, '1900-01-01')), gr.UpdateDate)`
+  const returnDateSql = `${grDocDate} >= '${dateFrom}'${dateToExclusive ? `\n      AND ${grDocDate} < ${dateToExclusive}` : ''}`
+  const location = sanitizeLike(filters?.location ?? '')
+  const locationSql = location ? `\n      AND RTRIM(gr.LocCode) LIKE N'%${location}%'` : ''
+  const qtyExpr = `COALESCE(NULLIF(grl.ReturnStockQty, 0), grl.QtyReturn, 0)`
+  const amountExpr = `CAST(COALESCE(
+      NULLIF(grl.Amount, 0),
+      ${qtyExpr} * COALESCE(NULLIF(grl.Cost, 0), p.Cost, 0),
+      0
+    ) AS DECIMAL(18,4))`
+
+  const reportRows = await rows(ctx, `
+    SELECT TOP ${limit}
+      RTRIM(gr.GoodsRetId) AS DokumenGoodsReturn,
+      ${grDocDate} AS Tanggal,
+      RTRIM(gr.LocCode) AS Gudang,
+      RTRIM(ISNULL(gr.SupplierCode, '')) AS SupplierCode,
+      RTRIM(ISNULL(gr.POID, '')) AS ReferensiPO,
+      RTRIM(grl.ItemCode) AS KodeBarang,
+      RTRIM(ISNULL(i.Description, grl.ItemCode)) AS NamaBarang,
+      CAST(${qtyExpr} AS DECIMAL(18,2)) AS QtyReturn,
+      CAST(COALESCE(NULLIF(grl.Cost, 0), p.Cost, 0) AS DECIMAL(18,4)) AS Cost,
+      ${amountExpr} AS Amount,
+      RTRIM(ISNULL(gr.Status, '')) AS Status
+    FROM [${DATABASE}].[dbo].[PU_GOODSRETLN] grl
+    INNER JOIN [${DATABASE}].[dbo].[PU_GOODSRET] gr ON gr.GoodsRetId = grl.GoodsRetId
+    LEFT JOIN [${DATABASE}].[dbo].[PU_POLN] p ON grl.POLnID = p.POLnID
+    LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON grl.ItemCode = i.ItemCode AND i.LocCode = gr.LocCode
+    WHERE ${returnDateSql}${locationSql}
+      AND RTRIM(ISNULL(gr.Status, '')) IN ('2', '5', '6')
+      ${whereSearch}
+    ORDER BY ${grDocDate} DESC, gr.GoodsRetId DESC
+  `)
+
+  const summary = await first(ctx, `
+    SELECT
+      COUNT(DISTINCT gr.GoodsRetId) AS TotalDokumen,
+      COUNT(*) AS TotalBaris,
+      COUNT(DISTINCT grl.ItemCode) AS TotalItem,
+      COUNT(DISTINCT gr.SupplierCode) AS TotalSupplier,
+      CAST(SUM(${qtyExpr}) AS DECIMAL(18,2)) AS TotalQtyReturn,
+      CAST(SUM(${amountExpr}) AS DECIMAL(18,4)) AS TotalAmount,
+      CAST(SUM(${amountExpr}) AS DECIMAL(18,4)) AS TotalGoodsReturnAmount,
+      MAX(${grDocDate}) AS TerakhirUpdate
+    FROM [${DATABASE}].[dbo].[PU_GOODSRETLN] grl
+    INNER JOIN [${DATABASE}].[dbo].[PU_GOODSRET] gr ON gr.GoodsRetId = grl.GoodsRetId
+    LEFT JOIN [${DATABASE}].[dbo].[PU_POLN] p ON grl.POLnID = p.POLnID
+    WHERE ${returnDateSql}${locationSql}
+      AND RTRIM(ISNULL(gr.Status, '')) IN ('2', '5', '6')
+  `)
+
+  const chart = await rows(ctx, `
+    SELECT TOP 10
+      RTRIM(grl.ItemCode) AS KodeBarang,
+      RTRIM(ISNULL(i.Description, grl.ItemCode)) AS NamaBarang,
+      COUNT(*) AS BarisReturn,
+      CAST(SUM(${qtyExpr}) AS DECIMAL(18,2)) AS QtyReturn,
+      CAST(SUM(${amountExpr}) AS DECIMAL(18,4)) AS NilaiReturn,
+      MAX(${grDocDate}) AS LastReturnDate
+    FROM [${DATABASE}].[dbo].[PU_GOODSRETLN] grl
+    INNER JOIN [${DATABASE}].[dbo].[PU_GOODSRET] gr ON gr.GoodsRetId = grl.GoodsRetId
+    LEFT JOIN [${DATABASE}].[dbo].[PU_POLN] p ON grl.POLnID = p.POLnID
+    LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON grl.ItemCode = i.ItemCode AND i.LocCode = gr.LocCode
+    WHERE ${returnDateSql}${locationSql}
+      AND RTRIM(ISNULL(gr.Status, '')) IN ('2', '5', '6')
+    GROUP BY RTRIM(grl.ItemCode), RTRIM(ISNULL(i.Description, grl.ItemCode))
+    ORDER BY NilaiReturn DESC
+  `)
+
+  return {
+    title: 'Goods Return ke Supplier',
+    description: 'Retur purchasing ke supplier (PU_GOODSRET). Bukan inventory stock return (IN_STOCKRTN).',
+    rows: reportRows,
+    columns: columnsFrom(reportRows),
+    summary,
+    chart,
+    metadata: metadata(ctx, {
+      sourceTables: 'PU_GOODSRET, PU_GOODSRETLN, PU_POLN',
+      returnDomain: 'purchasing',
+      primaryChart: 'Top Item Goods Return',
+      availableCharts: ['Top Item Goods Return', 'Goods Return per Supplier'],
+      qualityFocus: ['Status posted 2/5/6 only', 'Amount fallback Qty×Cost'],
     }),
   }
 }
@@ -4317,9 +4759,9 @@ async function itemUpdateAge({ limit, limitAll, search, ctx, stale, filters }: R
     summary,
     chart,
     metadata: metadata(ctx, {
-      sourceTables: 'IN_ITEM, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+      sourceTables: 'IN_ITEM, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK',
       quantityRule: 'QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder',
-      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
+      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM memakai IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
       stockAgingReport: true,
       itemTypeScope: 'ItemType 1 Stock dan 4 Workshop saja; ItemType 6 Asset dikeluarkan dari inventory gudang.',
       activeFilter: staleUpdateLabel(stale),
@@ -4439,7 +4881,7 @@ async function supplierPerformance({ limit, search, ctx, stale }: { limit: numbe
     ),
     gr AS (
       SELECT h.SupplierCode, COUNT(DISTINCT h.GoodsRcvID) AS TotalGR, SUM(ISNULL(l.ReceiveQty,0)) AS ReceiveQty,
-        SUM(ISNULL(l.CommAmount,0)) AS ReceiveAmount, MAX(h.PostDate) AS LastGRDate
+        SUM(ISNULL(l.CommAmount,0)) AS ReceiveAmount, MAX(${stockIssueDocumentDateExpression('h')}) AS LastGRDate
       FROM [${DATABASE}].[dbo].[PU_GOODSRCV] h
       JOIN [${DATABASE}].[dbo].[PU_GOODSRCVLN] l ON l.GoodsRcvID = h.GoodsRcvID
       WHERE h.PostDate >= '2000-01-01'
@@ -4601,9 +5043,9 @@ async function fertilizerInventoryProcurement({ limit, search, ctx, filters }: R
     summary,
     chart,
     metadata: metadata(ctx, {
-      sourceTables: 'IN_ITEM, PU_PO, PU_POLN, PU_SUPPLIER, IN_STOCKISSUE, IN_STOCKISSUELN, WS_JOBSTOCK',
+      sourceTables: 'IN_ITEM, PU_PO, PU_POLN, PU_SUPPLIER, IN_STOCKISSUE, IN_STOCKISSUELN, IN_FUELISSUE, IN_FUELISSUELN, WS_JOBSTOCK',
       quantityRule: 'QuantityClosing = QtyOnHand + QtyOnHold + QtyOnOrder',
-      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
+      issueUsageRule: 'ItemType 1 Stock memakai IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM memakai IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK.TransType = 1.',
       primaryChart: 'Top Pupuk by Stock Value',
       availableCharts: ['Top pupuk by stock value', 'PO pupuk by supplier', 'Pupuk stale update'],
       qualityFocus: ['ProdCatCode CA2111 dipakai sebagai definisi pupuk. LastIssue tidak valid dihitung dari movement aktual; ItemType 4 memakai WS_JOBSTOCK.'],
@@ -4615,6 +5057,7 @@ async function vehicleRunningWorkshop({ limit, search, ctx, stale }: { limit: nu
   const DATABASE = ctx.database
   const q = sanitizeLike(search)
   const whereSearch = q ? `AND (RTRIM(v.VehCode) LIKE '%${q}%' OR RTRIM(v.Description) LIKE N'%${q}%' OR RTRIM(v.VehTypeCode) LIKE '%${q}%')` : ''
+  const jobStockDate = workshopStockIssueDateExpression('js')
   const reportRows = await rows(ctx, `
     WITH usage AS (
       SELECT u.VehCode, COUNT(*) AS UsageLine, SUM(ISNULL(l.UsageUnit,0)) AS TotalUsageUnit,
@@ -4628,7 +5071,7 @@ async function vehicleRunningWorkshop({ limit, search, ctx, stale }: { limit: nu
       SELECT COALESCE(NULLIF(js.VehCode,''), NULLIF(j.VehCode,'')) AS VehCode,
         COUNT(DISTINCT js.JobID) AS TotalJob, COUNT(*) AS WorkshopLine, COUNT(DISTINCT js.ItemCode) AS WorkshopItem,
         SUM(ISNULL(js.Qty,0)) AS WorkshopQty, SUM(ISNULL(js.Amount,0)) AS WorkshopAmount,
-        MAX(js.PostDate) AS LastWorkshopDate
+        MAX(${jobStockDate}) AS LastWorkshopDate
       FROM [${DATABASE}].[dbo].[WS_JOBSTOCK] js
       LEFT JOIN [${DATABASE}].[dbo].[WS_JOB] j ON j.JobID = js.JobID
       WHERE js.PostDate >= '2025-05-01'
@@ -4670,13 +5113,13 @@ async function vehicleRunningWorkshop({ limit, search, ctx, stale }: { limit: nu
       (SELECT COUNT(*) FROM [${DATABASE}].[dbo].[WS_JOBSTOCK]) AS TotalWorkshopStockLine,
       (SELECT MAX(UpdateDate) FROM [${DATABASE}].[dbo].[BD_VEHICLERUNNING]) AS LastRunningUpdate,
       (SELECT MAX(TransactDate) FROM [${DATABASE}].[dbo].[GL_VEHUSAGELN] WHERE TransactDate >= '2000-01-01') AS LastUsageDate,
-      (SELECT MAX(PostDate) FROM [${DATABASE}].[dbo].[WS_JOBSTOCK] WHERE PostDate >= '2000-01-01') AS TerakhirUpdate
+      (SELECT MAX(${workshopStockIssueDateExpression('WS_JOBSTOCK')}) FROM [${DATABASE}].[dbo].[WS_JOBSTOCK] WHERE PostDate >= '2000-01-01') AS TerakhirUpdate
   `)
 
   const chart = await rows(ctx, `
     WITH workshop AS (
       SELECT COALESCE(NULLIF(js.VehCode,''), NULLIF(j.VehCode,'')) AS VehCode,
-        SUM(ISNULL(js.Amount,0)) AS WorkshopAmount, COUNT(DISTINCT js.JobID) AS TotalJob, MAX(js.PostDate) AS LastPostDate
+        SUM(ISNULL(js.Amount,0)) AS WorkshopAmount, COUNT(DISTINCT js.JobID) AS TotalJob, MAX(${jobStockDate}) AS LastPostDate
       FROM [${DATABASE}].[dbo].[WS_JOBSTOCK] js
       LEFT JOIN [${DATABASE}].[dbo].[WS_JOB] j ON j.JobID = js.JobID
       WHERE js.PostDate >= '2025-05-01'
@@ -4734,6 +5177,7 @@ const reportHandlers: Record<string, ReportHandler> = {
   'reorder-level': reorderLevel,
   'riwayat-transaksi': transactionHistory,
   'return-barang': stockReturn,
+  'goods-return-supplier': goodsReturnToSupplier,
   'item-stale-update': itemUpdateAge,
   'purchase-order-history': purchaseOrderHistory,
   'supplier-purchasing-performance': supplierPerformance,
@@ -4813,7 +5257,17 @@ async function handleInventoryGet(request: NextRequest) {
     // Lapisan agregasi bulanan: periode CLOSED (immutable) dilayani dari KPI pre-rendered
     // bila sudah ada; periode current / tanpa period / detail-export selalu live.
     // Detail `rows` tidak pernah disimpan — hanya KPI ringan (summary/chart/topLists/trend).
-    const aggregationAttempt = !limitAll
+    // Always live when pre-agg can freeze incomplete KPI formulas.
+    // - fuel/usage: date/location/source splits
+    // - valuation: Opening* fields missing from old closed aggregates → Opening = 0 in UI
+    const valuationHandlers = handlerKey === 'asset-stock-valuasi-listing'
+      || handlerKey === 'report-asset-stock-valuasi-listing'
+      || handlerKey === 'seluruh-stock-summary'
+      || handlerKey === 'RPTIN1000011'
+    const alwaysLiveHandlers = handlerKey === 'fuel-usage'
+      || handlerKey === 'pengeluaran-barang'
+      || valuationHandlers
+    const aggregationAttempt = !limitAll && !alwaysLiveHandlers
       ? await serveAggregate({ handlerKey, source: ctx.source, filters }).catch(() => null)
       : null
     let aggregationInfo: { mode: 'pre-aggregated' | 'live'; period: string | null; builtAt?: string } = {
@@ -4824,18 +5278,48 @@ async function handleInventoryGet(request: NextRequest) {
     let rawPayload: ReportPayload
     if (aggregationAttempt && aggregationAttempt.mode === 'pre-aggregated') {
       const stored = aggregationAttempt.stored
-      rawPayload = {
-        title: report?.title ?? reportParam,
-        description: report?.description ?? '',
-        rows: [],
-        columns: [],
-        summary: stored.summary ?? {},
-        chart: stored.chart ?? [],
-        metadata: { aggregatedKpi: true },
-        topLists: stored.topLists,
-        trend: stored.trend,
+      const storedSummary = (stored.summary ?? {}) as DbRow
+      const missingOpening = valuationHandlers
+        && storedSummary.OpeningTotalAmount === undefined
+        && storedSummary.openingTotalAmount === undefined
+      if (missingOpening) {
+        // Stale closed aggregate without Opening* — recompute live and refresh store.
+        rawPayload = includeDebugSql
+          ? await debugSqlStorage.run(debugSqlStatements, () => handler({ limit, limitAll, search, ctx, stale, filters }))
+          : await handler({ limit, limitAll, search, ctx, stale, filters })
+        await persistAggregate({
+          handlerKey,
+          source: ctx.source,
+          resolution: {
+            closed: true,
+            period: stored.period,
+            actualYear: Number(String(stored.period).slice(0, 4)) || null,
+            actualMonth: Number(String(stored.period).slice(5, 7)) || null,
+            requested: true,
+          },
+          filters,
+          payload: {
+            summary: rawPayload.summary ?? {},
+            chart: rawPayload.chart ?? [],
+            topLists: rawPayload.topLists,
+            trend: rawPayload.trend,
+          },
+        }).catch(() => false)
+        aggregationInfo = { mode: 'live', period: stored.period }
+      } else {
+        rawPayload = {
+          title: report?.title ?? reportParam,
+          description: report?.description ?? '',
+          rows: [],
+          columns: [],
+          summary: storedSummary,
+          chart: stored.chart ?? [],
+          metadata: { aggregatedKpi: true },
+          topLists: stored.topLists,
+          trend: stored.trend,
+        }
+        aggregationInfo = { mode: 'pre-aggregated', period: stored.period, builtAt: stored.builtAt.toISOString() }
       }
-      aggregationInfo = { mode: 'pre-aggregated', period: stored.period, builtAt: stored.builtAt.toISOString() }
     } else {
       rawPayload = includeDebugSql
         ? await debugSqlStorage.run(debugSqlStatements, () => handler({ limit, limitAll, search, ctx, stale, filters }))
@@ -4869,6 +5353,18 @@ async function handleInventoryGet(request: NextRequest) {
       'goods-receiving-receipt-activity',
       'purchase-request-inventory',
       'purchase-order-history',
+    ].includes(handlerKey)
+    // Usage/fuel/return already apply period/date/location/itemType in SQL and return full
+    // SQL summary (incl. Gudang/Workshop split + trend). Do not recompute summary from
+    // TOP-N preview rows — that wiped TotalAmount and source splits.
+    const usageSqlScopedFilters = [
+      'pengeluaran-barang',
+      'fuel-usage',
+      'return-barang',
+      'goods-return-supplier',
+      'penerimaan-barang',
+      'transfer-antar-gudang',
+      'stock-opname',
     ].includes(handlerKey)
     const basePostFilterInput = sqlScopedFilters
       ? {
@@ -4943,6 +5439,21 @@ async function handleInventoryGet(request: NextRequest) {
             productMaterial: undefined,
             itemType: undefined,
             includeWorkshopItem: undefined,
+            movementWindow: undefined,
+          }
+      : usageSqlScopedFilters
+        ? {
+            ...filters,
+            search: undefined,
+            period: undefined,
+            accYear: undefined,
+            accMonth: undefined,
+            actualYear: undefined,
+            actualMonth: undefined,
+            dateFrom: undefined,
+            dateTo: undefined,
+            location: undefined,
+            itemType: undefined,
             movementWindow: undefined,
           }
       : periodScopedFilters

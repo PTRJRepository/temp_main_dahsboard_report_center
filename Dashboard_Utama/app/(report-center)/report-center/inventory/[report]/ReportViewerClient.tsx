@@ -620,7 +620,10 @@ const MONTHLY_MOVEMENT_WINDOW_OPTIONS = [
   { value: '1m', label: '1 month' },
   { value: '3m', label: '3 months' },
   { value: '6m', label: '6 months' },
-  { value: '12m', label: '12 months' },
+  { value: '12m', label: '12 months / 1 year' },
+  { value: '2y', label: '2 years' },
+  { value: '5y', label: '5 years' },
+  { value: '10y', label: '10 years' },
 ] as const
 const SUB_KPI_CHART_TOTAL_KEYS = [
   'TotalItem',
@@ -842,17 +845,17 @@ function stockAgingKpis(summary: DbRow, rows: DbRow[] = []) {
     : summary.ItemTanpaKategori
 
   return [
-    { label: 'Total Item', value: totalItem, description: 'Item count in selected stock-aging scope.', tone: 'border-blue-100 bg-blue-50 text-blue-700' },
-    { label: 'Update <= 3 Bulan', value: itemAktif, description: 'Item count with last update within 3 months.', tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
-    { label: 'Update 6-12 Bulan', value: slowMoving, description: 'Item count with last update age between 6 and 12 months.', tone: 'border-yellow-100 bg-yellow-50 text-yellow-700' },
-    { label: 'Tidak Update > 12 Bulan', value: stale, description: 'Item count with no update for more than 12 months.', tone: 'border-orange-100 bg-orange-50 text-orange-700' },
-    { label: 'Tidak Update > 24 Bulan', value: dead, description: 'Item count with no update for more than 24 months.', tone: 'border-red-100 bg-red-50 text-red-700' },
-    { label: 'Nilai Stok Berisiko', value: riskyValue, description: 'Stock value in IDR for stale-risk items.', tone: 'border-red-100 bg-red-50 text-red-700' },
-    { label: 'Stok Nol', value: zeroStock, description: 'Item count where closing quantity is zero.', tone: 'border-slate-200 bg-slate-50 text-slate-700' },
-    { label: 'Fast Moving', value: fastMovement, description: 'Item count in Fast Moving category for all-period movement.', tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
-    { label: 'Slow Moving Qty', value: slowMovement, description: 'Item count in Slow Moving category for all-period movement.', tone: 'border-yellow-100 bg-yellow-50 text-yellow-700' },
-    { label: 'Dead Movement', value: deadMovement, description: 'Item count with Dead Movement / no recent usage signal.', tone: 'border-red-100 bg-red-50 text-red-700' },
-    { label: 'Tanpa Kategori', value: noCategory, description: 'Item count with empty master category.', tone: 'border-purple-100 bg-purple-50 text-purple-700' },
+    { label: 'Total Item', value: totalItem, description: 'Item count in selected stock-aging scope.', tone: 'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text)]' },
+    { label: 'Update <= 3 Bulan', value: itemAktif, description: 'Item count with last update within 3 months.', tone: 'border-[var(--rc-border)] bg-[rgba(24,185,107,.1)] text-[var(--rc-success)]' },
+    { label: 'Update 6-12 Bulan', value: slowMoving, description: 'Item count with last update age between 6 and 12 months.', tone: 'border-[var(--rc-border)] bg-[rgba(245,158,11,.1)] text-[var(--rc-warning)]' },
+    { label: 'Tidak Update > 12 Bulan', value: stale, description: 'Item count with no update for more than 12 months.', tone: 'border-[var(--rc-border)] bg-[rgba(251,113,133,.1)] text-[var(--rc-danger)]' },
+    { label: 'Tidak Update > 24 Bulan', value: dead, description: 'Item count with no update for more than 24 months.', tone: 'border-[var(--rc-border)] bg-[rgba(251,113,133,.1)] text-[var(--rc-danger)]' },
+    { label: 'Nilai Stok Berisiko', value: riskyValue, description: 'Stock value in IDR for stale-risk items.', tone: 'border-[var(--rc-border)] bg-[rgba(251,113,133,.1)] text-[var(--rc-danger)]' },
+    { label: 'Stok Nol', value: zeroStock, description: 'Item count where closing quantity is zero.', tone: 'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text-muted)]' },
+    { label: 'Fast Moving', value: fastMovement, description: 'Item count in Fast Moving category for all-period movement.', tone: 'border-[var(--rc-border)] bg-[rgba(24,185,107,.1)] text-[var(--rc-success)]' },
+    { label: 'Slow Moving Qty', value: slowMovement, description: 'Item count in Slow Moving category for all-period movement.', tone: 'border-[var(--rc-border)] bg-[rgba(245,158,11,.1)] text-[var(--rc-warning)]' },
+    { label: 'Dead Movement', value: deadMovement, description: 'Item count with Dead Movement / no recent usage signal.', tone: 'border-[var(--rc-border)] bg-[rgba(251,113,133,.1)] text-[var(--rc-danger)]' },
+    { label: 'Tanpa Kategori', value: noCategory, description: 'Item count with empty master category.', tone: 'border-[var(--rc-border)] bg-[rgba(214,184,92,.1)] text-[var(--rc-forest-premium)]' },
   ]
 }
 
@@ -874,14 +877,13 @@ function movementAnalysisKpis(summary: DbRow, rows: DbRow[] = [], groupBy?: stri
   }
 
   const base: ReportKpiCard[] = [
-    { label: 'Asset Amount Real Time', value: summary.TotalAssetAmount ?? summary.TotalAmount, description: `Current asset value in IDR for ${formatValue(itemCount)} inventory items from IN_ITEM.`, tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
-    { label: 'Total Item', value: itemCount, description: 'Item count for ItemType 1 + 4 in selected scope.', tone: 'border-blue-100 bg-blue-50 text-blue-700' },
-    categoryCard('Fast Moving', 'FastMovingItem', 'FastMovingAmount', 'border-emerald-100 bg-emerald-50 text-emerald-700'),
-    categoryCard('Moving', 'MovingItem', 'MovingAmount', 'border-blue-100 bg-blue-50 text-blue-700'),
-    categoryCard('Slow Moving', 'SlowMovingItem', 'SlowMovingAmount', 'border-yellow-100 bg-yellow-50 text-yellow-700'),
-    categoryCard('Dead Stock', 'DeadMovementItem', 'DeadMovementAmount', 'border-red-100 bg-red-50 text-red-700'),
-    categoryCard('Stale', 'StaleItem', 'StaleAmount', 'border-orange-100 bg-orange-50 text-orange-700'),
-    { label: 'StockIssue Movement', value: summary.TotalStockIssueMovementCount ?? rows.reduce((sum, row) => sum + toNumber(row.StockIssueMovementCount), 0), description: 'Count of StockIssue movement events in selected scope.', tone: 'border-amber-100 bg-amber-50 text-amber-700' },
+    { label: 'Asset Amount Real Time', value: summary.TotalAssetAmount ?? summary.TotalAmount, description: `Current asset value in IDR for ${formatValue(itemCount)} inventory items from IN_ITEM.`, tone: 'border-[var(--rc-border)] bg-[rgba(24,185,107,.1)] text-[var(--rc-success)]' },
+    { label: 'Total Item', value: itemCount, description: 'Item count for ItemType 1 + 4 in selected scope.', tone: 'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text)]' },
+    categoryCard('Fast Moving', 'FastMovingItem', 'FastMovingAmount', 'border-[var(--rc-border)] bg-[rgba(24,185,107,.1)] text-[var(--rc-success)]'),
+    categoryCard('Moving', 'MovingItem', 'MovingAmount', 'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text)]'),
+    categoryCard('Slow Moving', 'SlowMovingItem', 'SlowMovingAmount', 'border-[var(--rc-border)] bg-[rgba(245,158,11,.1)] text-[var(--rc-warning)]'),
+    categoryCard('Dead Stock', 'DeadMovementItem', 'DeadMovementAmount', 'border-[var(--rc-border)] bg-[rgba(251,113,133,.1)] text-[var(--rc-danger)]'),
+    { label: 'StockIssue Movement', value: summary.TotalStockIssueMovementCount ?? rows.reduce((sum, row) => sum + toNumber(row.StockIssueMovementCount), 0), description: 'Count of StockIssue movement events in selected scope.', tone: 'border-[var(--rc-border)] bg-[rgba(245,158,11,.1)] text-[var(--rc-warning)]' },
   ]
 
   const dim = resolveGroupDimension(
@@ -894,7 +896,7 @@ function movementAnalysisKpis(summary: DbRow, rows: DbRow[] = [], groupBy?: stri
     const groupCards = groupedKpiCards(rows, dim, [], 6)
     if (groupCards.length) {
       return [
-        { label: `Group: ${displayColumnLabel(dim)}`, value: groupCards.length, description: 'Number of KPI cards grouped by active analysis field.', tone: 'border-white/10 bg-[#102b1b] text-lime-100' },
+        { label: `Group: ${displayColumnLabel(dim)}`, value: groupCards.length, description: 'Number of KPI cards grouped by active analysis field.', tone: 'border-white/10 bg-[var(--rc-surface-raised)] text-lime-100' },
         ...groupCards,
         base[0],
         base[1],
@@ -909,8 +911,7 @@ function movementAnalysisQualityItems(payload: ReportPayload | null, rows: DbRow
     ['Fast Moving', payload?.summary.FastMovingItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Fast Moving').length],
     ['Moving', payload?.summary.MovingItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Moving').length],
     ['Slow Moving', payload?.summary.SlowMovingItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Slow Moving').length],
-    ['Stale', payload?.summary.StaleItem ?? rows.filter((row) => ['Stale', 'No Movement'].includes(String(row.MovementCategory ?? ''))).length],
-    ['Dead Stock', payload?.summary.DeadMovementItem ?? rows.filter((row) => String(row.MovementCategory ?? '') === 'Dead Stock').length],
+    ['Dead Stock', payload?.summary.DeadMovementItem ?? rows.filter((row) => ['Dead Stock', 'Stale', 'No Movement'].includes(String(row.MovementCategory ?? ''))).length],
     ['ItemType 4 Source Valid', payload?.summary.ItemType4WorkshopSourceValid ?? rows.filter((row) => String(row.ItemType ?? '') === '4' && String(row.MovementSource ?? '') === 'WS_JOBSTOCK').length],
     ['ItemType 4 Source Invalid', payload?.summary.ItemType4WorkshopSourceInvalid ?? rows.filter((row) => String(row.ItemType ?? '') === '4' && String(row.MovementSource ?? '') !== 'WS_JOBSTOCK').length],
     ['Movement Source Missing', payload?.summary.MovementSourceMissing ?? rows.filter((row) => !String(row.MovementSource ?? '').trim()).length],
@@ -933,13 +934,13 @@ function assetValuationKpis(summary: DbRow, metadata: DbRow = {}, rows: DbRow[] 
     summary.acc_year ?? metadata.accYear,
   ].filter((part) => part !== undefined && part !== null && part !== '').join('/')
   return [
-    { label: 'Nilai Asset', value: summary.total_amount ?? summary.TotalAmount, description: 'Stock valuation amount in IDR. This is inventory value, not movement sum.', tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
-    { label: 'Total Item', value: summary.total_item ?? summary.FilteredRows ?? rows.length, description: 'Item count for ItemType 1 Gudang + ItemType 4 Workshop/Mesin.', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
-    { label: 'Qty On Hand+Hold', value: summary.total_quantity ?? summary.TotalQty ?? rowTotalQty, description: 'Physical stock quantity: available on hand plus on hold.', tone: 'border-cyan-100 bg-cyan-50 text-cyan-800' },
-    { label: 'Qty On Hand', value: summary.total_quantity_on_hand ?? rowQtyOnHand, description: 'Physical quantity currently available for use.', tone: 'border-sky-100 bg-sky-50 text-sky-800' },
-    { label: 'Qty On Hold', value: summary.total_quantity_on_hold ?? rowQtyOnHold, description: 'Physical quantity reserved/on hold, not freely available.', tone: 'border-amber-100 bg-amber-50 text-amber-800' },
-    { label: 'Periode Aktual', value: periodLabel, description: 'Calendar month applied by report filters.', tone: 'border-white/10 bg-[#0F2B1A] text-white' },
-    { label: 'Acc Period', value: accLabel || (summary.accounting_period ?? metadata.accountingPeriod), description: 'Accounting fiscal period used by inventory tables.', tone: 'border-white/10 bg-[#1A1A1A] text-white' },
+    { label: 'Nilai Asset', value: summary.total_amount ?? summary.TotalAmount, description: 'Stock valuation amount in IDR. This is inventory value, not movement sum.', tone: 'border-[var(--rc-border)] bg-[rgba(24,185,107,.1)] text-[var(--rc-success)]' },
+    { label: 'Total Item', value: summary.total_item ?? summary.FilteredRows ?? rows.length, description: 'Item count for ItemType 1 Gudang + ItemType 4 Workshop/Mesin.', tone: 'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text)]' },
+    { label: 'Qty On Hand+Hold', value: summary.total_quantity ?? summary.TotalQty ?? rowTotalQty, description: 'Physical stock quantity: available on hand plus on hold.', tone: 'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text)]' },
+    { label: 'Qty On Hand', value: summary.total_quantity_on_hand ?? rowQtyOnHand, description: 'Physical quantity currently available for use.', tone: 'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text)]' },
+    { label: 'Qty On Hold', value: summary.total_quantity_on_hold ?? rowQtyOnHold, description: 'Physical quantity reserved/on hold, not freely available.', tone: 'border-[var(--rc-border)] bg-[rgba(245,158,11,.1)] text-[var(--rc-warning)]' },
+    { label: 'Periode Aktual', value: periodLabel, description: 'Calendar month applied by report filters.', tone: 'border-white/10 bg-[var(--rc-surface-raised)] text-white' },
+    { label: 'Acc Period', value: accLabel || (summary.accounting_period ?? metadata.accountingPeriod), description: 'Accounting fiscal period used by inventory tables.', tone: 'border-white/10 bg-[var(--rc-surface)] text-white' },
   ]
 }
 
@@ -1159,24 +1160,28 @@ function chartTotalsByGroup(chart: DbRow[], groupField: string | undefined) {
   return totals
 }
 
-/** Columns safe to sum into grand-total KPI (exclude codes/names/dates). */
+/** Columns safe to sum into grand-total KPI (exclude codes/names/dates/unit-cost/IDs). */
 function isSummableMetricField(field: string) {
   if (!field) return false
-  if (/Code$|Name$|Description|Period|Date|Time|ID$|Label|Category|Type|Status|UOM|Unit$|Location|Gudang|Supplier|Rank|Window|Source|Rule|Raw|technical|report_id|server|database|sql/i.test(field)) {
+  // Unit Cost is per-line price — never grand-total as money (bug: Cost total = Amount).
+  if (/^(cost|unit[_ ]?cost|average[_ ]?cost|price|rate|hargasatuan)$/i.test(field)) return false
+  if (/unitcost|averagecost|diffaveragecost/i.test(field) && !/amount/i.test(field)) return false
+  if (/Code$|Name$|Description|Period|Date|Time|ID$|Label|Category|Type|Status|UOM|Unit$|Location|Gudang|Supplier|Rank|Window|Source|Rule|Raw|technical|report_id|server|database|sql|Dokumen|StockIssue/i.test(field)) {
     return false
   }
-  return /Amount|Qty|Quantity|Total|Nilai|Count|Event|Cost|Value|OnHand|Hold|Closing|Opening|Issued|Received|Return|Goods|Adjustment|Transfer|Dispatch|Ledger|Station|Vehicle|Item$|Rows|Score/i.test(field)
+  // Money/qty totals only — bare Cost intentionally excluded above.
+  return /Amount|Qty|Quantity|Total|Nilai|Count|Event|Value|OnHand|Hold|Closing|Opening|Issued|Received|Return|Goods|Adjustment|Transfer|Dispatch|Ledger|Station|Vehicle|Item$|Rows|Score/i.test(field)
 }
 
 const KPI_TONES = [
-  'border-emerald-200 bg-emerald-50 text-emerald-900',
-  'border-sky-100 bg-sky-50 text-sky-800',
-  'border-amber-100 bg-amber-50 text-amber-800',
-  'border-rose-100 bg-rose-50 text-rose-800',
-  'border-purple-100 bg-purple-50 text-purple-800',
-  'border-cyan-100 bg-cyan-50 text-cyan-800',
-  'border-lime-100 bg-lime-50 text-lime-800',
-  'border-blue-100 bg-blue-50 text-blue-800',
+  'border-[var(--rc-border)] bg-[rgba(24,185,107,.1)] text-[var(--rc-success)]',
+  'border-[var(--rc-border)] bg-[rgba(155,226,61,.08)] text-[var(--rc-forest-accent)]',
+  'border-[var(--rc-border)] bg-[rgba(245,158,11,.1)] text-[var(--rc-warning)]',
+  'border-[var(--rc-border)] bg-[rgba(251,113,133,.1)] text-[var(--rc-danger)]',
+  'border-[var(--rc-border)] bg-[rgba(214,184,92,.1)] text-[var(--rc-forest-premium)]',
+  'border-[var(--rc-border)] bg-[rgba(52,211,153,.1)] text-[var(--rc-forest-primary)]',
+  'border-[var(--rc-border)] bg-[rgba(155,226,61,.1)] text-[var(--rc-forest-accent)]',
+  'border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-[var(--rc-text)]',
 ] as const
 
 /**
@@ -1497,7 +1502,7 @@ function buildDynamicGrandTotalKpis(
       label: 'Actual Period',
       value: period,
       description: 'Actual calendar period applied by report filters.',
-      tone: 'border-white/10 bg-[#0F2B1A] text-white',
+      tone: 'border-white/10 bg-[var(--rc-surface-raised)] text-white',
       scope: 'global',
     })
   }
@@ -1506,7 +1511,7 @@ function buildDynamicGrandTotalKpis(
       label: 'Acc Period',
       value: acc,
       description: 'Accounting fiscal period used by inventory report data.',
-      tone: 'border-white/10 bg-[#1A1A1A] text-white',
+      tone: 'border-white/10 bg-[var(--rc-surface)] text-white',
       scope: 'global',
     })
   }
@@ -1557,7 +1562,7 @@ function buildDynamicGrandTotalKpis(
         description: breakdownCards.length
           ? `Grand total summary for Gudang + Workshop. Also shows ${subCards.length} taxonomy groups and ${movementRailCards.length} Movement Category cards.`
           : `${displayColumnLabel(dim ?? 'taxonomy')} grouping summary: ${subCards.length} taxonomy groups and ${movementRailCards.length} Movement Category cards.`,
-        tone: 'border-white/10 bg-[#0F2B1A] text-lime-100',
+        tone: 'border-white/10 bg-[var(--rc-surface-raised)] text-lime-100',
         scope: 'global' as const,
         metrics: metricPreview.map((card) => ({ key: card.label, label: card.label, value: card.value })),
       },
@@ -1569,7 +1574,7 @@ function buildDynamicGrandTotalKpis(
               label: `Sub · ${displayColumnLabel(dim ?? 'group')}`,
               value: subCards.length,
               description: 'Stored taxonomy grouping such as Product, Brand, Model, Material, or Location. Not Movement Category.',
-              tone: 'border-white/10 bg-[#102b1b] text-lime-100',
+              tone: 'border-white/10 bg-[var(--rc-surface-raised)] text-lime-100',
               scope: 'sub' as const,
               groupField: dim,
             },
@@ -1598,8 +1603,8 @@ const GENERIC_KPI_PRIORITY: Array<{ keys: string[]; label: string; description: 
   { keys: ['TotalAmount', 'total_amount', 'ClosingAmount', 'NilaiStok', 'Amount'], label: 'Total Amount', description: 'Main report amount/value in IDR for selected scope.', tone: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
   { keys: ['TotalItem', 'total_item', 'FilteredRows', 'TotalRows'], label: 'Total Item / Rows', description: 'Item or row count in selected report scope.', tone: 'border-blue-100 bg-blue-50 text-blue-800' },
   { keys: ['TotalQty', 'total_quantity', 'ClosingQty', 'Qty'], label: 'Total Qty', description: 'Physical quantity total in selected report scope.', tone: 'border-cyan-100 bg-cyan-50 text-cyan-800' },
-  { keys: ['ActualPeriod', 'actualPeriod', 'period'], label: 'Actual Period', description: 'Calendar month applied by report filters.', tone: 'border-white/10 bg-[#0F2B1A] text-white' },
-  { keys: ['AccountingPeriod', 'accountingPeriod'], label: 'Acc Period', description: 'Accounting fiscal period used by report data.', tone: 'border-white/10 bg-[#1A1A1A] text-white' },
+  { keys: ['ActualPeriod', 'actualPeriod', 'period'], label: 'Actual Period', description: 'Calendar month applied by report filters.', tone: 'border-white/10 bg-[var(--rc-surface-raised)] text-white' },
+  { keys: ['AccountingPeriod', 'accountingPeriod'], label: 'Acc Period', description: 'Accounting fiscal period used by report data.', tone: 'border-white/10 bg-[var(--rc-surface)] text-white' },
   { keys: ['TotalLocation', 'LocationCount'], label: 'Location', description: 'Location/Gudang count in selected report scope.', tone: 'border-teal-100 bg-teal-50 text-teal-800' },
   { keys: ['TotalSupplier', 'SupplierCount'], label: 'Supplier', description: 'Supplier count in selected report scope.', tone: 'border-lime-100 bg-lime-50 text-lime-800' },
 ]
@@ -1652,7 +1657,7 @@ function genericKpis(payload: ReportPayload, filters?: ReportFilterInput): Repor
       label: displayColumnLabel(key),
       value,
       description: kpiMeaning(key),
-      tone: 'border-white/10 bg-[#1A1A1A] text-white',
+      tone: 'border-white/10 bg-[var(--rc-surface)] text-white',
     })
   }
 
@@ -1666,7 +1671,7 @@ function genericKpis(payload: ReportPayload, filters?: ReportFilterInput): Repor
   if (groupCards.length > 0 && (filters?.groupBy || filters?.chartDimension)) {
     const dim = filters?.groupBy ?? filters?.chartDimension
     return [
-      { label: `Group: ${displayColumnLabel(String(dim))}`, value: groupCards.length, description: 'Number of KPI cards grouped by user-selected analysis field.', tone: 'border-white/10 bg-[#102b1b] text-lime-100' },
+      { label: `Group: ${displayColumnLabel(String(dim))}`, value: groupCards.length, description: 'Number of KPI cards grouped by user-selected analysis field.', tone: 'border-white/10 bg-[var(--rc-surface-raised)] text-lime-100' },
       ...groupCards,
       ...cards.slice(0, 4),
     ].slice(0, 12)
@@ -2054,19 +2059,30 @@ async function exportExcel(report: InventoryReport, source: ReportSource, filter
 }
 
 async function exportPdf(report: InventoryReport, source: ReportSource, filters: ReportFilterInput, rows: DbRow[], columns: string[]) {
-  return saveReportPdfPreview({
+  if (rows.length === 0) {
+    window.alert('Tidak ada baris untuk diekspor.')
+    return
+  }
+  const periodLabel = String(filters.period ?? filters.accYear ?? 'Current')
+  await saveReportPdfPreview({
     reportId: report.id,
     reportTitle: report.title,
     reportCode: report.code,
     description: report.description,
     sourceLabel: sourceLabel(source),
-    periodLabel: String(filters.period ?? filters.accYear ?? 'Current'),
+    periodLabel,
     filters: filters as Record<string, unknown>,
     rows,
     columns,
+    totalRowCount: rows.length,
     formatValue,
     displayColumnLabel,
   })
+  const shown = Math.min(rows.length, 2000)
+  window.alert(
+    `PDF ops pack: ${shown.toLocaleString('id-ID')} baris × hingga ${Math.min(columns.length, 10)} kolom` +
+      (rows.length > 2000 ? ` (truncated dari ${rows.length.toLocaleString('id-ID')} — pakai Excel untuk penuh).` : '.'),
+  )
 }
 
 async function runConfirmedExport(
@@ -2662,7 +2678,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           field: 'MovementCategory',
           label: 'Movement Category',
           type: 'string',
-          options: ['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock', 'Stale'],
+          options: ['Fast Moving', 'Moving', 'Slow Moving', 'Dead Stock'],
         },
         ...cols,
       ]
@@ -3497,7 +3513,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     return ''
   }
   const headerCellClass = (column: string) => {
-    return `${headerWidthClass(column)} ${stickyColumnClass(column, true)} whitespace-normal break-words border-b border-r border-amber-400/20 bg-[#0b1018] ${headerPadding} align-bottom leading-tight font-black text-amber-100 shadow-[inset_0_-1px_0_rgba(245,158,11,0.28)]`
+    return `${headerWidthClass(column)} ${stickyColumnClass(column, true)} whitespace-normal break-words border-b border-r border-amber-400/20 bg-[var(--rc-bg)] ${headerPadding} align-bottom leading-tight font-black text-amber-100 shadow-[inset_0_-1px_0_rgba(245,158,11,0.28)]`
   }
 
   const bodyCellClass = (column: string, columnIndex: number, subtotal = false, selected = false, zebraAlt = false) => {
@@ -3539,11 +3555,11 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
     : 0
 
   return (
-    <main className="min-h-full bg-[#0F2B1A]">
+    <main className="min-h-full bg-[var(--rc-surface-raised)]">
       <div className="mx-auto max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Report identity banner — always above KPI rail */}
         <header className="rc-report-banner relative mb-4 overflow-hidden rounded-[28px] border border-[color:var(--rc-forest-border)] text-white shadow-[0_32px_90px_rgba(0,0,0,0.38)]">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_12%_0%,rgba(190,242,100,0.22),transparent_42%),radial-gradient(ellipse_at_88%_8%,rgba(52,211,153,0.18),transparent_40%),linear-gradient(135deg,#0a2416_0%,#071426_48%,#0c1a12_100%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_12%_0%,rgba(190,242,100,0.22),transparent_42%),radial-gradient(ellipse_at_88%_8%,rgba(52,211,153,0.18),transparent_40%),linear-gradient(135deg,var(--rc-surface-muted)_0%,var(--rc-surface)_48%,var(--rc-bg-soft)_100%)]" />
           <div className="pointer-events-none absolute -right-16 top-0 h-56 w-56 rounded-full bg-lime-300/10 blur-3xl" />
           <div className="pointer-events-none absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-emerald-400/10 blur-3xl" />
           <div className="relative p-5 sm:p-6 lg:p-7">
@@ -3575,7 +3591,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   {reportStateCards.map((card) => (
                     <div key={card.label} className={`rounded-2xl border px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${card.tone}`}>
                       <span className="block text-[10px] font-black uppercase tracking-[0.14em] opacity-70">{card.label}</span>
-                      <strong className="mt-1 block truncate text-base font-black tabular-nums">{card.value}</strong>
+                      <strong className="rc-metric mt-1 block truncate text-base font-black tabular-nums">{card.value}</strong>
                       <span className="mt-0.5 block truncate text-[11px] font-semibold opacity-60">{card.detail}</span>
                     </div>
                   ))}
@@ -3649,7 +3665,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           </div>
         </header>
 
-        <section className="rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-[#12351F] via-[#0F2B1A] to-[#0B1F15] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.22)]">
+        <section className="rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-[var(--rc-surface)] via-[var(--rc-surface-raised)] to-[var(--rc-bg-soft)] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.22)]">
 
         {removableFilterChips.length > 0 && (
           <AppliedFilterBar
@@ -4055,7 +4071,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   Movement Category (hitung dinamis dari StockIssue)
                 </p>
                 <p className="mb-2 text-xs font-semibold text-amber-100/80">
-                  Bukan field master DEADS/MEMOV. Fast/Moving/Slow/Dead/Stale dihitung ulang per item dari count issue valid dalam window.
+                  Bukan field master DEADS/MEMOV. Fast/Moving/Slow/Dead dihitung ulang per item dari count issue valid dalam window.
                 </p>
                 <div className="grid gap-2 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto]">
                   <label className="block">
@@ -4077,7 +4093,10 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                       <option value="1m">1 bulan</option>
                       <option value="3m">3 bulan terakhir</option>
                       <option value="6m">6 bulan terakhir</option>
-                      <option value="12m">12 bulan terakhir</option>
+                      <option value="12m">12 bulan / 1 tahun</option>
+                      <option value="2y">2 tahun</option>
+                      <option value="5y">5 tahun</option>
+                      <option value="10y">10 tahun</option>
                       <option value="custom">Custom range</option>
                     </select>
                   </label>
@@ -4200,7 +4219,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   </label>
                 </div>
                 <p className="mt-2 text-xs font-semibold text-amber-100/80">
-                  Window dan definisi ini menghitung ulang Fast/Moving/Slow/Dead/Stale dari issue valid. Default: Fast &gt;= 6, Moving 2-5, Slow = 1. DB tetap read-only.
+                  Window dan definisi ini menghitung ulang Fast/Moving/Slow/Dead dari issue valid. Default: Fast &gt;= 6, Moving 2-5, Slow = 1, Dead = 0. DB tetap read-only.
                 </p>
               </div>
               )}
@@ -4409,7 +4428,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
         )}
 
         <div className={`${tableExpanded || workspaceTab === 'detail' ? '' : 'hidden'}${tableExpanded ? '' : ' mt-5'}`.trim()}>
-        <section className={tableExpanded ? 'fixed inset-0 z-50 overflow-hidden bg-[#06080d] p-2' : 'overflow-hidden rounded-2xl border border-amber-400/25 bg-[#0b1018] shadow-[0_24px_80px_rgba(0,0,0,0.32)]'}>
+        <section className={tableExpanded ? 'fixed inset-0 z-50 overflow-hidden bg-[var(--rc-bg)] p-2' : 'overflow-hidden rounded-2xl border border-amber-400/25 bg-[var(--rc-bg)] shadow-[0_24px_80px_rgba(0,0,0,0.32)]'}>
           <ReportTableToolbar
             tableExpanded={tableExpanded}
             tableSearch={tableSearch}
@@ -4478,7 +4497,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           ) : (
             <>
               {!tableExpanded && reportInfoVisible && tableContextItems.length > 0 && (
-                <div className="border-b border-amber-400/15 bg-[#071426] px-4 py-3">
+                <div className="border-b border-amber-400/15 bg-[var(--rc-surface)] px-4 py-3">
                   <div className="flex flex-wrap gap-2">
                     {tableContextItems.map(([label, value]) => (
                       <div key={label} className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1.5">
@@ -4520,7 +4539,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               />
 
               {!tableExpanded && Object.keys(tableTotals).length > 0 && (
-                <div className="sticky bottom-0 z-20 flex flex-wrap gap-2 border-t border-amber-400/30 bg-[#0b1018]/95 px-4 py-2.5 backdrop-blur-md">
+                <div className="sticky bottom-0 z-20 flex flex-wrap gap-2 border-t border-amber-400/30 bg-[var(--rc-bg)]/95 px-4 py-2.5 backdrop-blur-md">
                   <span className="self-center text-[10px] font-black uppercase tracking-[0.16em] text-amber-200/80">Grand total tabel</span>
                   {Object.entries(tableTotals).map(([column, total]) => (
                     <div key={column} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 shadow-sm ${report.id === 'all-stock-movement-analysis' && column === 'AmountItem' ? 'border-emerald-300 bg-emerald-50' : 'border-white/10 bg-white/5'}`}>
@@ -4532,7 +4551,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               )}
 
               {!tableExpanded && (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-400/20 bg-[#071426] px-5 py-3 text-sm text-slate-300">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-400/20 bg-[var(--rc-surface)] px-5 py-3 text-sm text-slate-300">
                 <div className="flex flex-wrap items-center gap-3">
                   <span>
                     Menampilkan {shownTableRows} dari {displayTableTotalRows} row{serverPaged && tableWindow.windowed ? ` dari ${safeTotalTableRows} total` : ''}
@@ -4577,7 +4596,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           )}
         </section>
         {!tableExpanded && (workspaceTab === 'analisis' || workspaceTab === 'audit') && analysisPanelVisible && tableReady && !analysisReady && (
-          <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+          <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[var(--rc-surface)] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">
@@ -4593,7 +4612,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               </div>
               <Loader2 className="animate-spin text-emerald-300" size={18} />
             </div>
-            <div className="mt-4 rounded-xl border border-white/10 bg-[#0F2B1A] p-4 text-sm font-semibold text-white/60">
+            <div className="mt-4 rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] p-4 text-sm font-semibold text-white/60">
               {workspaceTab === 'audit'
                 ? 'Table sudah siap. Audit Workspace sedang menyiapkan SQL, metadata, quality, dan parameter request.'
                 : 'Table sudah siap. Analysis Workspace sedang dimuat di background supaya table tetap ringan dulu.'}
@@ -4601,7 +4620,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           </section>
         )}
         {!tableExpanded && (workspaceTab === 'analisis' || workspaceTab === 'audit') && analysisPanelVisible && tableReady && analysisReady && (
-          <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[#12351F] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+          <section id="analysis-workspace" className="mt-5 rounded-2xl border border-emerald-500/25 bg-[var(--rc-surface)] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-300">
@@ -4626,7 +4645,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
 
             <div className={aiInsightVisible ? 'mb-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]' : 'mb-4 grid gap-4'}>
               {aiInsightVisible && (
-              <div className="rounded-xl border border-white/10 bg-[#0F2B1A] p-4">
+              <div className="rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-black text-white">AI Insight Preview</p>
                   <span className={
@@ -4650,7 +4669,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               </div>
               )}
 
-              <div className="rounded-xl border border-white/10 bg-[#0F2B1A] p-4">
+              <div className="rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] p-4">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-white">
@@ -4705,7 +4724,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
               </div>
             </div>
 
-            <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-[#0F2B1A] p-1 md:grid-cols-6">
+            <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] p-1 md:grid-cols-6">
               {(Object.keys(insightTabLabels) as InsightTab[])
                 .filter((tab) => (tab !== 'ai' || aiInsightVisible) && (tab !== 'sql' || workspaceTab === 'audit' || debugSqlStatements.length > 0))
                 .map((tab) => (
@@ -4742,7 +4761,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   questionRequest={aiQuestionRequest}
                 />
                 {aiSections.map((section) => (
-                  <div key={section.label} className="rounded-xl border border-white/10 bg-[#0F2B1A] p-3">
+                  <div key={section.label} className="rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-black text-white">{section.label}</p>
                       <span className={
@@ -4818,7 +4837,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             {insightTab === 'quality' && (
               <div className="space-y-2">
                 {qualityItems.map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0F2B1A] px-3 py-2">
+                  <div key={label} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] px-3 py-2">
                     <span className="text-xs font-bold text-white/60">{label}</span>
                     <span className="text-sm font-black text-emerald-300">{formatValue(value)}</span>
                   </div>
@@ -4829,7 +4848,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
             {insightTab === 'metadata' && (
               <div className="space-y-2">
                 {metadataEntries.map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-3 rounded-xl border border-white/10 bg-[#0F2B1A] px-3 py-2 text-xs">
+                  <div key={label} className="flex justify-between gap-3 rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] px-3 py-2 text-xs">
                     <span className="text-white/40">{label}</span>
                     <span className="truncate text-right font-bold text-white">{formatValue(value)}</span>
                   </div>
@@ -4878,7 +4897,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                         </button>
                       </div>
                     </div>
-                    <pre className="mt-3 max-h-[280px] overflow-auto rounded-xl border border-white/10 bg-[#071426] p-4 text-[12px] leading-6 text-lime-100">
+                    <pre className="mt-3 max-h-[280px] overflow-auto rounded-xl border border-white/10 bg-[var(--rc-surface)] p-4 text-[12px] leading-6 text-lime-100">
                       <code>{kpiSimpleSqlView.sql}</code>
                     </pre>
                   </div>
@@ -4906,21 +4925,21 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                     </button>
                   </div>
                   <div className="mt-3 grid gap-2 text-xs font-semibold text-white/65 md:grid-cols-3">
-                    <div className="rounded-lg border border-white/10 bg-[#0F2B1A] p-3">
+                    <div className="rounded-lg border border-white/10 bg-[var(--rc-surface-raised)] p-3">
                       <span className="block text-white/35">Server</span>
                       <span className="mt-1 block font-black text-white">{debugSql?.target?.server ?? focusedDebugSqlStatement?.server ?? '-'}</span>
                     </div>
-                    <div className="rounded-lg border border-white/10 bg-[#0F2B1A] p-3">
+                    <div className="rounded-lg border border-white/10 bg-[var(--rc-surface-raised)] p-3">
                       <span className="block text-white/35">Database</span>
                       <span className="mt-1 block font-black text-white">{debugSql?.target?.database ?? focusedDebugSqlStatement?.database ?? '-'}</span>
                     </div>
-                    <div className="rounded-lg border border-white/10 bg-[#0F2B1A] p-3">
+                    <div className="rounded-lg border border-white/10 bg-[var(--rc-surface-raised)] p-3">
                       <span className="block text-white/35">Statement</span>
                       <span className="mt-1 block font-black text-white">{formatValue(debugSql?.statementCount ?? debugSqlStatements.length)}</span>
                     </div>
                   </div>
                   {debugSql?.sourceTables && (
-                    <p className="mt-3 rounded-lg border border-white/10 bg-[#0F2B1A] p-3 text-xs font-semibold leading-5 text-white/60">
+                    <p className="mt-3 rounded-lg border border-white/10 bg-[var(--rc-surface-raised)] p-3 text-xs font-semibold leading-5 text-white/60">
                       Tabel sumber: {debugSql.sourceTables}
                     </p>
                   )}
@@ -4937,7 +4956,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                             onClick={() => setDebugSqlFocus(statementId)}
                             className={active
                               ? 'w-full rounded-xl border border-amber-300/50 bg-amber-300/15 p-3 text-left text-amber-100'
-                              : 'w-full rounded-xl border border-white/10 bg-[#0F2B1A] p-3 text-left text-white/55 hover:border-amber-300/25 hover:text-white'}
+                              : 'w-full rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] p-3 text-left text-white/55 hover:border-amber-300/25 hover:text-white'}
                           >
                             <span className="block text-[10px] font-black uppercase tracking-wide">{statement.label ?? `query-${index + 1}`}</span>
                             <span className="mt-1 block text-xs font-semibold">Rows: {formatValue(statement.rows)}{statement.executionMs ? ` | ${statement.executionMs}ms` : ''}</span>
@@ -4946,7 +4965,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                       })}
                     </div>
 
-                    <div className="min-w-0 rounded-xl border border-white/10 bg-[#071426]">
+                    <div className="min-w-0 rounded-xl border border-white/10 bg-[var(--rc-surface)]">
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
                         <div>
                           <p className="text-sm font-black text-white">{focusedDebugSqlStatement?.label ?? 'query'}</p>
@@ -4984,7 +5003,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
                   />
                 </div>
                 {viewerProfile.presets.length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-[#0F2B1A] p-4">
+                  <div className="rounded-xl border border-white/10 bg-[var(--rc-surface-raised)] p-4">
                     <p className="text-xs font-black text-white">Suggested Next Filters</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {viewerProfile.presets.slice(0, 6).map((preset) => (
@@ -5017,7 +5036,7 @@ export default function ReportViewerClient({ reportId }: { reportId: string }) {
           onClick={() => setKpiSimpleSqlView(null)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-lime-300/35 bg-[#071426] text-white shadow-[0_28px_80px_rgba(0,0,0,0.55)]"
+            className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-lime-300/35 bg-[var(--rc-surface)] text-white shadow-[0_28px_80px_rgba(0,0,0,0.55)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">

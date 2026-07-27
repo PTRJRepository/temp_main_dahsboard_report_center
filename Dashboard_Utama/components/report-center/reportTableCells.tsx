@@ -35,9 +35,9 @@ export function movementTone(value: unknown) {
   if (text.includes('fast')) return 'border-emerald-200 bg-emerald-50 text-emerald-700'
   if (text === 'moving') return 'border-blue-200 bg-blue-50 text-blue-700'
   if (text.includes('slow')) return 'border-yellow-200 bg-yellow-50 text-yellow-700'
-  if (text.includes('dead')) return 'border-red-200 bg-red-50 text-red-700'
-  if (text.includes('stale')) return 'border-orange-200 bg-orange-50 text-orange-700'
-  if (text.includes('no movement')) return 'border-slate-200 bg-slate-50 text-slate-700'
+  if (text.includes('dead') || text.includes('stale') || text.includes('no movement')) {
+    return 'border-red-200 bg-red-50 text-red-700'
+  }
   return 'border-slate-200 bg-slate-50 text-slate-700'
 }
 

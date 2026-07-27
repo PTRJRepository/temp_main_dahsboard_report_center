@@ -1,4 +1,9 @@
 import { accountingToActualPeriod, actualToAccountingPeriod } from '../accounting-period'
+import {
+  fuelIssueFiscalPeriodFilter,
+  fuelIssueStatusFilter,
+  FUEL_ISSUE_PERIOD_RULE,
+} from './fuel-issue-sql'
 import { MOVEMENT_CATEGORY_ORDER, normalizeMovementCategoryLabel } from '../movement-category'
 import type { DbRow, ReportFilterInput } from '../report-filtering'
 import type { InventoryAnalyticsContract } from './analytics-contract'
@@ -128,11 +133,11 @@ export const MONTHLY_MOVEMENT_DEFINITIONS: readonly MonthlyMovementDefinition[] 
   {
     key: 'received',
     sqlPrefix: 'Received',
-    label: 'Received',
+    label: 'Inventory Received',
     quantity_unit: 'item unit',
     amount_currency: 'IDR',
-    status: 'placeholder_zero',
-    source: 'Not implemented in current RPTIN1000015 reconstruction',
+    status: 'implemented',
+    source: 'IN_STOCKRECEIVE/LN — inventory module receive (bukan purchasing GR)',
   },
   {
     key: 'return_advice',
@@ -200,29 +205,29 @@ export const MONTHLY_MOVEMENT_DEFINITIONS: readonly MonthlyMovementDefinition[] 
   {
     key: 'return',
     sqlPrefix: 'Return',
-    label: 'Return',
+    label: 'Inventory Return',
     quantity_unit: 'item unit',
     amount_currency: 'IDR',
     status: 'implemented',
-    source: 'WS_JOBSTOCK TransType 2',
+    source: 'IN_STOCKRTN/LN + WS_JOBSTOCK TransType 2 (return ke gudang, bukan purchasing goods return)',
   },
   {
     key: 'purchasing_goods_receive',
     sqlPrefix: 'GoodsReceive',
-    label: 'Purchasing - Goods Receive',
+    label: 'Purchasing Goods Receive',
     quantity_unit: 'item unit',
     amount_currency: 'IDR',
     status: 'implemented',
-    source: 'PU_GOODSRCV/PU_GOODSRCVLN with PU_POLN cost',
+    source: 'PU_GOODSRCV/LN × PU_POLN.Cost · Status 2/5/6',
   },
   {
     key: 'purchasing_goods_return',
     sqlPrefix: 'GoodsReturn',
-    label: 'Purchasing - Goods Return',
+    label: 'Purchasing Goods Return',
     quantity_unit: 'item unit',
     amount_currency: 'IDR',
     status: 'implemented',
-    source: 'PU_GOODSRET/PU_GOODSRETLN Amount fallback ReturnStockQty * Cost',
+    source: 'PU_GOODSRET/LN · retur ke supplier (bukan inventory stock return)',
   },
   {
     key: 'purchasing_dispatch_advice',
@@ -400,10 +405,6 @@ function transactionAsOfFilter(alias: string, transactionAsOf: string) {
 
 function nonWorkshopItemTypeFilter(alias: string) {
   return `AND ISNULL(RTRIM(CONVERT(varchar(10), ${alias}.ItemType)), '') <> '4'`
-}
-
-function fuelIssueStatusFilter(alias = 'h') {
-  return `AND RTRIM(ISNULL(${alias}.Status, '')) IN ('2', '6')`
 }
 
 function inventoryValuationItemTypeFilter(alias: string) {
@@ -601,7 +602,7 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
         ON issueItem.ItemCode = l.ItemCode
         AND issueItem.LocCode = h.LocCode
       WHERE RTRIM(h.LocCode) = '${scope.location}'
-        ${accountingPeriodFilter('h', scope.accYear, scope.accMonth)}
+        ${fuelIssueFiscalPeriodFilter('h', scope.accYear, scope.accMonth)}
         ${fuelIssueStatusFilter('h')}
         AND (
           issueItem.ItemCode IS NULL
@@ -636,6 +637,40 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
 
       UNION ALL
 
+      -- Inventory module RECEIVE (IN_STOCKRECEIVE) — bukan purchasing GR
+      SELECT
+        RTRIM(l.ItemCode),
+        0, 0,
+        ISNULL(l.Qty, 0),
+        CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS decimal(18, 6)),
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      FROM [${database}].[dbo].[IN_STOCKRECEIVE] h
+      JOIN [${database}].[dbo].[IN_STOCKRECEIVELN] l
+        ON h.StockReceiveID = l.StockReceiveID
+      WHERE RTRIM(h.LocCode) = '${scope.location}'
+        ${accountingPeriodFilter('h', scope.accYear, scope.accMonth)}
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
+        ${transactionAsOfFilter('h', scope.transactionAsOf)}
+
+      UNION ALL
+
+      -- Inventory module RETURN (IN_STOCKRTN) — return ke gudang dari issue
+      SELECT
+        RTRIM(l.ItemCode),
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ISNULL(l.Qty, 0),
+        CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS decimal(18, 6)),
+        0, 0, 0, 0, 0, 0
+      FROM [${database}].[dbo].[IN_STOCKRTN] h
+      JOIN [${database}].[dbo].[IN_STOCKRTNLN] l
+        ON h.StockRtnID = l.StockRtnID
+      WHERE RTRIM(h.LocCode) = '${scope.location}'
+        ${accountingPeriodFilter('h', scope.accYear, scope.accMonth)}
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
+        ${transactionAsOfFilter('h', scope.transactionAsOf)}
+
+      UNION ALL
+
       SELECT
         RTRIM(gl.ItemCode),
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -649,7 +684,15 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
         ON gl.POLnID = p.POLnID
       WHERE RTRIM(g.LocCode) = '${scope.location}'
         ${accountingPeriodFilter('g', scope.accYear, scope.accMonth)}
-        AND RTRIM(g.Status) = '2'
+        -- Posted GR often Status 5; Status=2 only → GoodsReceiveAmount 0
+        AND RTRIM(ISNULL(g.Status, '')) IN ('2', '5', '6')
+        -- RPTIN1000015 Purchasing-Goods Receive: exclude ProdType 'DC' (direct-charge asset lines)
+        AND NOT EXISTS (
+          SELECT 1 FROM [${database}].[dbo].[IN_ITEM] dc
+          WHERE dc.ItemCode = gl.ItemCode
+            AND dc.LocCode = g.LocCode
+            AND RTRIM(ISNULL(dc.ProdTypeCode, '')) = 'DC'
+        )
         ${transactionAsOfFilter('g', scope.transactionAsOf)}
 
       UNION ALL
@@ -671,7 +714,7 @@ export function buildMonthlyStockAccountMovementCte(scope: MonthlyStockMovementS
         ON grl.POLnID = p.POLnID
       WHERE RTRIM(gr.LocCode) = '${scope.location}'
         ${accountingPeriodFilter('gr', scope.accYear, scope.accMonth)}
-        AND RTRIM(gr.Status) = '2'
+        AND RTRIM(ISNULL(gr.Status, '')) IN ('2', '5', '6')
         ${transactionAsOfFilter('gr', scope.transactionAsOf)}
     ),
     agg AS (
@@ -1238,7 +1281,6 @@ function monthlyMovementCategoryKpis(summary: DbRow, totalRows: number): Invento
     ['Moving', 'MovingItem'],
     ['Slow Moving', 'SlowMovingItem'],
     ['Dead Stock', 'DeadStockItem'],
-    ['Stale', 'StaleItem'],
   ] as const
 
   const categoryKpis: InventoryAnalyticsContract['kpis'] = categoryKeys.map(([label, key]) => ({
@@ -1466,7 +1508,7 @@ function buildMetadata(ctx: InventoryQueryContext, scope: MonthlyStockMovementSc
     openingRule: 'Opening qty diambil dari IN_MTHENDITEM accounting period sebelumnya; opening amount memakai Amount tersimpan dengan fallback Qty * AverageCost. Transaksi bulan berjalan memakai AccYear/AccMonth hasil konversi periode aktual.',
     transactionAsOfRule: 'Jika dateTo dikirim, transaksi bulan berjalan dibatasi ke COALESCE(UpdateDate, CreateDate) <= dateTo agar hanya dokumen yang sudah posted/update sebelum waktu cetak yang ikut dihitung.',
     closingRule: 'Closing prefer IN_MTHENDITEM AccYear/AccMonth = report period (official). Fallback reconstruct: opening + received + return advice + transferred + adjustment - issued total + return + goods receive - goods return - dispatch advice.',
-    issueUsageRule: 'Issue non-workshop dihitung dari IN_STOCKISSUE/IN_STOCKISSUELN dan issue BBM dari IN_FUELISSUE/IN_FUELISSUELN; ItemType 4 Workshop memakai WS_JOBSTOCK dengan TransType 1 untuk issue dan TransType 2 untuk return.',
+    issueUsageRule: `Issue non-workshop: IN_STOCKISSUE/LN (Acc period). Fuel BBM: IN_FUELISSUE/LN — ${FUEL_ISSUE_PERIOD_RULE} Workshop ItemType 4: WS_JOBSTOCK TT1 issue / TT2 return.`,
     onHandHoldAmountRule: scope.snapshotMode
       ? 'Valuasi dari IN_MTHENDITEM snapshot: Amount tersimpan, fallback Qty * AverageCost.'
       : 'Valuasi saldo aktif dari IN_ITEM live: (QtyOnHand + QtyOnHold) * AverageCost.',

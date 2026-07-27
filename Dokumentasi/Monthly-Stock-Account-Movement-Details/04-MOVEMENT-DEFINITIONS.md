@@ -193,7 +193,9 @@ GoodsReturnAmt = COALESCE(
 | **Status** | ✅ Implemented |
 | **Unit** | item unit |
 | **Currency** | IDR |
-| **Source** | `IN_STOCKISSUE` + `WS_JOBSTOCK` (no block, no vehicle) |
+| **Source** | `IN_STOCKISSUE` + **`IN_FUELISSUE`** + `WS_JOBSTOCK` (no block, no vehicle) |
+
+**Period:** stock/ws = AccYear/AccMonth; **fuel = calendar DocDate** (see `FUEL_ISSUE_SELECTED_PERIOD.md`).
 
 **Classification:**
 ```
@@ -225,14 +227,14 @@ CASE WHEN TransType = '1'
 | **Status** | ✅ Implemented |
 | **Unit** | item unit |
 | **Currency** | IDR |
-| **Source** | `IN_STOCKISSUE` + `WS_JOBSTOCK` (has block, no vehicle) |
+| **Source** | `IN_STOCKISSUE` + **`IN_FUELISSUE`** + `WS_JOBSTOCK` (has block, no vehicle) |
 
 **Classification:**
 ```
 BlkCode = has_value AND VehCode = empty
 ```
 
-**Cost Center Context:** Ini adalah issue ke station/cost center, bukan ke kendaraan.
+**Cost Center Context:** Issue ke station/cost center, bukan ke kendaraan.
 
 ---
 
@@ -244,14 +246,14 @@ BlkCode = has_value AND VehCode = empty
 | **Status** | ✅ Implemented |
 | **Unit** | item unit |
 | **Currency** | IDR |
-| **Source** | `IN_STOCKISSUE` + `WS_JOBSTOCK` (has vehicle) |
+| **Source** | `IN_STOCKISSUE` + **`IN_FUELISSUE`** (majority BBM) + `WS_JOBSTOCK` (has vehicle) |
 
 **Classification:**
 ```
 VehCode = has_value
 ```
 
-**Cost Center Context:** Ini adalah expense kendaraan (bahan bakar, spare part kendaraan).
+**Cost Center Context:** Expense kendaraan (BBM, spare part). Fuel lines often land here.
 
 ---
 
@@ -269,6 +271,8 @@ VehCode = has_value
 ```
 IssuedTotal = Ledger + Station + Vehicle
 ```
+
+Includes stock + fuel + workshop issue (rules above). **≠ Total Usage** (usage excludes fuel).
 
 ---
 
@@ -300,10 +304,10 @@ WS_JOBSTOCK.TransType = '2' (Return)
 | `return_advice` | Return Advice | ⚠️ | Placeholder |
 | `transferred` | Transferred | ⚠️ | Placeholder |
 | `adjustment` | Adjustment | ⚠️ | Placeholder |
-| `issued_ledger` | Issued - Ledger | ✅ | IN_STOCKISSUE |
-| `issued_station` | Issued - Station | ✅ | IN_STOCKISSUE |
-| `issued_vehicle` | Issued - Vehicle | ✅ | IN_STOCKISSUE |
-| `issued_total` | Issued - Total | ✅ | Computed |
+| `issued_ledger` | Issued - Ledger | ✅ | IN_STOCKISSUE + IN_FUELISSUE + WS |
+| `issued_station` | Issued - Station | ✅ | IN_STOCKISSUE + IN_FUELISSUE + WS |
+| `issued_vehicle` | Issued - Vehicle | ✅ | IN_STOCKISSUE + IN_FUELISSUE + WS |
+| `issued_total` | Issued - Total | ✅ | Computed (L+S+V) |
 | `return` | Return | ✅ | WS_JOBSTOCK TType=2 |
 | `purchasing_goods_receive` | Goods Receive | ✅ | PU_GOODSRCV |
 | `purchasing_goods_return` | Goods Return | ✅ | PU_GOODSRET |

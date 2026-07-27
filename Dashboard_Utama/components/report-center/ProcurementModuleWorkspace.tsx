@@ -15,6 +15,7 @@ import {
   type ReportSource,
 } from '@/lib/reports/procurement-workspace'
 import InventoryOverview from './InventoryOverview'
+import type { MovementWindowValue } from './MovementWindowTimeline'
 import ProcurementHierarchyNav from './ProcurementHierarchyNav'
 import ProcurementKpiStrip, {
   createDefaultProcurementKpiFilters,
@@ -57,6 +58,7 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
       ? 'workshop'
       : undefined
   const [moduleFilters, setModuleFilters] = useState<ProcurementKpiFilters>(() => createDefaultProcurementKpiFilters())
+  const [movementWindowRange, setMovementWindowRange] = useState<MovementWindowValue>({ start: null, end: null })
   const activePeriodLabel = formatPeriodLabel(moduleFilters.period)
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
       movementWindow: moduleFilters.movementWindow || 'all',
     }),
     usage: createProcurementReportHref('pengeluaran-barang', source),
+    fuel: createProcurementReportHref('fuel-usage', source),
     return: createProcurementReportHref('return-barang', source),
   }
 
@@ -104,6 +107,9 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
               </div>
               <p className="mt-1 text-xs font-semibold text-[var(--rc-text-muted)]">
                 Period {activePeriodLabel} · MC {moduleFilters.movementWindow}
+                {moduleFilters.movementWindow === 'custom' && movementWindowRange.start && movementWindowRange.end
+                  ? ` (${movementWindowRange.start.slice(0, 7)} → ${movementWindowRange.end.slice(0, 7)})`
+                  : ''}
                 {moduleFilters.itemType ? ` · Scope ${moduleFilters.itemType}` : ' · Scope Inventory 1+4'}
               </p>
             </div>
@@ -163,6 +169,8 @@ export default function ProcurementModuleWorkspace({ source, stockGroup }: Procu
           onPeriodChange={(period) => setModuleFilters((current) => ({ ...current, period }))}
           movementWindow={moduleFilters.movementWindow}
           onMovementWindowChange={(movementWindow) => setModuleFilters((current) => ({ ...current, movementWindow }))}
+          movementWindowRange={movementWindowRange}
+          onMovementWindowRangeChange={setMovementWindowRange}
           hideScopeControls
         />
 

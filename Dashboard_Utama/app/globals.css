@@ -971,6 +971,57 @@ body {
   transform: translateY(-3px);
 }
 
+/* rc-scroll-y — scrollbar vertikal seragam ala report-center (forest theme).
+   Dipakai lewat komponen ScrollArea agar konsisten di banyak tempat, menggantikan
+   scrollbar bawaan browser. Track transparan, thumb emerald halus dengan hover. */
+.rc-scroll-y {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(52, 211, 153, 0.35) transparent;
+}
+
+.rc-scroll-y::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rc-scroll-y::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rc-scroll-y::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.28);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.rc-scroll-y::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.5);
+  background-clip: padding-box;
+}
+
+/* Varian tipis (untuk daftar padat / panel kecil). */
+.rc-scroll-y.rc-scroll-y--thin {
+  scrollbar-width: thin;
+}
+
+.rc-scroll-y.rc-scroll-y--thin::-webkit-scrollbar {
+  width: 5px;
+}
+
+/* rc-period-track — track scrubber periode (horizontal); scrollbar disembunyikan,
+   navigasi lewat drag/scroll halus + fade tepi. */
+.rc-period-track {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.rc-period-track::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rc-rail-track [data-rail-card] > * {
     transition: none;
@@ -1170,8 +1221,12 @@ body {
 .report-center-dark .rc-kpi-surface {
   position: relative;
   isolation: isolate;
+  /* contain paint so glow/SQL never bleed into neighbor cards */
+  contain: layout paint;
+  z-index: 0;
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
   background:
     linear-gradient(165deg, rgba(172, 255, 188, 0.055), rgba(172, 255, 188, 0.012) 42%, rgba(0, 0, 0, 0.16)),
     var(--rc-forest-surface);
@@ -1182,6 +1237,41 @@ body {
     background 220ms ease;
 }
 
+/* Clip decorative glows hard; never escape card */
+.report-center-dark .rc-kpi-surface .rc-kpi-glow {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* SQL badge stays inside card bounds; never paint over neighbors */
+.report-center-dark .rc-kpi-surface .rc-sql-debug {
+  z-index: 5;
+  max-width: 3.25rem;
+}
+
+.report-center-dark .rc-kpi-grid {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.report-center-dark .rc-kpi-grid > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.report-center-dark .rc-carousel-track > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  contain: layout paint;
+}
+
 .report-center-dark .rc-kpi-surface:hover {
   /* No lift transform — avoids neighbor card visual collision in tight grids/carousels */
   border-color: var(--rc-forest-border-strong);
@@ -1189,6 +1279,7 @@ body {
     linear-gradient(165deg, rgba(172, 255, 188, 0.085), rgba(172, 255, 188, 0.02) 42%, rgba(0, 0, 0, 0.14)),
     var(--rc-forest-surface-raised);
   box-shadow: inset 0 1px 0 rgba(235, 255, 240, 0.1);
+  z-index: 1;
 }
 
 /* Focus ring konsisten lime */

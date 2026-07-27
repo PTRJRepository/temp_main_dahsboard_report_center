@@ -102,11 +102,22 @@ export default function AnalysisDrawer({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  const isYearMode = filters.periodMode === 'year' && /^\d{4}$/.test((filters.customYear ?? '').trim())
+  // Show year number field whenever mode is year — not only after a valid YYYY.
+  // Old gate (isYearMode = mode+valid year) left month <select> stuck after tapping Tahun.
+  const yearMode = (filters.periodMode ?? 'month') === 'year'
+  const isYearMode = yearMode && /^\d{4}$/.test((filters.customYear ?? '').trim())
 
   const applyYear = (year: number) => {
     onFilter('periodMode', 'year')
     onFilter('customYear', String(year))
+  }
+
+  const switchPeriodMode = (mode: 'month' | 'year') => {
+    onFilter('periodMode', mode)
+    if (mode === 'year' && !/^\d{4}$/.test((filters.customYear ?? '').trim())) {
+      // Seed current calendar year so input is usable immediately.
+      onFilter('customYear', String(new Date().getFullYear()))
+    }
   }
 
   const presets = useMemo(() => {
@@ -175,7 +186,7 @@ export default function AnalysisDrawer({
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => onFilter('periodMode', mode)}
+                    onClick={() => switchPeriodMode(mode)}
                     className={`h-full px-3 text-[10px] font-black uppercase tracking-[0.08em] transition ${
                       (filters.periodMode ?? 'month') === mode
                         ? 'bg-[var(--rc-forest-accent)] text-[#04130c]'
@@ -186,7 +197,7 @@ export default function AnalysisDrawer({
                   </button>
                 ))}
               </div>
-              {isYearMode ? (
+              {yearMode ? (
                 <input
                   type="number"
                   min={2000}
@@ -208,8 +219,13 @@ export default function AnalysisDrawer({
                 </select>
               )}
             </div>
-            {filters.periodMode === 'year' && !isYearMode ? (
+            {yearMode && !isYearMode ? (
               <p className="rc-data text-[10px] text-amber-200/80">Isi 4 digit tahun (mis. 2025) untuk mode Tahun.</p>
+            ) : null}
+            {isYearMode ? (
+              <p className="rc-data text-[10px] text-[var(--rc-text-faint)]">
+                Mode Tahun = 1 kalender ({filters.customYear}). Untuk lookback multi-tahun (2/5/10 th) pakai Jendela aging movement di bawah.
+              </p>
             ) : null}
           </section>
 

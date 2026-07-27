@@ -20,9 +20,9 @@ type ExceptionQueueProps = {
 }
 
 const severityClass: Record<InventoryExceptionItem['severity'], string> = {
-  critical: 'border-rose-300/25 bg-rose-400/10 text-rose-100',
-  warning: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
-  watch: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
+  critical: 'border-[var(--rc-forest-danger)]/40 bg-[var(--rc-forest-danger)]/10 text-[var(--rc-forest-danger)]',
+  warning: 'border-[var(--rc-forest-warning)]/40 bg-[var(--rc-forest-warning)]/10 text-[var(--rc-forest-warning)]',
+  watch: 'border-[var(--rc-forest-info)]/40 bg-[var(--rc-forest-info)]/10 text-[var(--rc-forest-info)]',
 }
 
 export function ExceptionQueue({ items, loading, error, onRetry }: ExceptionQueueProps) {
@@ -32,10 +32,10 @@ export function ExceptionQueue({ items, loading, error, onRetry }: ExceptionQueu
     <section className="rounded-[26px] border border-[var(--rc-forest-border)] bg-[rgba(5,17,10,.66)] p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-200">Exception queue</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--rc-forest-warning)]">Exception queue</p>
           <h3 className="mt-1 text-lg font-black tracking-[-0.03em] text-[var(--rc-text)]">Prioritas tindakan</h3>
         </div>
-        <span className="grid h-10 w-10 place-items-center rounded-2xl border border-amber-300/20 bg-amber-400/10 text-amber-200">
+        <span className="grid h-10 w-10 place-items-center rounded-2xl border-[var(--rc-forest-border)] bg-[var(--rc-forest-premium-soft)] text-[var(--rc-forest-premium)]">
           <ShieldAlert size={18} />
         </span>
       </div>

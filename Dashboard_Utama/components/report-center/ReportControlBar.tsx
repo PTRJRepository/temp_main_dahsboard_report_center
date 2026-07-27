@@ -69,7 +69,7 @@ export function ReportControlBar({
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
       <label className="block min-w-0">
         <span className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-white/35">Actual period</span>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="rounded-xl border border-[var(--rc-border)] bg-white/[0.04] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <input
             type="month"
             value={periodValue}
@@ -81,7 +81,7 @@ export function ReportControlBar({
 
       <label className="block min-w-0">
         <span className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-white/35">Analysis group</span>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="rounded-xl border border-[var(--rc-border)] bg-white/[0.04] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <select
             value={analysisGroupValue}
             onChange={(event) => onAnalysisGroupChange(event.target.value)}
@@ -96,7 +96,7 @@ export function ReportControlBar({
 
       <label className="block min-w-0">
         <span className="mb-1 block text-[9px] font-black uppercase tracking-[0.14em] text-white/35">Movement period</span>
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="rounded-xl border border-[var(--rc-border)] bg-white/[0.04] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <select
             value={movementWindowValue}
             onChange={(event) => onMovementWindowChange(event.target.value)}
@@ -120,7 +120,7 @@ export function ReportControlBar({
         <div
           role="radiogroup"
           aria-label="Item type scope"
-          className="flex overflow-hidden rounded-xl border border-white/10 bg-[#06101d]/90 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+          className="flex overflow-hidden rounded-xl border border-[var(--rc-border)] bg-[var(--rc-surface)]/90 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
         >
           {ITEM_TYPE_SEGMENTS.map((segment, index) => {
             const active = itemType === segment.value

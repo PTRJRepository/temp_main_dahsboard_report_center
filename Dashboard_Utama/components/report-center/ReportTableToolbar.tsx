@@ -54,12 +54,12 @@ export type ReportTableToolbarProps = {
 function btnClass(expanded: boolean, kind: 'default' | 'success' | 'warning' | 'primary' = 'default') {
   if (expanded) {
     if (kind === 'success') return 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-700/30 bg-emerald-50 px-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100'
-    return 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800 hover:bg-slate-50'
+    return 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] px-2 text-xs font-bold text-[var(--rc-text)] hover:bg-[var(--rc-surface-muted)]'
   }
   if (kind === 'success') return 'inline-flex h-11 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20'
   if (kind === 'warning') return 'inline-flex h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 text-sm font-bold text-amber-300 hover:bg-amber-500/20'
-  if (kind === 'primary') return 'inline-flex h-11 items-center gap-2 rounded-xl bg-[#167A3A] px-4 text-sm font-black text-white hover:bg-[#0f6a30]'
-  return 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-[#0F2B1A] px-4 text-sm font-bold text-white/85 hover:bg-[#12351F] hover:text-white'
+  if (kind === 'primary') return 'inline-flex h-11 items-center gap-2 rounded-xl bg-[var(--rc-forest-primary)] px-4 text-sm font-black text-white hover:bg-[rgba(24,185,107,.85)]'
+  return 'inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-[var(--rc-surface-raised)] px-4 text-sm font-bold text-white/85 hover:bg-[var(--rc-surface)] hover:text-white'
 }
 
 export function ReportTableToolbar({
@@ -102,13 +102,13 @@ export function ReportTableToolbar({
   extraLeft,
 }: ReportTableToolbarProps) {
   return (
-    <div className={`sticky top-0 z-40 flex flex-wrap items-center justify-between border-b border-amber-400/20 bg-[#071426] ${tableExpanded ? 'mb-1 gap-1.5 px-2 py-1.5' : 'mb-0 gap-3 px-4 py-3'}`}>
+    <div className={`sticky top-0 z-40 flex flex-wrap items-center justify-between border-b border-amber-400/20 bg-[var(--rc-surface)] ${tableExpanded ? 'mb-1 gap-1.5 px-2 py-1.5' : 'mb-0 gap-3 px-4 py-3'}`}>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
         {tableExpanded && (
           <button
             type="button"
             onClick={onExitFullTable}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-900 px-2 text-xs font-bold text-white hover:bg-slate-800"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] px-2 text-xs font-bold text-white hover:bg-[var(--rc-surface-muted)]"
           >
             <Minimize2 size={16} />
             Exit
@@ -121,12 +121,12 @@ export function ReportTableToolbar({
             onChange={(event) => onTableSearchChange(event.target.value)}
             placeholder="Search dalam table..."
             className={tableExpanded
-              ? 'h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs font-semibold text-slate-950 placeholder:text-slate-400 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20'
-              : 'h-11 w-full rounded-xl border border-white/20 bg-[#1A1A1A] pl-9 pr-3 text-sm font-medium text-white placeholder:text-white/40 outline-none focus:border-emerald-500 focus:bg-[#1A1A1A] focus:ring-4 focus:ring-emerald-500/20'}
+              ? 'h-8 w-full rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] pl-9 pr-3 text-xs font-semibold text-[var(--rc-text)] placeholder:text-[var(--rc-text-faint)] outline-none focus:border-[var(--rc-forest-primary)] focus:ring-2 focus:ring-emerald-500/20'
+              : 'h-11 w-full rounded-xl border border-white/20 bg-[var(--rc-surface)] pl-9 pr-3 text-sm font-medium text-white placeholder:text-white/40 outline-none focus:border-emerald-500 focus:bg-[var(--rc-surface)] focus:ring-4 focus:ring-emerald-500/20'}
           />
         </div>
         {tableExpanded && (
-          <span className="hidden rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-600 md:inline-flex">
+          <span className="hidden rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] px-2 py-1 text-xs font-bold text-[var(--rc-text-muted)] md:inline-flex">
             {shownTableRows} / {displayTableTotalRows} row{serverPaged && tableWindowed ? ` dari ${safeTotalTableRows} total` : ''}
           </span>
         )}
@@ -153,8 +153,8 @@ export function ReportTableToolbar({
           value={tableGroupMode}
           onChange={(event) => onTableGroupModeChange(event.target.value)}
           className={tableExpanded
-            ? 'h-8 max-w-[180px] rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20'
-            : 'h-11 rounded-xl border border-white/20 bg-[#1A1A1A] px-3 text-sm font-semibold text-white outline-none hover:bg-[#252525] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20'}
+            ? 'h-8 max-w-[180px] rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] px-2 text-xs font-semibold text-[var(--rc-text)] outline-none focus:border-[var(--rc-forest-primary)] focus:ring-2 focus:ring-emerald-500/20'
+            : 'h-11 rounded-xl border border-white/20 bg-[var(--rc-surface)] px-3 text-sm font-semibold text-white outline-none hover:bg-[var(--rc-surface-raised)] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20'}
         >
           <option value={autoGroupValue}>Auto group</option>
           <option value={noGroupValue}>Tanpa group</option>
@@ -164,11 +164,11 @@ export function ReportTableToolbar({
         </select>
 
         {groupedTableActive && (
-          <div className="flex rounded-xl border border-white/20 bg-[#1A1A1A] p-1">
-            <button type="button" onClick={onExpandGroups} className="rounded-lg px-3 py-2 text-xs font-bold text-white/70 hover:bg-[#252525] hover:text-white">
+          <div className="flex rounded-xl border border-white/20 bg-[var(--rc-surface)] p-1">
+            <button type="button" onClick={onExpandGroups} className="rounded-lg px-3 py-2 text-xs font-bold text-white/70 hover:bg-[var(--rc-surface-raised)] hover:text-white">
               Expand
             </button>
-            <button type="button" onClick={onCollapseGroups} className="rounded-lg px-3 py-2 text-xs font-bold text-white/70 hover:bg-[#252525] hover:text-white">
+            <button type="button" onClick={onCollapseGroups} className="rounded-lg px-3 py-2 text-xs font-bold text-white/70 hover:bg-[var(--rc-surface-raised)] hover:text-white">
               Collapse
             </button>
           </div>
@@ -180,13 +180,13 @@ export function ReportTableToolbar({
 
         <details className="relative">
           <summary className={tableExpanded
-            ? 'h-8 cursor-pointer rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-bold text-slate-800 hover:bg-slate-50'
-            : 'h-11 cursor-pointer rounded-xl border border-white/15 bg-[#0F2B1A] px-4 py-2.5 text-sm font-semibold text-white/85 hover:bg-[#12351F] hover:text-white'}>
+            ? 'h-8 cursor-pointer rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] px-2 py-1.5 text-xs font-bold text-[var(--rc-text)] hover:bg-[var(--rc-surface-muted)]'
+            : 'h-11 cursor-pointer rounded-xl border border-white/15 bg-[var(--rc-surface-raised)] px-4 py-2.5 text-sm font-semibold text-white/85 hover:bg-[var(--rc-surface)] hover:text-white'}>
             Columns
           </summary>
-          <div className="absolute right-0 z-20 mt-2 max-h-80 w-64 overflow-y-auto rounded-xl border border-white/20 bg-[#1A1A1A] p-3 text-white shadow-2xl">
+          <div className="absolute right-0 z-20 mt-2 max-h-80 w-64 overflow-y-auto rounded-xl border border-white/20 bg-[var(--rc-surface)] p-3 text-white shadow-2xl">
             {allColumns.map((column) => (
-              <label key={column} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-white/70 hover:bg-[#252525]">
+              <label key={column} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-white/70 hover:bg-[var(--rc-surface-raised)]">
                 <input type="checkbox" checked={visibleColumns.includes(column)} onChange={() => onToggleColumn(column)} />
                 <span className="truncate">{displayColumnLabel(column)}</span>
               </label>
@@ -195,17 +195,17 @@ export function ReportTableToolbar({
         </details>
 
         {tableExpanded && !groupedTableActive && (
-          <div className="flex h-8 overflow-hidden rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700">
-            <button type="button" disabled={page === 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="px-2 hover:bg-slate-50 disabled:opacity-30">Prev</button>
-            <span className="border-x border-slate-200 px-2 py-1.5">{page}/{pageCount}</span>
-            <button type="button" disabled={page === pageCount} onClick={() => onPageChange(Math.min(pageCount, page + 1))} className="px-2 hover:bg-slate-50 disabled:opacity-30">Next</button>
+          <div className="flex h-8 overflow-hidden rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] text-xs font-bold text-[var(--rc-text)]">
+            <button type="button" disabled={page === 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="px-2 hover:bg-[var(--rc-surface-muted)] disabled:opacity-30">Prev</button>
+            <span className="border-x border-[var(--rc-border)] px-2 py-1.5">{page}/{pageCount}</span>
+            <button type="button" disabled={page === pageCount} onClick={() => onPageChange(Math.min(pageCount, page + 1))} className="px-2 hover:bg-[var(--rc-surface-muted)] disabled:opacity-30">Next</button>
           </div>
         )}
         {tableExpanded && !groupedTableActive && (
           <select
             value={pageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-bold text-slate-800"
+            className="h-8 rounded-lg border border-[var(--rc-border)] bg-[var(--rc-surface-raised)] px-2 text-xs font-bold text-[var(--rc-text)]"
           >
             {[100, 200, 500].map((size) => (
               <option key={size} value={size}>{size}</option>
@@ -227,10 +227,10 @@ export function ReportTableToolbar({
         </button>
 
         <details className={tableExpanded ? 'hidden' : 'relative'}>
-          <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-xl border border-white/15 bg-[#0F2B1A] px-4 text-sm font-bold text-white/85 hover:bg-[#12351F] hover:text-white">
+          <summary className="inline-flex h-11 cursor-pointer list-none items-center rounded-xl border border-white/15 bg-[var(--rc-surface-raised)] px-4 text-sm font-bold text-white/85 hover:bg-[var(--rc-surface)] hover:text-white">
             Lainnya
           </summary>
-          <div className="absolute right-0 z-30 mt-2 flex min-w-[200px] flex-col gap-1 rounded-xl border border-white/15 bg-[#0b1018] p-2 shadow-2xl">
+          <div className="absolute right-0 z-30 mt-2 flex min-w-[200px] flex-col gap-1 rounded-xl border border-white/15 bg-[var(--rc-bg)] p-2 shadow-2xl">
             {showSqlAudit && (
               <button type="button" onClick={() => onJumpToAnalysis('sql')} className="rounded-lg px-3 py-2 text-left text-xs font-bold text-amber-100 hover:bg-white/10">
                 SQL (audit)

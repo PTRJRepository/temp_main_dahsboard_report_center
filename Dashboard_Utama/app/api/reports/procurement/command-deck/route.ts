@@ -25,6 +25,7 @@ type Snapshot = {
     items?: DbRow[]
     costCenters?: DbRow[]
     vehicles?: DbRow[]
+    blocks?: DbRow[]
   }
   trend?: DbRow[]
   issueFrequency?: {
@@ -34,7 +35,7 @@ type Snapshot = {
   updatedAt?: string
 }
 
-type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'movementMonthly' | 'usage' | 'return'
+type KpiKey = 'stock' | 'receive' | 'po' | 'pr' | 'workshop' | 'movement' | 'movementMonthly' | 'usage' | 'fuel' | 'return'
 
 type KpiSpec = {
   key: KpiKey
@@ -50,6 +51,7 @@ const KPI_SPECS: KpiSpec[] = [
   { key: 'movement', report: 'all-stock-movement-analysis' },
   { key: 'movementMonthly', report: 'monthly-stock-account-movement-details' },
   { key: 'usage', report: 'pengeluaran-barang' },
+  { key: 'fuel', report: 'fuel-usage' },
   { key: 'return', report: 'return-barang' },
 ]
 
@@ -145,15 +147,38 @@ function specExtraParams(spec: KpiSpec, filters: CommandDeckFilters): Record<str
     return { ...base, itemType: filters.itemType === 'gudang' ? 'gudang' : 'workshop' }
   }
   if (spec.key === 'movement') {
+    // KPI deck: lock movement timeline ke periode terpilih (bukan MC 'all'),
+    // supaya Issue Amount/Qty selaras dengan Total Usage period.
+    if (filters.dateFrom) {
+      return {
+        ...base,
+        ...analysisScopeParams(filters),
+        groupBy: 'MovementCategory',
+        chartDimension: 'MovementCategory',
+        movementWindow: 'custom',
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo || filters.dateFrom,
+      }
+    }
     return {
       ...base,
       ...analysisScopeParams(filters),
       groupBy: 'MovementCategory',
       chartDimension: 'MovementCategory',
-      movementWindow: filters.movementWindow || 'all',
+      movementWindow: '1m',
+      period: filters.period,
     }
   }
-  if (spec.key === 'usage') {
+  // Process flow + usage/fuel all follow selected period (or custom year range).
+  if (
+    spec.key === 'usage'
+    || spec.key === 'fuel'
+    || spec.key === 'receive'
+    || spec.key === 'return'
+    || spec.key === 'po'
+    || spec.key === 'pr'
+    || spec.key === 'movementMonthly'
+  ) {
     return usageParams(filters)
   }
   return base

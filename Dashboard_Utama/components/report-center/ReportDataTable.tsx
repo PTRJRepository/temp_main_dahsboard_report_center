@@ -84,7 +84,7 @@ export function ReportDataTable({
         .slice(0, 2)
 
       return (
-        <tr key={rowModel.key} className="bg-[#071426] text-slate-200">
+        <tr key={rowModel.key} className="bg-[var(--rc-surface)] text-slate-200">
           <td colSpan={Math.max(visibleColumns.length, 1)} className="border-y border-amber-400/20 px-2 py-1.5">
             <button
               type="button"
@@ -177,7 +177,7 @@ export function ReportDataTable({
 
   return (
     <>
-      <div className={`overflow-auto ${tableExpanded ? 'h-[calc(100vh-58px)] rounded-lg border border-amber-400/20 bg-[#0b1018]' : 'h-[76vh] min-h-[620px] max-h-[920px] bg-[#0b1018]'}`} ref={tableContainerRef}>
+      <div className={`overflow-auto ${tableExpanded ? 'h-[calc(100vh-58px)] rounded-lg border border-amber-400/20 bg-[var(--rc-bg)]' : 'h-[76vh] min-h-[620px] max-h-[920px] bg-[var(--rc-bg)]'}`} ref={tableContainerRef}>
         <table className={`w-full table-fixed border-separate border-spacing-0 text-left ${tableExpanded ? 'text-[11px]' : 'text-[11px] sm:text-xs'}`}>
           <thead className={`sticky top-0 z-30 border-b border-amber-400/25 uppercase text-amber-100 ${tableExpanded ? 'text-[9px] tracking-[0.06em]' : 'text-[10px] tracking-[0.08em]'}`}>
             <tr>

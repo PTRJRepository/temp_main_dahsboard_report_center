@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import ScrollArea from './ScrollArea'
 
 /**
  * FrequencyInsights — analisis frekuensi issue level deck (agregat).
@@ -84,7 +85,18 @@ export default function FrequencyInsights({ periods, rows, onDrilldown }: Freque
     }
   }, [periods, rows])
 
-  if (periods.length === 0 || rows.length === 0) return null
+  if (periods.length === 0) {
+    return (
+      <div className="grid h-full min-h-[200px] place-items-center rounded-[24px] border-white/10 bg-white/[0.03] p-4 text-center">
+        <div>
+          <p className="text-sm font-bold text-[var(--rc-text-muted)]">Analisis frekuensi issue</p>
+          <p className="rc-data mt-1 text-[11px] text-[var(--rc-text-faint)]">
+            Menunggu matriks movement (periode × barang). Ubah timeline atau coba lagi saat DB siap.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const consistencyPct = periods.length > 0 ? Math.round((model.activePeriods / periods.length) * 100) : 0
   const totalAllItemsDocs = model.itemDocs.reduce((a, b) => a + b.docs, 0)
@@ -96,6 +108,7 @@ export default function FrequencyInsights({ periods, rows, onDrilldown }: Freque
           <p className="text-[13px] font-semibold text-[var(--rc-text)]">Analisis frekuensi issue</p>
           <p className="rc-data mt-0.5 text-[10px] text-[var(--rc-text-faint)]">
             {model.totalDocs} dok · {model.activePeriods}/{periods.length} periode aktif ({consistencyPct}% konsisten)
+            {rows.length === 0 ? ' · belum ada barang di top list' : ''}
           </p>
         </div>
         <span className="rc-data shrink-0 rounded-full border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-[var(--rc-text-muted)]">
@@ -149,7 +162,7 @@ export default function FrequencyInsights({ periods, rows, onDrilldown }: Freque
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto rounded-2xl border-white/[0.07] bg-black/20 p-2.5">
+          <ScrollArea className="min-h-0 flex-1 rounded-2xl border-white/[0.07] bg-black/20 p-2.5">
             <p className="rc-data text-[9px] uppercase tracking-[0.14em] text-[var(--rc-text-faint)]">Paling sering di-issue</p>
             <div className="mt-1.5 space-y-1">
               {model.topItems.map((item, idx) => {
@@ -172,7 +185,7 @@ export default function FrequencyInsights({ periods, rows, onDrilldown }: Freque
                 )
               })}
             </div>
-          </div>
+          </ScrollArea>
         </div>
       </div>
     </div>

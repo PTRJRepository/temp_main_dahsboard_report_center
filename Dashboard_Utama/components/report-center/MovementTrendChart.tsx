@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import MicroReportHeader, { type MicroReportStat } from './MicroReportHeader'
 
 /**
  * MovementTrendChart — grafik movement yang "ramai" (bukan sunyi).
@@ -45,6 +46,7 @@ type MovementTrendChartProps = {
   trend: TrendRow[]
   frequency?: FrequencyRow[]
   loading?: boolean
+  failed?: boolean
 }
 
 const MONTH_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
@@ -65,7 +67,7 @@ function monthLabel(month: string) {
   return `${MONTH_ID[idx] ?? m} ${String(y).slice(2)}`
 }
 
-export default function MovementTrendChart({ trend, frequency, loading }: MovementTrendChartProps) {
+export default function MovementTrendChart({ trend, frequency, loading, failed }: MovementTrendChartProps) {
   const points = useMemo(() => {
     const freqByMonth = new Map<string, { docs: number; activeDays: number }>()
     ;(frequency ?? []).forEach((row) => {
@@ -90,17 +92,21 @@ export default function MovementTrendChart({ trend, frequency, loading }: Moveme
       .sort((a, b) => (a.month < b.month ? -1 : 1))
   }, [trend, frequency])
 
+  const activeMonths = points.filter((p) => p.amount > 0 || p.qty > 0 || p.docs > 0).length
+  const hasSignal = activeMonths > 0
+
   if (points.length < 2) {
     return (
       <div className="grid h-full min-h-[200px] place-items-center rounded-2xl border-[var(--rc-forest-border)] bg-black/20 p-4 text-center">
         <div>
           <p className="text-sm font-bold text-[var(--rc-text-muted)]">
-            {loading ? 'Memuat trend movement…' : 'Belum ada movement pada 5 bulan terakhir'}
+            {loading ? 'Memuat trend movement…' : failed ? 'Data usage gagal dimuat — trend tidak dihitung.' : 'Belum ada data trend movement'}
           </p>
           {!loading && (
             <p className="mt-1 text-[11px] font-semibold text-[var(--rc-text-faint)]">
-              Tren selalu menampilkan 5 bulan ke belakang dari periode terpilih. Tidak ada transaksi issue
-              pada rentang tersebut — coba periode lain atau periksa filter lokasi/tipe barang.
+              {failed
+                ? 'Sumber pengeluaran-barang gagal/timeout. Refresh atau cek gateway SQL sebelum membaca trend.'
+                : 'Tren menampilkan 12 bulan ke belakang dari periode terpilih (bulan kosong diisi 0). Tidak ada transaksi issue — coba periode lain atau periksa filter lokasi/tipe barang.'}
             </p>
           )}
         </div>
@@ -109,21 +115,42 @@ export default function MovementTrendChart({ trend, frequency, loading }: Moveme
   }
 
   const peak = points.reduce((acc, p) => (p.amount > acc.amount ? p : acc), points[0])
+  const rangeLabel = points.length >= 2
+    ? `${points[0].label} → ${points[points.length - 1].label}`
+    : `${points.length} bln`
+  const totalAmount = points.reduce((s, p) => s + p.amount, 0)
+
+  const trendStats: MicroReportStat[] = [
+    {
+      label: 'Bln aktif',
+      value: hasSignal ? `${activeMonths}/${points.length}` : '0',
+      delta: rangeLabel,
+      deltaDir: 'flat',
+    },
+    {
+      label: 'Puncak',
+      value: hasSignal ? `Rp ${formatCompact(peak.amount)}` : '—',
+      delta: hasSignal ? peak.label : 'tak ada issue',
+      deltaDir: hasSignal ? 'up' : 'flat',
+    },
+    {
+      label: 'Total',
+      value: `Rp ${formatCompact(totalAmount)}`,
+      delta: `${points.length} bln`,
+      deltaDir: 'flat',
+    },
+  ]
 
   return (
     <div className="flex h-full min-h-[200px] flex-col">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 px-1 pb-2">
-        <div>
-          <p className="text-[11px] font-semibold text-[var(--rc-forest-accent)]">Trend movement · 5 bulan</p>
-          <p className="mt-0.5 text-[11px] font-semibold text-[var(--rc-text-muted)]">
-            {points.length} titik · puncak {peak.label} — Rp {formatCompact(peak.amount)}
-          </p>
-        </div>
-        <span className="rc-chip">
-          <span>Total </span>
-          <strong>Rp {formatCompact(points.reduce((s, p) => s + p.amount, 0))}</strong>
-        </span>
-      </div>
+      <MicroReportHeader
+        className="mx-1 mb-1"
+        ticker="Trend movement"
+        title={`${points.length} bulan`}
+        subtitle={hasSignal ? `${rangeLabel} · semua bulan diisi (kosong=0)` : `${rangeLabel} · tidak ada issue di window`}
+        stats={trendStats}
+        accent="emerald"
+      />
       <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={points} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>

@@ -35,9 +35,9 @@ export function usageIntensity(issueAmount: number, stockValue: number): number 
   return safeRatio(issueAmount, stockValue)
 }
 
-/** RiskCount = Slow + Dead + Stale (count item). */
-export function riskCount(slow: number, dead: number, stale: number): number {
-  return (Number.isFinite(slow) ? slow : 0) + (Number.isFinite(dead) ? dead : 0) + (Number.isFinite(stale) ? stale : 0)
+/** RiskCount = Slow + Dead (count item). Optional 3rd arg kept for call-site compatibility (ignored). */
+export function riskCount(slow: number, dead: number, _stale = 0): number {
+  return (Number.isFinite(slow) ? slow : 0) + (Number.isFinite(dead) ? dead : 0)
 }
 
 /** Persen dari total (0..100). */

@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Product Type Analysis · May 2026 · PTRJ</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #050b08;
+      --panel: rgba(8, 28, 18, 0.92);
+      --line: rgba(172, 255, 188, 0.16);
+      --text: #e8f5ec;
+      --muted: #8fbfa1;
+      --faint: #6a8f78;
+      --lime: #9be23d;
+      --data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Inter, system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(16,185,129,.16), transparent 30rem),
+        linear-gradient(160deg, #050b08, #07110d 50%, #020906);
+    }
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 16px 40px; }
+    .hero {
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px;
+      padding: 18px 20px; border: 1px solid var(--line); border-radius: 24px;
+      background: linear-gradient(145deg, rgba(16,49,38,.92), rgba(7,26,20,.96));
+    }
+    .eyebrow { font-size: 11px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; color: var(--lime); margin: 0 0 6px; }
+    h1 { margin: 0; font-size: clamp(1.35rem, 2.4vw, 1.9rem); letter-spacing: -.03em; }
+    .sub { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; max-width: 72ch; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px;
+      font-size: 11px; font-weight: 800; color: var(--muted); background: rgba(0,0,0,.22);
+    }
+    .badge.live { border-color: rgba(56,189,248,.35); color: #bae6fd; background: rgba(56,189,248,.1); }
+    .badge.ok { border-color: rgba(52,211,153,.35); color: #a7f3d0; background: rgba(52,211,153,.1); }
+    .kpi-grid {
+      display: grid; gap: 12px; margin-top: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+    .kpi {
+      cursor: pointer; text-align: left; border: 1px solid var(--line); border-radius: 18px;
+      background: var(--panel); padding: 14px; color: inherit;
+      transition: border-color .15s, transform .15s, background .15s;
+    }
+    .kpi:hover { border-color: rgba(155,226,61,.35); transform: translateY(-1px); }
+    .kpi.active { border-color: rgba(155,226,61,.55); background: rgba(16,185,129,.12); }
+    .kpi .label { font-size: 10px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+    .kpi .value { margin-top: 8px; font-size: clamp(1.05rem, 1.8vw, 1.35rem); font-weight: 900; font-family: var(--data); word-break: break-all; }
+    .kpi .hint { margin-top: 6px; font-size: 11px; color: var(--muted); font-weight: 600; }
+    .kpi .pct { margin-top: 8px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .kpi .pct > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #18b96b, #9be23d); }
+    .panel {
+      margin-top: 16px; border: 1px solid var(--line); border-radius: 22px;
+      background: rgba(5,17,10,.72); padding: 14px;
+    }
+    .panel-h {
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: end;
+      margin-bottom: 12px;
+    }
+    .panel-h h2 { margin: 0; font-size: 15px; }
+    .panel-h p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .controls input, .controls select, .controls button {
+      border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,.28);
+      color: var(--text); padding: 8px 10px; font-size: 12px; font-weight: 700;
+    }
+    .controls input { min-width: 180px; }
+    .controls button { cursor: pointer; }
+    .controls button.active { border-color: rgba(155,226,61,.45); background: rgba(155,226,61,.12); color: #d9f99d; }
+    .charts {
+      display: grid; gap: 12px;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    }
+    @media (max-width: 980px) { .charts { grid-template-columns: 1fr; } }
+    .chart-box {
+      border: 1px solid var(--line); border-radius: 18px; background: rgba(0,0,0,.22);
+      padding: 10px; min-height: 320px; position: relative;
+    }
+    .chart-box h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .chart-box canvas { width: 100% !important; height: 280px !important; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 9px 8px; border-bottom: 1px solid rgba(255,255,255,.06); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+    th {
+      position: sticky; top: 0; z-index: 1;
+      background: rgba(7, 22, 15, .96); color: var(--faint);
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+    }
+    th:hover, th.active { color: var(--lime); }
+    tr { cursor: pointer; }
+    tr:hover td { background: rgba(155,226,61,.05); }
+    tr.selected td { background: rgba(56,189,248,.1); }
+    .code { font-family: var(--data); font-weight: 800; color: #a7f3d0; }
+    .name { color: var(--text); font-weight: 700; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .pos { color: #6ee7b7; }
+    .neg { color: #fda4af; }
+    .bar { display: inline-flex; align-items: center; gap: 6px; min-width: 88px; justify-content: flex-end; }
+    .bar .track { width: 56px; height: 5px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .bar .track > i { display: block; height: 100%; background: linear-gradient(90deg, #18b96b, #9be23d); }
+    .mono { font-family: var(--data); font-weight: 700; }
+    .table-wrap { max-height: 560px; overflow: auto; border: 1px solid var(--line); border-radius: 16px; }
+    .detail {
+      margin-top: 12px; display: none; border: 1px solid rgba(56,189,248,.25);
+      border-radius: 16px; background: rgba(14,40,55,.35); padding: 12px 14px;
+    }
+    .detail.show { display: block; }
+    .detail h3 { margin: 0 0 8px; font-size: 14px; }
+    .detail-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+    .detail-grid .cell {
+      border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: rgba(0,0,0,.18);
+    }
+    .detail-grid .cell span { display: block; font-size: 10px; color: var(--faint); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
+    .detail-grid .cell strong { display: block; margin-top: 4px; font-family: var(--data); font-size: 13px; }
+    .footer { margin-top: 14px; color: var(--faint); font-size: 11px; line-height: 1.5; }
+    .err { color: #fda4af; padding: 24px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Interactive KPI · Product Type</p>
+        <h1 id="title">Monthly Stock Account Movement</h1>
+        <p class="sub" id="subtitle">Analisis seluruh product type: share closing, share per kolom, delta opening→closing, issued & goods receive.</p>
+      </div>
+      <div class="badge-row">
+        <span class="badge live" id="periodBadge">Period —</span>
+        <span class="badge" id="locBadge">Loc —</span>
+        <span class="badge ok" id="valBadge">Validation —</span>
+      </div>
+    </header>
+
+    <section class="kpi-grid" id="kpiGrid"></section>
+
+    <section class="panel">
+      <div class="panel-h">
+        <div>
+          <h2>Komposisi & ranking product type</h2>
+          <p>Klik KPI / bar / baris tabel untuk drill. Header tabel = sort kolom. % = porsi terhadap total kolom.</p>
+        </div>
+        <div class="controls">
+          <input id="search" type="search" placeholder="Cari code / nama…" />
+          <select id="filterMode">
+            <option value="all">Semua</option>
+            <option value="up">Closing naik</option>
+            <option value="down">Closing turun</option>
+            <option value="dead">No issue (closing &gt; 0)</option>
+            <option value="active">Ada issue</option>
+          </select>
+          <button type="button" data-metric="closing" class="active">Closing %</button>
+          <button type="button" data-metric="issued">Issued %</button>
+          <button type="button" data-metric="gr">GR %</button>
+          <button type="button" data-metric="delta">Δ Opening</button>
+        </div>
+      </div>
+      <div class="charts">
+        <div class="chart-box">
+          <h3 id="barTitle">Top product type · % Closing</h3>
+          <canvas id="barChart"></canvas>
+        </div>
+        <div class="chart-box">
+          <h3>Mix total issued / GR / return</h3>
+          <canvas id="mixChart"></canvas>
+        </div>
+      </div>
+
+      <div class="detail" id="detail">
+        <h3 id="detailTitle">—</h3>
+        <div class="detail-grid" id="detailGrid"></div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:12px">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="code">Code</th>
+              <th data-sort="name">Product type</th>
+              <th data-sort="opening">Opening</th>
+              <th data-sort="openingShare">% Open</th>
+              <th data-sort="issuedTotal">Issued</th>
+              <th data-sort="issuedShare">% Issued</th>
+              <th data-sort="goodsReceive">Goods Rcv</th>
+              <th data-sort="grShare">% GR</th>
+              <th data-sort="closing" class="active">Closing</th>
+              <th data-sort="closingShare">% Close</th>
+              <th data-sort="delta">Δ</th>
+              <th data-sort="deltaPct">Δ %</th>
+              <th data-sort="turnover">Issue/Open %</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <p class="footer" id="footerNote"></p>
+    </section>
+  </div>
+
+  <script>
+    const fmt = (v) => {
+      if (!Number.isFinite(v)) return '—';
+      const abs = Math.abs(v);
+      const sign = v < 0 ? '-' : '';
+      if (abs >= 1e12) return sign + (abs / 1e12).toFixed(2) + ' T';
+      if (abs >= 1e9) return sign + (abs / 1e9).toFixed(2) + ' M';
+      if (abs >= 1e6) return sign + (abs / 1e6).toFixed(1) + ' jt';
+      return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(v);
+    };
+    const fmtFull = (v) => new Intl.NumberFormat('id-ID', {
+      style: 'currency', currency: 'IDR', minimumFractionDigits: 2, maximumFractionDigits: 2,
+    }).format(v || 0);
+    const pct = (v) => !Number.isFinite(v) ? '—' : v.toFixed(2) + '%';
+
+    let DATA = null;
+    let metric = 'closing';
+    let sortKey = 'closing';
+    let sortDir = -1;
+    let selected = null;
+    let barChart = null;
+    let mixChart = null;
+    const COLORS = ['#34d399','#22d3ee','#a3e635','#fbbf24','#fb7185','#a78bfa','#38bdf8','#f472b6','#94a3b8','#2dd4bf','#c084fc','#f59e0b'];
+
+    function filteredRows() {
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      const mode = document.getElementById('filterMode').value;
+      let rows = DATA.rows.slice();
+      if (q) rows = rows.filter((r) => r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+      if (mode === 'up') rows = rows.filter((r) => r.delta > 0);
+      if (mode === 'down') rows = rows.filter((r) => r.delta < 0);
+      if (mode === 'dead') rows = rows.filter((r) => r.issuedTotal === 0 && r.closing > 0);
+      if (mode === 'active') rows = rows.filter((r) => r.issuedTotal > 0);
+      rows.sort((a, b) => {
+        const av = a[sortKey];
+        const bv = b[sortKey];
+        const aNull = av == null || !Number.isFinite(av);
+        const bNull = bv == null || !Number.isFinite(bv);
+        if (aNull && bNull) return a.code.localeCompare(b.code);
+        if (aNull) return 1;
+        if (bNull) return -1;
+        if (av === bv) return a.code.localeCompare(b.code);
+        return av > bv ? sortDir : -sortDir;
+      });
+      return rows;
+    }
+
+    function metricValue(r) {
+      if (metric === 'issued') return r.issuedShare;
+      if (metric === 'gr') return r.grShare;
+      if (metric === 'delta') return r.delta;
+      return r.closingShare;
+    }
+    function metricLabel() {
+      return ({ closing: '% Closing', issued: '% Issued', gr: '% Goods Receive', delta: 'Δ Opening→Closing' })[metric];
+    }
+
+    function renderKpis() {
+      const k = DATA.kpi;
+      const netPct = k.totalOpening ? (k.netDelta / Math.abs(k.totalOpening)) * 100 : 0;
+      const cards = [
+        { id: 'opening', label: 'Total Opening', value: fmt(k.totalOpening), hint: fmtFull(k.totalOpening), bar: 100 },
+        { id: 'closing', label: 'Total Closing', value: fmt(k.totalClosing), hint: pct(netPct) + ' vs opening', bar: 100, active: metric === 'closing' },
+        { id: 'delta', label: 'Δ Closing − Opening', value: fmt(k.netDelta), hint: (netPct >= 0 ? 'Naik ' : 'Turun ') + pct(Math.abs(netPct)), bar: Math.min(100, Math.abs(netPct) * 10), active: metric === 'delta' },
+        { id: 'issued', label: 'Issued Total', value: fmt(k.totalIssued), hint: 'L ' + fmt(k.issuedLedger) + ' · S ' + fmt(k.issuedStation) + ' · V ' + fmt(k.issuedVehicle), bar: k.totalOpening ? Math.min(100, (k.totalIssued / k.totalOpening) * 100) : 0, active: metric === 'issued' },
+        { id: 'gr', label: 'Goods Receive', value: fmt(k.totalGR), hint: 'Purch return ' + fmt(k.totalPurchReturn), bar: k.totalClosing ? Math.min(100, (k.totalGR / k.totalClosing) * 100) : 0, active: metric === 'gr' },
+        { id: 'types', label: 'Product types', value: String(DATA.rows.length), hint: DATA.rows.filter((r) => r.issuedTotal === 0 && r.closing > 0).length + ' no-issue with stock', bar: 100 },
+      ];
+      const grid = document.getElementById('kpiGrid');
+      while (grid.firstChild) grid.removeChild(grid.firstChild);
+      cards.forEach((c) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'kpi' + (c.active ? ' active' : '');
+        btn.title = c.hint;
+        const label = document.createElement('div'); label.className = 'label'; label.textContent = c.label;
+        const value = document.createElement('div'); value.className = 'value'; value.textContent = c.value;
+        const hint = document.createElement('div'); hint.className = 'hint'; hint.textContent = c.hint;
+        const track = document.createElement('div'); track.className = 'pct';
+        const fill = document.createElement('i'); fill.style.width = Math.max(4, c.bar || 0) + '%';
+        track.appendChild(fill);
+        btn.appendChild(label); btn.appendChild(value); btn.appendChild(hint); btn.appendChild(track);
+        btn.addEventListener('click', () => {
+          if (c.id === 'closing' || c.id === 'issued' || c.id === 'gr' || c.id === 'delta') {
+            metric = c.id;
+            document.querySelectorAll('.controls button[data-metric]').forEach((b) => {
+              b.classList.toggle('active', b.getAttribute('data-metric') === metric);
+            });
+            renderAll();
+          }
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    function renderCharts() {
+      const rows = filteredRows().slice(0, 12);
+      const labels = rows.map((r) => r.code);
+      const values = rows.map((r) => metric === 'delta' ? r.delta : metricValue(r));
+      const colors = rows.map((_, i) => COLORS[i % COLORS.length]);
+      document.getElementById('barTitle').textContent = 'Top product type · ' + metricLabel();
+
+      if (barChart) barChart.destroy();
+      barChart = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: metricLabel(),
+            data: values,
+            backgroundColor: colors.map((c) => c + 'cc'),
+            borderColor: colors,
+            borderWidth: 1,
+            borderRadius: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: (_, els) => {
+            if (!els.length) return;
+            selectRow(rows[els[0].index].code);
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => {
+                  const r = rows[items[0].dataIndex];
+                  return r.code + ' · ' + r.name;
+                },
+                label: (ctx) => {
+                  const r = rows[ctx.dataIndex];
+                  if (metric === 'delta') return 'Δ ' + fmtFull(r.delta) + ' (' + pct(r.deltaPct) + ')';
+                  if (metric === 'issued') return '% Issued ' + pct(r.issuedShare) + ' · ' + fmtFull(r.issuedTotal);
+                  if (metric === 'gr') return '% GR ' + pct(r.grShare) + ' · ' + fmtFull(r.goodsReceive);
+                  return '% Closing ' + pct(r.closingShare) + ' · ' + fmtFull(r.closing);
+                },
+              },
+            },
+          },
+          scales: {
+            x: { ticks: { color: '#8fbfa1', maxRotation: 0, font: { size: 10, weight: '700' } }, grid: { display: false } },
+            y: {
+              ticks: {
+                color: '#8fbfa1',
+                callback: (v) => metric === 'delta' ? fmt(v) : Number(v).toFixed(1) + '%',
+              },
+              grid: { color: 'rgba(255,255,255,0.06)' },
+            },
+          },
+        },
+      });
+
+      const k = DATA.kpi;
+      if (mixChart) mixChart.destroy();
+      mixChart = new Chart(document.getElementById('mixChart'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Issued Ledger', 'Issued Station', 'Issued Vehicle', 'Goods Receive', 'Purch Return'],
+          datasets: [{
+            data: [k.issuedLedger, k.issuedStation, k.issuedVehicle, k.totalGR, k.totalPurchReturn],
+            backgroundColor: ['#38bdf8', '#34d399', '#fbbf24', '#a3e635', '#fb7185'],
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#8fbfa1', boxWidth: 10, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const total = ctx.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                  const v = ctx.raw || 0;
+                  return ctx.label + ': ' + fmtFull(v) + ' (' + ((v / total) * 100).toFixed(1) + '%)';
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function renderTable() {
+      const rows = filteredRows();
+      const tb = document.getElementById('tbody');
+      while (tb.firstChild) tb.removeChild(tb.firstChild);
+      rows.forEach((r) => {
+        const tr = document.createElement('tr');
+        if (selected === r.code) tr.className = 'selected';
+        tr.setAttribute('data-code', r.code);
+        const dCls = r.delta >= 0 ? 'pos' : 'neg';
+        const cells = [
+          ['code', r.code, null],
+          ['name', r.name, r.name],
+          ['mono', fmt(r.opening), fmtFull(r.opening)],
+          ['share', pct(r.openingShare), r.openingShare],
+          ['mono', fmt(r.issuedTotal), fmtFull(r.issuedTotal)],
+          ['share', pct(r.issuedShare), r.issuedShare],
+          ['mono', fmt(r.goodsReceive), fmtFull(r.goodsReceive)],
+          ['share', pct(r.grShare), r.grShare],
+          ['mono', fmt(r.closing), fmtFull(r.closing)],
+          ['share', pct(r.closingShare), r.closingShare],
+          ['mono ' + dCls, fmt(r.delta), fmtFull(r.delta)],
+          ['mono ' + dCls, pct(r.deltaPct), null],
+          ['mono', pct(r.turnover), null],
+        ];
+        cells.forEach((cell, idx) => {
+          const td = document.createElement('td');
+          if (idx === 0) td.className = 'code';
+          else if (idx === 1) td.className = 'name';
+          else if (cell[0].startsWith('mono')) td.className = cell[0];
+          if (cell[0] === 'share') {
+            const wrap = document.createElement('span'); wrap.className = 'bar';
+            const track = document.createElement('span'); track.className = 'track';
+            const fill = document.createElement('i'); fill.style.width = Math.min(100, Number(cell[2]) || 0) + '%';
+            track.appendChild(fill);
+            const val = document.createElement('span'); val.className = 'mono'; val.textContent = cell[1];
+            wrap.appendChild(track); wrap.appendChild(val);
+            td.appendChild(wrap);
+          } else {
+            td.textContent = cell[1];
+            if (cell[2] && idx !== 1) td.title = String(cell[2]);
+            if (idx === 1) td.title = r.name;
+          }
+          tr.appendChild(td);
+        });
+        tr.addEventListener('click', () => selectRow(r.code));
+        tb.appendChild(tr);
+      });
+      document.getElementById('footerNote').textContent =
+        rows.length + ' product type · % Close/% Open/% Issued/% GR = porsi thd total kolom · Issue/Open % = issued ÷ opening · May 2026 PTRJ mill';
+    }
+
+    function selectRow(code) {
+      selected = selected === code ? null : code;
+      const r = DATA.rows.find((x) => x.code === code);
+      const box = document.getElementById('detail');
+      if (!selected || !r) {
+        box.classList.remove('show');
+        renderTable();
+        return;
+      }
+      document.getElementById('detailTitle').textContent = r.code + ' · ' + r.name;
+      const grid = document.getElementById('detailGrid');
+      while (grid.firstChild) grid.removeChild(grid.firstChild);
+      const cells = [
+        ['Opening', fmtFull(r.opening), pct(r.openingShare)],
+        ['Closing', fmtFull(r.closing), pct(r.closingShare)],
+        ['Δ', fmtFull(r.delta), pct(r.deltaPct)],
+        ['Issued total', fmtFull(r.issuedTotal), pct(r.issuedShare)],
+        ['Issued ledger', fmtFull(r.issuedLedger), ''],
+        ['Issued station', fmtFull(r.issuedStation), ''],
+        ['Issued vehicle', fmtFull(r.issuedVehicle), ''],
+        ['Goods receive', fmtFull(r.goodsReceive), pct(r.grShare)],
+        ['Purch return', fmtFull(r.purchReturn), ''],
+        ['Goods return', fmtFull(r.goodsReturn), ''],
+        ['Issue / Open', pct(r.turnover), 'turnover proxy'],
+        ['Adj / Transfer / RA', fmt(r.adjustment) + ' / ' + fmt(r.transferred) + ' / ' + fmt(r.returnAdvice), ''],
+      ];
+      cells.forEach(([a, b, c]) => {
+        const div = document.createElement('div'); div.className = 'cell';
+        const s1 = document.createElement('span'); s1.textContent = a;
+        const strong = document.createElement('strong'); strong.textContent = b;
+        const s2 = document.createElement('span'); s2.textContent = c || '';
+        div.appendChild(s1); div.appendChild(strong); div.appendChild(s2);
+        grid.appendChild(div);
+      });
+      box.classList.add('show');
+      renderTable();
+    }
+
+    function renderAll() {
+      renderKpis();
+      renderCharts();
+      renderTable();
+    }
+
+    async function boot() {
+      const res = await fetch('./product-type-may2026-data.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' loading product-type-may2026-data.json');
+      DATA = await res.json();
+      document.getElementById('title').textContent = DATA.meta.title;
+      document.getElementById('subtitle').textContent =
+        DATA.meta.company + ' · ' + DATA.meta.site + ' · ' + DATA.meta.periodLabel +
+        ' (Acc ' + DATA.meta.periodCode + ') · group ' + DATA.meta.analysisGroup +
+        ' · workshop ' + (DATA.meta.includeWorkshop ? 'ON' : 'OFF');
+      document.getElementById('periodBadge').textContent = 'Period ' + DATA.meta.periodLabel;
+      document.getElementById('locBadge').textContent = 'Loc ' + DATA.meta.location;
+      document.getElementById('valBadge').textContent = DATA.meta.validation && DATA.meta.validation.location_total_matches_record_sum
+        ? 'Valid · ' + DATA.rows.length + ' types'
+        : 'Check validation · ' + DATA.rows.length + ' types';
+
+      document.getElementById('search').addEventListener('input', renderAll);
+      document.getElementById('filterMode').addEventListener('change', renderAll);
+      document.querySelectorAll('.controls button[data-metric]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          metric = btn.getAttribute('data-metric');
+          document.querySelectorAll('.controls button[data-metric]').forEach((b) => {
+            b.classList.toggle('active', b === btn);
+          });
+          renderAll();
+        });
+      });
+      document.querySelectorAll('th[data-sort]').forEach((th) => {
+        th.addEventListener('click', () => {
+          const key = th.getAttribute('data-sort');
+          if (sortKey === key) sortDir *= -1;
+          else { sortKey = key; sortDir = -1; }
+          document.querySelectorAll('th[data-sort]').forEach((x) => {
+            x.classList.toggle('active', x.getAttribute('data-sort') === sortKey);
+          });
+          renderAll();
+        });
+      });
+      renderAll();
+    }
+
+    boot().catch((e) => {
+      const pre = document.createElement('pre');
+      pre.className = 'err';
+      pre.textContent = 'Gagal load data: ' + e.message + '\nPastikan file public/product-type-may2026-data.json ada dan dev server :3100 jalan.';
+      document.body.innerHTML = '';
+      document.body.appendChild(pre);
+    });
+  </script>
+</body>
+</html>

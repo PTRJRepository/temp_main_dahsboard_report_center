@@ -141,8 +141,13 @@ export function compactReportPayloadForAi<T extends ReportPayloadLike>(
 }
 
 export function isSubtotalColumn(column: string, rows: DbRow[], sampleSize = 20) {
+  // Unit cost / rate — never grand-total (Cost ≠ Amount; Cost is per-line unit price).
   if (/^(unit[_ ]?cost|diff(?:erential)?[_ ]?unit[_ ]?cost|cost|average[_ ]?cost|harga[_ ]?satuan|rate|price)$/i.test(column)) return false
+  // IDs (header/line) — never sum
+  if (/(^|_)(id|lnid|lineid|stockissueid|stockissuelnid)$/i.test(column) || /^(StockIssueID|StockIssueLnID|Dokumen)$/i.test(column)) return false
   if (!/(amount|total|nilai|qty|quantity|stok|baris|rows|count|jumlah|receive|usage)/i.test(column)) return false
+  // Bare "cost" already excluded; also block *UnitCost* style fields that still match "cost" via amount path elsewhere
+  if (/unitcost|averagecost|diffaveragecost/i.test(column) && !/amount/i.test(column)) return false
 
   const sample = rows
     .map((row) => row[column])
@@ -187,12 +192,15 @@ export function buildReportTableGroups<T extends DbRow>(
 }
 
 const subtotalSummaryAliases: Record<string, string[]> = {
-  Amount: ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
-  amount: ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
+  Amount: ['TotalAmount', 'TotalIssueAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
+  amount: ['TotalAmount', 'TotalIssueAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
   AmountItem: ['TotalAssetAmount', 'TotalAmountItem', 'TotalAmount', 'total_amount', 'AssetAmountRealTime'],
   AmountCurrent: ['TotalAmount', 'NilaiPersediaan', 'total_amount', 'TotalAssetAmount'],
-  TotalAmount: ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
-  total_amount: ['total_amount', 'TotalAmount', 'TotalAssetAmount'],
+  TotalAmount: ['TotalAmount', 'TotalIssueAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount'],
+  TotalIssueAmount: ['TotalIssueAmount', 'TotalAmount', 'total_amount'],
+  total_amount: ['total_amount', 'TotalAmount', 'TotalIssueAmount', 'TotalAssetAmount'],
+  // Cost intentionally has NO TotalAmount alias — unit cost must not inherit money totals.
+  Cost: [],
   NilaiStok: ['NilaiPersediaan', 'TotalAmount', 'total_amount'],
   NilaiPersediaan: ['NilaiPersediaan', 'TotalAmount', 'total_amount'],
   Qty: ['TotalQty', 'total_quantity'],
@@ -216,9 +224,12 @@ const subtotalSummaryAliases: Record<string, string[]> = {
 }
 
 function dynamicSummaryAliases(column: string) {
-  if (/(amount|nilai|cost|biaya)/i.test(column)) return ['TotalAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount']
+  // NEVER map unit Cost → TotalAmount (bug: Grand total Cost = Amount).
+  if (/^(cost|unitcost|unit_cost|averagecost|price|rate|hargasatuan)$/i.test(column)) return []
+  if (/unitcost|averagecost|diffaveragecost/i.test(column) && !/amount/i.test(column)) return []
+  if (/(amount|nilai|biaya)/i.test(column)) return ['TotalAmount', 'TotalIssueAmount', 'total_amount', 'NilaiPersediaan', 'TotalAssetAmount']
   if (/(qty|quantity|stok)/i.test(column)) return ['TotalQty', 'total_quantity']
-  if (/(count|jumlah|rows|baris)/i.test(column)) return ['FilteredRows', 'TotalItem', 'total_item']
+  if (/(count|jumlah|rows|baris)/i.test(column)) return ['FilteredRows', 'TotalItem', 'total_item', 'TotalBaris']
   return []
 }
 

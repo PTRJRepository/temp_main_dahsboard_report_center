@@ -45,9 +45,9 @@ export type MonthlyStockRingkasanProps = {
   formatValue: (value: unknown, field?: string) => string
   displayColumnLabel: (field: string) => string
   activePeriodLabels: { actual?: string; accounting?: string; summary: string }
-  openKpiSqlDebug: (event: { preventDefault: () => void; stopPropagation: () => void }, kpi: any) => void
+  openKpiSqlDebug: (event: { preventDefault: () => void; stopPropagation: () => void }, kpi: ReportKpiCardLike) => void
   applyKpiFilter: (label: string) => void
-  applySubKpiCardFilter: (kpi: any) => void
+  applySubKpiCardFilter: (kpi: ReportKpiCardLike) => void
   applyMonthlyAnalysisGroup: (groupBy: string) => void
   applyMonthlyMovementWindow: (window: string) => void
   applyMonthlyItemType?: (itemType: 'inventory' | 'gudang' | 'workshop') => void
@@ -414,7 +414,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
   const movementCategoryMax = Math.max(...movementCategoryKpiCards.map(cardChartValue), 1)
 
   return (
-        <div className="rc-ringkasan sticky top-0 z-30 mt-5 space-y-5 rounded-[34px] border border-lime-300/25 bg-[#04111f]/97 p-4 shadow-[0_24px_90px_rgba(0,0,0,0.50),0_0_0_1px_rgba(255,255,255,0.06),0_0_120px_rgba(132,204,22,0.08)] backdrop-blur-xl sm:p-5">
+        <div className="rc-ringkasan sticky top-0 z-30 mt-5 space-y-5 rounded-[34px] border border-lime-300/25 bg-[var(--rc-surface-muted)]/97 p-4 shadow-[0_24px_90px_rgba(0,0,0,0.50),0_0_0_1px_rgba(255,255,255,0.06),0_0_120px_rgba(132,204,22,0.08)] backdrop-blur-xl sm:p-5">
           {/* Hide sticky grand strip when official flow cards already carry open→close story (avoids double totals). */}
           {stickyGrandTotals.length > 0 && !(isMonthlyStockMovement && flowKpiCards.length > 0) && (
             <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-1 pb-2.5">
@@ -616,7 +616,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                             return (
                               <div
                                 key={`flow-${kpi.sourceField ?? kpi.label}`}
-                                className={`group relative min-h-[120px] rounded-2xl border-2 p-4 pr-12 text-left text-white shadow-[0_8px_32px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.1)] ${kpi.tone}`}
+                                className={`rc-kpi-surface group relative min-h-[120px] rounded-2xl border-2 p-4 pr-12 text-left text-white shadow-[0_8px_32px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.1)] ${kpi.tone}`}
                                 title={[kpi.sourceTable, kpi.sourceField].filter(Boolean).join(' · ')}
                               >
                                 <button
@@ -630,7 +630,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                                 <span className="rc-kpi-label block truncate text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/60">
                                   {kpi.label}
                                 </span>
-                                <span className="rc-kpi-value mt-2 block text-3xl font-black tracking-tight text-lime-100 whitespace-normal break-all leading-tight">
+                                <span className="rc-kpi-value rc-metric mt-2 block text-3xl font-black tracking-tight text-lime-100 whitespace-normal break-all leading-tight">
                                   {compactMetric(kpi.value, amountMetric?.key ?? kpi.sourceField, kpi.label)}
                                 </span>
                                 {isMonthlyStockMovement && qtyMetric && kpi.sourceField !== 'TotalItem' ? (
@@ -731,7 +731,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                           if (!canFilter) return
                           if (event.key === 'Enter' || event.key === ' ') applyKpiFilter(kpi.label)
                         }}
-                        className={`group relative min-h-[108px] rounded-2xl border-2 border-emerald-400/25 bg-white/[0.06] p-4 pr-12 text-left text-white shadow-[0_8px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all ${canFilter ? 'cursor-pointer hover:-translate-y-1 hover:border-lime-300/50 hover:bg-emerald-400/12 hover:shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_20px_rgba(16,185,129,0.15)]' : 'cursor-default'}`}
+                        className={`rc-kpi-surface group relative min-h-[108px] rounded-2xl border-2 border-emerald-400/25 bg-white/[0.06] p-4 pr-12 text-left text-white shadow-[0_8px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all ${canFilter ? 'cursor-pointer hover:-translate-y-1 hover:border-lime-300/50 hover:bg-emerald-400/12 hover:shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_20px_rgba(16,185,129,0.15)]' : 'cursor-default'}`}
                       >
                         <button
                           type="button"
@@ -742,7 +742,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                           SQL
                         </button>
                         <span className="block text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/50">{kpi.label}</span>
-                        <span className="mt-2 block text-3xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                        <span className="rc-metric mt-2 block text-3xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         <span className="mt-1 block text-[12px] font-semibold text-white/50">{kpi.description}</span>
                         {kpi.metrics && kpi.metrics.length > 1 && (
                           <div className="mt-1.5 flex flex-wrap gap-1">
@@ -785,7 +785,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                             <span className="mt-1 block truncate text-lg font-black text-amber-50 leading-tight">{kpi.label}</span>
                             <span className="mt-1 block truncate text-[12px] font-semibold text-white/50">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                          <span className="rc-metric shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
                         {kpi.metrics && kpi.metrics.length > 0 && (
                           <div className="mt-3 grid grid-cols-3 gap-2">
@@ -830,7 +830,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                             <span className="mt-1 block truncate text-lg font-black text-sky-50 leading-tight">{kpi.label}</span>
                             <span className="mt-1 block truncate text-[12px] font-semibold text-white/50">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                          <span className="rc-metric shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           <span className="rounded-xl border border-sky-300/25 bg-sky-300/10 px-2 py-1 text-[9px] font-black uppercase text-sky-100/75">
@@ -889,7 +889,7 @@ export function MonthlyStockRingkasan(props: MonthlyStockRingkasanProps) {
                             <span className="mt-1 block truncate text-lg font-black text-emerald-50 leading-tight">{kpi.label}</span>
                             <span className="mt-1 block truncate text-[12px] font-semibold text-white/50">{kpi.description}</span>
                           </div>
-                          <span className="shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
+                          <span className="rc-metric shrink-0 text-2xl font-black tracking-tight text-lime-200 whitespace-normal break-all leading-tight">{compactMetric(kpi.value, kpi.sourceField ?? kpi.metrics?.[0]?.key, kpi.label)}</span>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           <span className="rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-2 py-1 text-[9px] font-black uppercase text-emerald-100/80">
