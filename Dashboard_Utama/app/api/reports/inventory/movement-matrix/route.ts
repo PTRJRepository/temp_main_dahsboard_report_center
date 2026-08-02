@@ -11,6 +11,7 @@ import {
   resolveSqlGatewayBase,
   sqlGatewayQueryUrl,
 } from '@/lib/reports/sql-gateway-config'
+import { fuelIssueDocumentDateExpression, fuelIssueStatusFilter } from '@/lib/reports/inventory/fuel-issue-sql'
 
 /**
  * Movement matrix — heatmap barang (Y) × periode bulan (X).
@@ -315,28 +316,35 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const effectiveTop = itemCode ? 1 : productType || q ? Math.max(top, 40) : top
 
   // Pola issue_rows (lihat inventory/route.ts), diagregasi per barang×bulan.
+  // Patokan tanggal & status diselaraskan dengan KPI utama inventory/route.ts
+  // (CreateDate-utama + filter Status) agar angka satelit parity dengan KPI.
+  const gudangTanggalExpr =
+    "COALESCE(NULLIF(h.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate)"
   const gudangQuery = `
       SELECT
         RTRIM(l.ItemCode) AS KodeBarang,
         RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
         RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProdTypeCode,
-        h.PostDate AS Tanggal,
+        ${gudangTanggalExpr} AS Tanggal,
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
         CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
         CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS DECIMAL(18,2)) AS Amount
       FROM [${DATABASE}].[dbo].[IN_STOCKISSUELN] l
       INNER JOIN [${DATABASE}].[dbo].[IN_STOCKISSUE] h ON l.StockIssueID = h.StockIssueID
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-      WHERE h.PostDate >= '${dateFrom}'
+      WHERE ${gudangTanggalExpr} >= '${dateFrom}'
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
         AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'
         ${itemFilterSql}
   `
+  const workshopTanggalExpr =
+    "COALESCE(NULLIF(s.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate)"
   const workshopQuery = `
       SELECT
         RTRIM(s.ItemCode) AS KodeBarang,
         RTRIM(ISNULL(i.Description, s.ItemCode)) AS NamaBarang,
         RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProdTypeCode,
-        COALESCE(NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate) AS Tanggal,
+        ${workshopTanggalExpr} AS Tanggal,
         COALESCE(
           NULLIF(RTRIM(CONVERT(varchar(50), s.JobStockIssueID)), ''),
           NULLIF(RTRIM(CONVERT(varchar(50), s.JobStockID)), ''),
@@ -347,7 +355,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       FROM [${DATABASE}].[dbo].[WS_JOBSTOCK] s
       LEFT JOIN [${DATABASE}].[dbo].[WS_JOB] j ON s.JobID = j.JobID
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON s.ItemCode = i.ItemCode AND i.LocCode = s.LocCode
-      WHERE COALESCE(NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate) >= '${dateFrom}'
+      WHERE ${workshopTanggalExpr} >= '${dateFrom}'
         AND RTRIM(ISNULL(s.TransType, '')) = '1'
         AND COALESCE(
               NULLIF(RTRIM(CONVERT(varchar(10), i.ItemType)), ''),
@@ -360,14 +368,15 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         RTRIM(l.ItemCode) AS KodeBarang,
         RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
         RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProdTypeCode,
-        COALESCE(NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate, h.CreateDate) AS Tanggal,
+        ${fuelIssueDocumentDateExpression('h')} AS Tanggal,
         RTRIM(CONVERT(varchar(50), h.FuelIssueID)) AS Dokumen,
         CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
         CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS DECIMAL(18,2)) AS Amount
       FROM [${DATABASE}].[dbo].[IN_FUELISSUELN] l
       INNER JOIN [${DATABASE}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
       LEFT JOIN [${DATABASE}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-      WHERE COALESCE(NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate, h.CreateDate) >= '${dateFrom}'
+      WHERE ${fuelIssueDocumentDateExpression('h')} >= '${dateFrom}'
+        ${fuelIssueStatusFilter('h')}
         AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'
         ${itemFilterSql}
   `
@@ -422,6 +431,22 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     FROM [${DATABASE}].[dbo].[IN_PRODTYPE] pt
     WHERE RTRIM(ISNULL(pt.ProdTypeCode, '')) <> ''
     ORDER BY RTRIM(ISNULL(pt.Description, pt.ProdTypeCode))
+  `
+
+  // Full-scope issue totals per period (TANPA batas TOP-N) — dipakai periodSummary
+  // agar selaras KPI utama (handler stockIssue). `raw` (TOP-N) hanya untuk matriks UI.
+  const summarySql = `
+    WITH issue_rows AS (
+      ${queries.join(' UNION ALL ')}
+    )
+    SELECT
+      CONVERT(varchar(7), Tanggal, 120) AS period,
+      CAST(SUM(ISNULL(Qty, 0)) AS DECIMAL(18,2)) AS qty,
+      CAST(SUM(ISNULL(Amount, 0)) AS DECIMAL(18,2)) AS amount,
+      COUNT(DISTINCT Dokumen) AS docs
+    FROM issue_rows
+    WHERE Tanggal IS NOT NULL
+    GROUP BY CONVERT(varchar(7), Tanggal, 120)
   `
 
   const currentYm = periods[periods.length - 1]
@@ -491,10 +516,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   `
 
   try {
-    const [raw, productTypeRows, valuationRows] = await Promise.all([
+    const [raw, productTypeRows, valuationRows, summaryRows] = await Promise.all([
       runQuery(server, database, sql),
       runQuery(server, database, productTypesSql).catch(() => [] as DbRow[]),
       runQuery(server, database, valuationSql).catch(() => [] as DbRow[]),
+      runQuery(server, database, summarySql).catch(() => [] as DbRow[]),
     ])
 
     // Susun pivot: baris per barang, sel periode (urut kronologis).
@@ -593,7 +619,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       if (idx === undefined) continue
       periodSummary[idx].valuation += Number(row.valuation ?? 0) || 0
     }
-    for (const row of raw) {
+    for (const row of summaryRows) {
       const period = String(row.period ?? '').trim()
       const idx = periodIndex.get(period)
       if (idx === undefined) continue

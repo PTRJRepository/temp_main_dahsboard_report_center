@@ -235,14 +235,33 @@ function buildClosingCte(
     )`
 }
 
-/** Ekspresi tanggal dokumen fuel — mengikuti helper di inventory/route.ts. */
-function fuelDate(alias: string) {
-  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate, ${alias}.CreateDate)`
+/**
+ * Ekspresi tanggal dokumen stock issue (gudang) — patokan CreateDate-utama,
+ * SAMA dengan stockIssueDocumentDateExpression di inventory/route.ts.
+ * PostDate sering placeholder 1900; fallback: CreateDate → PostDate(≠1900) → UpdateDate.
+ */
+function stockIssueDate(alias: string) {
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate)`
 }
 
-/** Ekspresi tanggal workshop — mengikuti helper di inventory/route.ts. */
+/** Filter status posted stock issue (gudang) — sama dengan inventory/route.ts. */
+function stockIssueStatusFilter(alias: string) {
+  return `AND RTRIM(ISNULL(${alias}.Status, '')) IN ('2', '5', '6')`
+}
+
+/** Ekspresi tanggal dokumen fuel — CreateDate-utama, sama dengan fuelIssueDocumentDateExpression. */
+function fuelDate(alias: string) {
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate)`
+}
+
+/** Filter status posted fuel — sama dengan fuelIssueStatusFilter. */
+function fuelStatusFilter(alias: string) {
+  return `AND RTRIM(ISNULL(${alias}.Status, '')) IN ('2', '6')`
+}
+
+/** Ekspresi tanggal workshop — CreateDate-utama, mengikuti workshopStockIssueDateExpression di inventory/route.ts. */
 function workshopDate(alias: string) {
-  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.TransDate)`
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.TransDate)`
 }
 
 /** Ekspresi amount workshop — mengikuti helper di inventory/route.ts. */
@@ -273,14 +292,15 @@ function buildIssueCte(
         RTRIM(l.ItemCode) AS ItemCode,
         RTRIM(ISNULL(i.Description, l.ItemCode)) AS ItemName,
         'GUDANG' AS Source,
-        h.PostDate AS Tanggal,
+        ${stockIssueDate('h')} AS Tanggal,
         RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
         CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
         CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS DECIMAL(18,2)) AS Amount
       FROM [${database}].[dbo].[IN_STOCKISSUELN] l
       INNER JOIN [${database}].[dbo].[IN_STOCKISSUE] h ON l.StockIssueID = h.StockIssueID
       LEFT JOIN [${database}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-      WHERE h.PostDate >= '${dateFrom}'
+      WHERE ${stockIssueDate('h')} >= '${dateFrom}'
+        ${stockIssueStatusFilter('h')}
         AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'${gudangLoc}
     `)
     branches.push(`
@@ -297,7 +317,7 @@ function buildIssueCte(
       INNER JOIN [${database}].[dbo].[IN_FUELISSUE] h ON l.FuelIssueID = h.FuelIssueID
       LEFT JOIN [${database}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
       WHERE ${fuelDate('h')} >= '${dateFrom}'
-        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '6')
+        ${fuelStatusFilter('h')}
         AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'${gudangLoc}
     `)
   }

@@ -202,7 +202,7 @@ function itemTypeScopeFilter(itemType: string, itemAlias: string) {
 /**
  * CTE baris PURCHASING return (retur ke supplier) — kolom & fallback SAMA
  * dengan `goodsReturnToSupplier` di inventory/route.ts (verified live):
- * tanggal dok = PostDate → GoodsRetRefDate → UpdateDate → CreateDate,
+ * tanggal dok = CreateDate → PostDate → GoodsRetDate → UpdateDate (patokan CreateDate),
  * status posted '2'/'5'/'6', qty = ReturnStockQty → QtyReturn,
  * amount = Amount → qty × (Cost → PU_POLN.Cost).
  */
@@ -212,7 +212,10 @@ function buildPurchasingReturnCte(
   dateToExclusive: string,
   opts: { itemType: string; locCode?: string },
 ) {
-  const docDate = `COALESCE(NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.GoodsRetRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate, h.CreateDate)`
+  // Patokan tanggal = CreateDate (selaras KPI utama); PostDate sering placeholder 1900.
+  // Kolom yang benar adalah GoodsRetDate (bukan GoodsRetRefDate — kolom itu TIDAK ada
+  // di PU_GOODSRET pada db_ptrj maupun db_ptrj_mill; terbukti error 'Invalid column name').
+  const docDate = `COALESCE(NULLIF(h.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.GoodsRetDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate)`
   const loc = opts.locCode ? cleanCode(opts.locCode, 16) : ''
   const locFilter = loc ? ` AND RTRIM(h.LocCode) = '${loc}'` : ''
   const typeFilter = itemTypeScopeFilter(opts.itemType, 'i')
@@ -252,10 +255,9 @@ function buildInventoryReturnCte(
   opts: { itemType: string; locCode?: string },
 ) {
   const pairs = yearMonthPairsBetween(dateFrom, dateToExclusive)
-  const pairList = pairs.map((p) => `(${p.year}, ${p.month})`).join(', ')
   const docDate = `DATEFROMPARTS(CONVERT(int, h.AccYear), CONVERT(int, h.AccMonth), 1)`
-  const periodFilter = pairList
-    ? `(CONVERT(int, h.AccYear), CONVERT(int, h.AccMonth)) IN (VALUES ${pairList})`
+  const periodFilter = pairs.length
+    ? `(${pairs.map((p) => `(CONVERT(int, h.AccYear) = ${p.year} AND CONVERT(int, h.AccMonth) = ${p.month})`).join(' OR ')})`
     : '1 = 0'
   const loc = opts.locCode ? cleanCode(opts.locCode, 16) : ''
   const locFilter = loc ? ` AND RTRIM(h.LocCode) = '${loc}'` : ''

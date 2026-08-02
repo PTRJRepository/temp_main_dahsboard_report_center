@@ -161,9 +161,14 @@ function movementWindowEndExclusive(now: Date = new Date()): string {
   return `${y}-${pad2(m)}-01`
 }
 
-/** Ekspresi tanggal dokumen fuel — sama persis dengan fuelQuery di movement-category-evolution. */
+/**
+ * Ekspresi tanggal dokumen fuel — PATOKAN BARU = CreateDate-utama, identik dengan
+ * `fuelIssueDocumentDateExpression` di `lib/reports/inventory/fuel-issue-sql.ts`
+ * (dipakai KPI utama stockIssue agar parity Rp 0 dgn RPTIN).
+ * Urutan fallback: CreateDate(≠1900) → PostDate(≠1900) → FuelIssueRefDate(≠1900) → UpdateDate.
+ */
 function fuelDate(alias: string) {
-  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate, ${alias}.CreateDate)`
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate)`
 }
 
 /**

@@ -20,8 +20,10 @@ import {
  *   dokumen issue dalam window analisis.
  *
  * Universe issue = 3 sumber yang sama dengan `buildIssueCte` di
- * `product-type-kpi/route.ts` (join, doc-date, status, itemType identik):
- *   - IN_STOCKISSUE/LN   (gudang, ItemType <> '4')
+ * `product-type-kpi/route.ts` (join & itemType identik); doc-date & status
+ * selaras definisi BARU KPI utama `app/api/reports/inventory/route.ts`
+ * (patokan CreateDate-utama, parity Rp 0 dgn monthly report RPTIN):
+ *   - IN_STOCKISSUE/LN   (gudang, Status 2/5/6, ItemType <> '4')
  *   - IN_FUELISSUE/LN    (fuel,   Status 2/6, ItemType <> '4')
  *   - WS_JOBSTOCK        (workshop, TransType='1', ItemType = '4')
  * Return TIDAK dihitung sebagai issue (return itu penerimaan kembali, bukan pemakaian).
@@ -145,20 +147,40 @@ function cleanCode(raw: string, max = 40) {
   return raw.trim().replace(/[^A-Za-z0-9._\-\/ ]/g, '').replace(/'/g, '').slice(0, max)
 }
 
-/** Ekspresi tanggal dokumen fuel — sama persis dengan fuel-usage/route.ts. */
+/**
+ * Ekspresi tanggal dokumen fuel — IDENTIK dengan `fuelIssueDocumentDateExpression`
+ * di lib/reports/inventory/fuel-issue-sql.ts (dipakai KPI utama inventory/route.ts).
+ * Ditulis inline agar file ini tidak menambah import baru.
+ * Patokan CreateDate-utama: CreateDate → PostDate(≠1900) → FuelIssueRefDate(≠1900) → UpdateDate.
+ */
 function fuelDate(alias: string) {
-  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate, ${alias}.CreateDate)`
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate)`
 }
 
-/** Ekspresi tanggal workshop — sama persis dengan product-type-kpi/route.ts. */
+/**
+ * Ekspresi tanggal gudang (IN_STOCKISSUE) — sama dengan `stockIssueDocumentDateExpression`
+ * di inventory/route.ts. Patokan CreateDate-utama: CreateDate → PostDate(≠1900) → UpdateDate.
+ */
+function stockIssueDate(alias: string) {
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.UpdateDate)`
+}
+
+/**
+ * Ekspresi tanggal workshop — sama dengan `workshopDocumentDateExpression`
+ * di inventory/route.ts. Patokan CreateDate-utama: CreateDate → PostDate(≠1900) → TransDate.
+ */
 function workshopDate(alias: string) {
-  return `COALESCE(NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.TransDate)`
+  return `COALESCE(NULLIF(${alias}.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(${alias}.PostDate, CONVERT(datetime, '1900-01-01')), ${alias}.TransDate)`
 }
 
 /**
  * CTE universe issue (per ItemCode + LocCode) — 3 sumber yang sama dengan
  * `buildIssueCte` di product-type-kpi/route.ts, tapi hanya kolom kunci
  * (ItemCode, LocCode) karena yang dipakai hanya EXISTENCE (ada/tidak issue).
+ * Filter periode & status selaras definisi BARU KPI utama inventory/route.ts:
+ *   - gudang: tanggal stockIssueDate(h), Status 2/5/6
+ *   - fuel:   tanggal fuelDate(h), Status 2/6
+ *   - workshop: tanggal workshopDate(s), TransType='1' (tanpa filter status)
  * itemType:
  *   - '1' / 'gudang'    → hanya gudang + fuel
  *   - '4' / 'workshop'  → hanya workshop
@@ -180,7 +202,8 @@ function buildIssuedItemCte(
       FROM [${database}].[dbo].[IN_STOCKISSUELN] l
       INNER JOIN [${database}].[dbo].[IN_STOCKISSUE] h ON l.StockIssueID = h.StockIssueID
       LEFT JOIN [${database}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-      WHERE h.PostDate >= '${dateFrom}'
+      WHERE ${stockIssueDate('h')} >= '${dateFrom}'
+        AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
         AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'${gudangLoc}
     `)
     branches.push(`

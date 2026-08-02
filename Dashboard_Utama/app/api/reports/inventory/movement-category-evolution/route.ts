@@ -199,28 +199,35 @@ function buildIssueRowsCte(
   const includeGudang = itemTypeScope !== '4'
   const includeWorkshop = itemTypeScope !== '1'
 
+  // Gudang (IN_STOCKISSUE) — patokan tanggal CreateDate-utama + status posted (2/5/6),
+  // selaras KPI utama di app/api/reports/inventory/route.ts (stockIssueDocumentDateExpression).
+  const gudangDocDate = `COALESCE(NULLIF(h.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate)`
   const gudangQuery = `
     SELECT
       RTRIM(l.ItemCode) AS KodeBarang,
       RTRIM(ISNULL(i.Description, l.ItemCode)) AS NamaBarang,
       RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductType,
-      h.PostDate AS Tanggal,
+      ${gudangDocDate} AS Tanggal,
       RTRIM(CONVERT(varchar(50), h.StockIssueID)) AS Dokumen,
       CAST(ISNULL(l.Qty, 0) AS DECIMAL(18,2)) AS Qty,
       CAST(COALESCE(NULLIF(l.Amount, 0), ISNULL(l.Qty, 0) * ISNULL(l.Cost, 0), 0) AS DECIMAL(18,2)) AS Amount
     FROM [${database}].[dbo].[IN_STOCKISSUELN] l
     INNER JOIN [${database}].[dbo].[IN_STOCKISSUE] h ON l.StockIssueID = h.StockIssueID
     LEFT JOIN [${database}].[dbo].[IN_ITEM] i ON l.ItemCode = i.ItemCode AND i.LocCode = h.LocCode
-    WHERE h.PostDate >= '${dateFrom}' AND h.PostDate < '${dateToExclusive}'
+    WHERE ${gudangDocDate} >= '${dateFrom}' AND ${gudangDocDate} < '${dateToExclusive}'
+      AND RTRIM(ISNULL(h.Status, '')) IN ('2', '5', '6')
       AND ISNULL(RTRIM(CONVERT(varchar(10), i.ItemType)), '') <> '4'
   `
 
+  // Workshop (WS_JOBSTOCK) — patokan tanggal CreateDate-utama, fallback PostDate(≠1900) → TransDate.
+  // Tanpa filter status: cakupan sudah dibatasi TransType = '1' (selaras KPI utama).
+  const workshopDocDate = `COALESCE(NULLIF(s.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate)`
   const workshopQuery = `
     SELECT
       RTRIM(s.ItemCode) AS KodeBarang,
       RTRIM(ISNULL(i.Description, s.ItemCode)) AS NamaBarang,
       RTRIM(ISNULL(i.ProdTypeCode, '')) AS ProductType,
-      COALESCE(NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate) AS Tanggal,
+      ${workshopDocDate} AS Tanggal,
       COALESCE(
         NULLIF(RTRIM(CONVERT(varchar(50), s.JobStockIssueID)), ''),
         NULLIF(RTRIM(CONVERT(varchar(50), s.JobStockID)), ''),
@@ -231,8 +238,8 @@ function buildIssueRowsCte(
     FROM [${database}].[dbo].[WS_JOBSTOCK] s
     LEFT JOIN [${database}].[dbo].[WS_JOB] j ON s.JobID = j.JobID
     LEFT JOIN [${database}].[dbo].[IN_ITEM] i ON s.ItemCode = i.ItemCode AND i.LocCode = s.LocCode
-    WHERE COALESCE(NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate) >= '${dateFrom}'
-      AND COALESCE(NULLIF(s.PostDate, CONVERT(datetime, '1900-01-01')), s.TransDate) < '${dateToExclusive}'
+    WHERE ${workshopDocDate} >= '${dateFrom}'
+      AND ${workshopDocDate} < '${dateToExclusive}'
       AND RTRIM(ISNULL(s.TransType, '')) = '1'
       AND COALESCE(
             NULLIF(RTRIM(CONVERT(varchar(10), i.ItemType)), ''),
@@ -240,10 +247,10 @@ function buildIssueRowsCte(
           ) = '4'
   `
 
-  // Fuel BBM (IN_FUELISSUE/LN) — samakan universe dengan Issued total & evolution rule.
-  // Status 2/6 (posted), doc-date COALESCE PostDate/RefDate (PostDate 1900 di-skip),
-  // non-workshop (ItemType <> '4'), orphan lines ikut (LEFT JOIN master).
-  const fuelDocDate = `COALESCE(NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate, h.CreateDate)`
+  // Fuel BBM (IN_FUELISSUE/LN) — patokan tanggal CreateDate-utama + status posted (2/6),
+  // selaras fuelIssueDocumentDateExpression/fuelIssueStatusFilter di lib/reports/inventory/fuel-issue-sql.ts.
+  // Non-workshop (ItemType <> '4'), orphan lines ikut (LEFT JOIN master).
+  const fuelDocDate = `COALESCE(NULLIF(h.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(h.FuelIssueRefDate, CONVERT(datetime, '1900-01-01')), h.UpdateDate)`
   const fuelQuery = `
     SELECT
       RTRIM(l.ItemCode) AS KodeBarang,

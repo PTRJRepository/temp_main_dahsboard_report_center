@@ -4539,8 +4539,8 @@ async function goodsReturnToSupplier({ limit, search, ctx, filters }: ReportHand
       ? `'${month.toExclusive}'`
       : null
   // Patokan tanggal = CreateDate; PostDate sering placeholder 1900.
-  // Fallback: CreateDate → PostDate(≠1900) → GoodsRetRefDate(≠1900) → UpdateDate.
-  const grDocDate = `COALESCE(NULLIF(gr.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(gr.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(gr.GoodsRetRefDate, CONVERT(datetime, '1900-01-01')), gr.UpdateDate)`
+  // Fallback: CreateDate → PostDate(≠1900) → GoodsRetDate(≠1900) → UpdateDate.
+  const grDocDate = `COALESCE(NULLIF(gr.CreateDate, CONVERT(datetime, '1900-01-01')), NULLIF(gr.PostDate, CONVERT(datetime, '1900-01-01')), NULLIF(gr.GoodsRetDate, CONVERT(datetime, '1900-01-01')), gr.UpdateDate)`
   const returnDateSql = `${grDocDate} >= '${dateFrom}'${dateToExclusive ? `\n      AND ${grDocDate} < ${dateToExclusive}` : ''}`
   const location = sanitizeLike(filters?.location ?? '')
   const locationSql = location ? `\n      AND RTRIM(gr.LocCode) LIKE N'%${location}%'` : ''
