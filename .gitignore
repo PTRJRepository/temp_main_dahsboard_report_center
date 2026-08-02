@@ -7,12 +7,15 @@ yarn-error.log*
 # Environment & secrets
 .env
 .env.local
+.env.development
 .env.development.local
 .env.test.local
 .env.production.local
 .env.production
 env-config.txt
 Dashboard_Utama/env-config.txt
+graphify-out/
+_backup/
 
 # Keys & certificates
 keys/
