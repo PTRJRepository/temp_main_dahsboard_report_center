@@ -118,6 +118,20 @@
     "image": "https://myfirstblog123.hashnode.dev/_next/image?url=https%3A%2F%2Fcdn.hashnode.com%2Fres%2Fhashnode%2Fimage%2Fupload%2Fv1727268180677%2Ff42f8ec4-32c9-4494-af41-c93c68aacf22.jpeg&w=3840&q=75"
   },
   {
+    "id": "basis-panen",
+    "path": "/basis-panen",
+    "servicePath": "/basis-panen",
+    "serviceUrl": "http://localhost:3001/basis-panen",
+    "target": "http://localhost:3002",
+    "name": "Basis Panen",
+    "description": "Kalkulator evaluasi panen PWA (tanpa kredensial)",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false,
+    "public": true,
+    "image": "/assets/kebun sawit.webp"
+  },
+  {
     "id": "report-center",
     "path": "/report-center",
     "servicePath": "/report-center",
