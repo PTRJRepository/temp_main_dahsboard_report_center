@@ -2,9 +2,11 @@ import { cookies } from 'next/headers'
 import UserManagement from '@/components/UserManagement'
 import ServiceTable from '@/components/ServiceTable'
 import AddServiceForm from '@/components/AddServiceForm'
+import AddRoleForm from '@/components/AddRoleForm'
 import PermissionsTable from '@/components/PermissionsTable'
 import { userRepository } from '@/utils/user-repository'
 import { serviceRepository } from '@/utils/service-repository'
+import { roleRepository } from '@/utils/role-repository'
 import { verifyToken } from '@/utils/jwt'
 import Link from 'next/link'
 
@@ -21,6 +23,10 @@ async function getServices() {
 
 async function getPermissions() {
     return await serviceRepository.findAllPermissions()
+}
+
+async function getRoles() {
+    return await roleRepository.findAll()
 }
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
@@ -75,6 +81,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     const users = await getUsers()
     const services = await getServices()
     const permissions = await getPermissions()
+    const roles = await getRoles()
 
     return (
         <div className="space-y-6">
@@ -111,10 +118,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
 
             {tab === 'users' ? (
-                <UserManagement users={users} services={services} />
+                <UserManagement users={users} services={services} roles={roles} />
             ) : (
                 <div className="space-y-8">
-                    <PermissionsTable services={services} permissions={permissions} />
+                    <PermissionsTable services={services} permissions={permissions} roles={roles} />
                     <div className="border-t border-gray-200 pt-8">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Tambah Layanan Baru</h3>
                         <AddServiceForm />
@@ -123,6 +130,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     <div className="mt-8">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Daftar Layanan</h3>
                         <ServiceTable services={services} />
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-8">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Manajemen Peran</h3>
+                        <AddRoleForm roles={roles} />
                     </div>
                 </div>
             )}

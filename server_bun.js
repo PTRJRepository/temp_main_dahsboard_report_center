@@ -4089,11 +4089,11 @@ server = Bun.serve({
         const token = extractToken(req.headers.get('cookie') || '');
         const user = token ? verifyJWT(token) : null;
 
-        // Phase 5: require X-API-Key for /backend/upah, /query, /ifess
+        // Phase 5: require X-API-Key for /query, /ifess
+        // NOTE: /backend/upah has NO x-api-key guard — the upah backend auths via
+        // its own Bearer JWT; the frontend never sends x-api-key, so guarding it
+        // here caused 401s on every /backend/upah/* call (login kick-out loop).
         const hApiKey = req.headers.get('x-api-key'); const reqId = req.headers.get('x-request-id') || 'req_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
-
-        if (reqPath.startsWith('/backend/upah') && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
-        if (reqPath.startsWith('/backend/upah') && hApiKey !== UPATH_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
 
         if (reqPath.startsWith('/query') && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
         if (reqPath.startsWith('/query') && hApiKey !== QUERY_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }

@@ -21,12 +21,18 @@ interface Service {
     path?: string
 }
 
+interface Role {
+    name: string
+    description?: string
+}
+
 interface UserManagementProps {
     users: User[]
     services: Service[]
+    roles: Role[]
 }
 
-export default function UserManagement({ users, services }: UserManagementProps) {
+export default function UserManagement({ users, services, roles }: UserManagementProps) {
     const [showAddForm, setShowAddForm] = useState(false)
 
     return (
@@ -40,10 +46,10 @@ export default function UserManagement({ users, services }: UserManagementProps)
                     Tambah Pengguna Baru
                 </button>
             </div>
-            <AdminTableWrapper users={users} services={services} />
+            <AdminTableWrapper users={users} services={services} roles={roles} />
 
             {showAddForm && (
-                <AddUserForm onClose={() => setShowAddForm(false)} services={services} />
+                <AddUserForm onClose={() => setShowAddForm(false)} services={services} roles={roles} />
             )}
         </div>
     )

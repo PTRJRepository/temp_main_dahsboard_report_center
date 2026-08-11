@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { verifyToken } from '@/utils/jwt'
-import { getGatewayFallbackServices, serviceRepository } from '@/utils/service-repository'
+import { getGatewayFallbackServices, serviceRepository, Service } from '@/utils/service-repository'
+import { userRepository } from '@/utils/user-repository'
 import Link from 'next/link'
 import { Server, Settings, Shield } from 'lucide-react'
 import LogoutButton from '@/components/LogoutButton'
@@ -10,12 +11,35 @@ import ServiceCard from '@/components/ServiceCard'
 // Force Node.js runtime
 export const runtime = 'nodejs'
 
+/**
+ * Services a user may actually access.
+ * = role-based services ∩ per-user AccessControl assignment.
+ * A user gets a service ONLY if their role allows it AND it was explicitly
+ * assigned to them in AccessControl. Admin/fallback (id 0) overrides to all.
+ */
+async function getAccessibleServices(user: { id: number; role: string }): Promise<Service[]> {
+    try {
+        const roleServices = await serviceRepository.findByRole(user.role)
+        const assigned = await userRepository.getUserServices(user.id)
+        if (assigned.length === 0) {
+            // No explicit per-user assignment: fall back to role-based only
+            // (avoids a brand-new user seeing nothing before admin assigns services)
+            return roleServices
+        }
+        const allowed = new Set(assigned)
+        return roleServices.filter(s => allowed.has(s.serviceId))
+    } catch (e) {
+        console.error('Error resolving accessible services:', e)
+        return []
+    }
+}
+
 export default async function DashboardUserPage() {
     const cookieStore = await cookies()
     const token = cookieStore.get('auth-token')?.value ||
         cookieStore.get('payroll_auth_token')?.value
 
-    let user = null
+    let user: { id: number; name: string; email: string; role: string } | null = null
     if (token) {
         const payload = verifyToken(token)
         if (payload) {
@@ -47,7 +71,7 @@ export default async function DashboardUserPage() {
 
     const services = user.id === 0
         ? getGatewayFallbackServices(user.role)
-        : await serviceRepository.findByRole(user.role)
+        : await getAccessibleServices(user)
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">

@@ -8,13 +8,14 @@ import { Shield, Check, X, Loader2 } from 'lucide-react'
 interface PermissionsTableProps {
     services: Service[]
     permissions: RolePermission[]
+    roles: { name: string; description?: string }[]
 }
 
-const ROLES = ['ADMIN', 'KERANI', 'MNGR', 'ASISTEN', 'MANDOR', 'VISITOR'] // Add other roles as needed
-
-export default function PermissionsTable({ services, permissions }: PermissionsTableProps) {
+export default function PermissionsTable({ services, permissions, roles }: PermissionsTableProps) {
     const [isPending, startTransition] = useTransition()
     const [optimisticPermissions, setOptimisticPermissions] = useState<RolePermission[]>(permissions)
+
+    const ROLES = roles.map(r => r.name)
 
     const hasPermission = (role: string, serviceId: string) => {
         return optimisticPermissions.some(p => p.role === role && p.serviceId === serviceId)

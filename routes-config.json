@@ -5,6 +5,7 @@
     "target": "http://localhost:8002",
     "description": "Sistem Penggajian/Payroll (Static dari dist folder)",
     "enabled": true,
+    "public": true,
     "rewriteContent": "html-only",
     "spaIndex": "D:/Gawean Rebinmas/PORTAL_ESTATE/Plantware_Auto_Report/Daftar_Upah_baru/payroll_daftar_upah/refactor_production/frontend/dist/index.html",
     "aliases": [
@@ -72,6 +73,7 @@
     "rewriteContent": false,
     "changeOrigin": false,
     "rewritePath": true,
+    "public": true,
     "image": "https://broadwayshr.com/wp-content/uploads/2024/02/upah-lembur-per-jam-cover.jpg"
   },
   {

@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { userRepository } from '@/utils/user-repository'
 import { serviceRepository } from '@/utils/service-repository'
+import { roleRepository } from '@/utils/role-repository'
+import { syncAddService, syncRemoveService } from '@/utils/route-config-sync'
 
 // USER ACTIONS
 export async function createUser(formData: FormData) {
@@ -22,10 +24,11 @@ export async function createUser(formData: FormData) {
         return { error: 'Password minimal 6 karakter' }
     }
 
-    // Validate role
-    const validRoles = ['ADMIN', 'KERANI', 'ACCOUNTING', 'VISITOR']
-    if (!validRoles.includes(role)) {
-        return { error: 'Peran tidak valid' }
+    // Validate role against dynamic role registry
+    const validRoles = await roleRepository.findAll()
+    const roleIsValid = validRoles.some(r => r.name.toUpperCase() === String(role).trim().toUpperCase())
+    if (!roleIsValid) {
+        return { error: `Peran tidak valid: ${role}. Peran terdaftar: ${validRoles.map(r => r.name).join(', ')}` }
     }
 
     // Validate divisi for KERANI role
@@ -87,10 +90,11 @@ export async function updateUser(userId: string, formData: FormData) {
         return { error: 'Password minimal 6 karakter' }
     }
 
-    // Validate role
-    const validRoles = ['ADMIN', 'KERANI', 'ACCOUNTING', 'VISITOR']
-    if (!validRoles.includes(role)) {
-        return { error: 'Peran tidak valid' }
+    // Validate role against dynamic role registry
+    const validRoles = await roleRepository.findAll()
+    const roleIsValid = validRoles.some(r => r.name.toUpperCase() === String(role).trim().toUpperCase())
+    if (!roleIsValid) {
+        return { error: `Peran tidak valid: ${role}` }
     }
 
     // Validate divisi for KERANI role
@@ -186,8 +190,23 @@ export async function addService(formData: FormData) {
             imagePath: imagePath || null
         })
 
+        // Sinkron ke proxy gateway routes-config (dev + production)
+        const syncResult = syncAddService({
+            serviceId,
+            name,
+            description: description || '',
+            serviceUrl,
+            path: path || undefined,
+            enabled: true,
+            imagePath: imagePath || null
+        })
+
         revalidatePath('/admin')
-        return { message: 'Service berhasil ditambahkan' }
+        return {
+            message: syncResult.dev && syncResult.prod
+                ? 'Service berhasil ditambahkan dan disinkronkan ke proxy gateway'
+                : 'Service ditambahkan, tapi sinkronisasi routes-config sebagian gagal'
+        }
     } catch (e) {
         console.error('Error adding service:', e)
         return { error: 'Gagal menambahkan service' }
@@ -197,8 +216,16 @@ export async function addService(formData: FormData) {
 export async function deleteService(serviceId: string) {
     try {
         await serviceRepository.delete(serviceId)
+
+        // Hapus juga dari routes-config proxy (dev + production)
+        const syncResult = syncRemoveService(serviceId)
+
         revalidatePath('/admin')
-        return { message: 'Service berhasil dihapus' }
+        return {
+            message: syncResult.dev && syncResult.prod
+                ? 'Service berhasil dihapus dari registry dan proxy gateway'
+                : 'Service dihapus, tapi sinkronisasi routes-config sebagian gagal'
+        }
     } catch (e) {
         return { error: 'Gagal menghapus service' }
     }

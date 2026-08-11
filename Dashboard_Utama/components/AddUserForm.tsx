@@ -11,16 +11,22 @@ interface Service {
     path?: string
 }
 
+interface Role {
+    name: string
+    description?: string
+}
+
 interface AddUserFormProps {
     onClose: () => void
     services: Service[]
+    roles: Role[]
 }
 
-export default function AddUserForm({ onClose, services }: AddUserFormProps) {
+export default function AddUserForm({ onClose, services, roles }: AddUserFormProps) {
     const formRef = useRef<HTMLFormElement>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [selectedRole, setSelectedRole] = useState('KERANI')
+    const [selectedRole, setSelectedRole] = useState(roles.length > 0 ? roles[0].name : '')
 
     // Services selection state
     const [selectedServices, setSelectedServices] = useState<string[]>([])
@@ -214,12 +220,12 @@ export default function AddUserForm({ onClose, services }: AddUserFormProps) {
                                 onChange={(e) => setSelectedRole(e.target.value)}
                                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 bg-gray-50 focus:ring-2 focus:ring-palm-green focus:border-transparent transition-all"
                             >
-                                <option value="KERANI" className="text-gray-900">Kerani</option>
-                                <option value="AKUNTING" className="text-gray-900">Akunting</option>
-                                <option value="HRD" className="text-gray-900">HRD</option>
-                                <option value="PAJAK" className="text-gray-900">Pajak</option>
-                                <option value="VISITOR" className="text-gray-900">Visitor</option>
-                                <option value="ADMIN" className="text-gray-900">Admin</option>
+                                {roles.length === 0 && <option value="">Peran kosong — tambah dulu di Manajemen Peran</option>}
+                                {roles.map(r => (
+                                    <option key={r.name} value={r.name} className="text-gray-900">
+                                        {r.name.charAt(0) + r.name.slice(1).toLowerCase()}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 

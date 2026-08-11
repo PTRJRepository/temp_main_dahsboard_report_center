@@ -237,6 +237,19 @@ async function setupAndSeed() {
             END
         `);
 
+        // ROLE REGISTRY TABLE (dynamic roles)
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='role_ptrj' AND xtype='U')
+            BEGIN
+                CREATE TABLE role_ptrj (
+                    name NVARCHAR(50) PRIMARY KEY,
+                    description NVARCHAR(255),
+                    createdAt DATETIME DEFAULT GETDATE(),
+                    updatedAt DATETIME DEFAULT GETDATE()
+                );
+            END
+        `);
+
         // 3. Seed Users
         console.log('\nSeeding/Updating users...');
         for (const user of usersToSeed) {
@@ -360,6 +373,30 @@ async function setupAndSeed() {
                     .input('role', sql.NVarChar, 'VISITOR')
                     .input('sid', sql.NVarChar, sid)
                     .query('INSERT INTO role_service_permission (role, serviceId) VALUES (@role, @sid)');
+            }
+        }
+
+        console.log('\nSeeding role registry...');
+        const defaultRoles = [
+            { name: 'ADMIN', description: 'Administrator penuh' },
+            { name: 'KERANI', description: 'Kerani divisi' },
+            { name: 'AKUNTING', description: 'Bagian Akunting' },
+            { name: 'HRD', description: 'Human Resource Development' },
+            { name: 'PAJAK', description: 'Bagian Perpajakan' },
+            { name: 'VISITOR', description: 'Hanya lihat' },
+            { name: 'MNGR', description: 'Manager' },
+            { name: 'ASISTEN', description: 'Asisten' },
+            { name: 'MANDOR', description: 'Mandor' }
+        ];
+        for (const r of defaultRoles) {
+            const checkRole = await pool.request()
+                .input('name', sql.NVarChar, r.name)
+                .query('SELECT name FROM role_ptrj WHERE name = @name');
+            if (checkRole.recordset.length === 0) {
+                await pool.request()
+                    .input('name', sql.NVarChar, r.name)
+                    .input('desc', sql.NVarChar, r.description)
+                    .query('INSERT INTO role_ptrj (name, description) VALUES (@name, @desc)');
             }
         }
 

@@ -21,12 +21,18 @@ interface Service {
     path?: string
 }
 
+interface Role {
+    name: string
+    description?: string
+}
+
 interface AdminTableWrapperProps {
     users: User[]
     services: Service[]
+    roles: Role[]
 }
 
-export default function AdminTableWrapper({ users, services }: AdminTableWrapperProps) {
+export default function AdminTableWrapper({ users, services, roles }: AdminTableWrapperProps) {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [editingUser, setEditingUser] = useState<User | null>(null)
@@ -98,6 +104,7 @@ export default function AdminTableWrapper({ users, services }: AdminTableWrapper
                 <EditUserModal
                     user={editingUser}
                     services={services}
+                    roles={roles}
                     onClose={() => {
                         setEditingUser(null)
                         router.refresh()
