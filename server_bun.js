@@ -19,7 +19,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from '
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { Buffer } from 'node:buffer';
-import { createVerify } from 'node:crypto';
+import { verifyJWT, extractToken } from './shared/auth/jwt.js';
+import {
+    isProtectedPath, isDashboardPublicPath, isDashboardPath,
+    redirectToLogin, wantsJson,
+} from './shared/auth/paths.js';
 import { promises as dnsPromises } from 'node:dns';
 import { createSocket } from 'node:dgram';
 import { Socket } from 'node:net';
@@ -108,77 +112,9 @@ class LRUCache {
 // Static asset cache — long TTL, keyed by path + query
 const assetCache = new LRUCache(CACHE_MAX_SIZE * 2, 30 * 60 * 1000);
 
-// ─── JWT Verification (lightweight, no crypto.sign overhead) ─────────────────
-const JWT_PUBLIC_KEY = readFileSync(`${ROOT_DIR}/keys/public.pem`, 'utf-8').trim();
-
-function verifyJWT(token) {
-    if (!token) return null;
-    try {
-        const parts = token.split('.');
-        if (parts.length !== 3) return null;
-        const [headerB64, payloadB64, signatureB64] = parts;
-        const header = decodeJwtSegment(headerB64);
-        if (header.alg !== 'RS256') return null;
-
-        const verifier = createVerify('RSA-SHA256');
-        verifier.update(`${headerB64}.${payloadB64}`);
-        verifier.end();
-        if (!verifier.verify(JWT_PUBLIC_KEY, base64UrlToBuffer(signatureB64))) return null;
-
-        const payload = decodeJwtSegment(payloadB64);
-        if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-        return payload;
-    } catch { return null; }
-}
-
-function base64UrlToBuffer(value) {
-    const padded = value + '='.repeat((4 - value.length % 4) % 4);
-    return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-}
-
-function decodeJwtSegment(value) {
-    return JSON.parse(base64UrlToBuffer(value).toString('utf8'));
-}
-
-function extractToken(cookieHeader) {
-    if (!cookieHeader) return null;
-    const match = cookieHeader.match(/(?:^|;\s*)(?:auth-token|payroll_auth_token)=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
-}
-
-// ─── Public & Protected Path Definitions ──────────────────────────────────────
-const PUBLIC_PATHS = new Set(['/', '/login', '/logout', '/favicon.ico']);
-const DASHBOARD_PUBLIC_PREFIXES = ['/_next', '/assets', '/api/auth'];
-const DASHBOARD_PATHS = ['/admin', '/dashboard', '/dashboard-user', '/modules', '/report-center', '/api/services', '/api/reports', '/ifess-control', '/api/ifess', '/api/query-gateway'];
-const PROTECTED_PATHS = ['/config-path', ...DASHBOARD_PATHS];
-
-function isProtectedPath(pathname) {
-    return PROTECTED_PATHS.some(p => pathname.startsWith(p));
-}
-
-function isDashboardPublicPath(pathname) {
-    return PUBLIC_PATHS.has(pathname) || DASHBOARD_PUBLIC_PREFIXES.some(p => pathname.startsWith(p));
-}
-
-function isDashboardPath(pathname) {
-    return isDashboardPublicPath(pathname) || DASHBOARD_PATHS.some(p => pathname.startsWith(p));
-}
-
-function wantsJson(req, pathname) {
-    const accept = req.headers.get('accept') || '';
-    return pathname.startsWith('/api/') || accept.includes('application/json') || req.method !== 'GET';
-}
-
-function redirectToLogin(req, pathname, search = '') {
-    if (wantsJson(req, pathname)) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-            status: 401,
-            headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Proxy' },
-        });
-    }
-    const returnTo = encodeURIComponent(pathname + search);
-    return Response.redirect(`/login?returnTo=${returnTo}`, 302);
-}
+// ─── Auth: JWT verification + path protection (extracted to shared/auth/) ──────
+// verifyJWT now takes ROOT_DIR — wrap it to preserve the no-arg call sites.
+const verifyJwtForRoot = (token) => verifyJWT(token, ROOT_DIR);
 
 // ─── IFESS Control Server Handler (Bun Native) ─────────────────────────────────
 const IFESS_API_KEY = process.env.IFESS_API_KEY || 'ptrj-rebinmas-air-ruak-parit-gunung-darul';
@@ -4001,7 +3937,7 @@ server = Bun.serve({
         // Runtime monitoring snapshot for Server Monitor and Network Monitor.
         if (reqPath === '/api/monitoring/host-labels') {
             const monitoringToken = extractToken(req.headers.get('cookie') || '');
-            const monitoringUser = monitoringToken ? verifyJWT(monitoringToken) : null;
+            const monitoringUser = monitoringToken ? verifyJwtForRoot(monitoringToken) : null;
             if (!monitoringUser) return redirectToLogin(req, reqPath, url.search);
 
             if (req.method === 'GET') {
@@ -4031,7 +3967,7 @@ server = Bun.serve({
 
         if (reqPath === '/api/monitoring/host-labels/delete') {
             const monitoringToken = extractToken(req.headers.get('cookie') || '');
-            const monitoringUser = monitoringToken ? verifyJWT(monitoringToken) : null;
+            const monitoringUser = monitoringToken ? verifyJwtForRoot(monitoringToken) : null;
             if (!monitoringUser) return redirectToLogin(req, reqPath, url.search);
             if (req.method !== 'DELETE') return jsonResp(405, { success: false, error: 'Method not allowed' });
 
@@ -4050,7 +3986,7 @@ server = Bun.serve({
 
         if (reqPath === '/api/monitoring/discovery/refresh') {
             const monitoringToken = extractToken(req.headers.get('cookie') || '');
-            const monitoringUser = monitoringToken ? verifyJWT(monitoringToken) : null;
+            const monitoringUser = monitoringToken ? verifyJwtForRoot(monitoringToken) : null;
             if (!monitoringUser) return redirectToLogin(req, reqPath, url.search);
             scheduleLanDiscoveryRefresh(url.searchParams.get('reason') || 'manual-api');
             return jsonResp(202, {
@@ -4064,7 +4000,7 @@ server = Bun.serve({
 
         if (reqPath === '/api/monitoring/snapshot') {
             const monitoringToken = extractToken(req.headers.get('cookie') || '');
-            const monitoringUser = monitoringToken ? verifyJWT(monitoringToken) : null;
+            const monitoringUser = monitoringToken ? verifyJwtForRoot(monitoringToken) : null;
             if (!monitoringUser) return redirectToLogin(req, reqPath, url.search);
             return jsonResp(200, await getMonitoringSnapshot({
                 forceDiscovery: url.searchParams.get('forceDiscovery') === '1',
@@ -4079,7 +4015,7 @@ server = Bun.serve({
         const route = directRoute || refererRoute;
         const routeReqPath = directRoute ? reqPath : `${route?.path || ''}${reqPath}`;
         const token = extractToken(req.headers.get('cookie') || '');
-        const user = token ? verifyJWT(token) : null;
+        const user = token ? verifyJwtForRoot(token) : null;
 
         // Phase 5: require X-API-Key for /query, /ifess
         // NOTE: /backend/upah has NO x-api-key guard — the upah backend auths via
