@@ -21,7 +21,7 @@ Browser → Next.js :3001 → MSSQL (db_ptrj / db_ptrj_mill)
 
 ### Next.js App (Dashboard_Utama)
 - Route handlers in `app/api/`
-- Report viewers in `app/report-center/`
+- Report viewers in `app/(report-center)/` (thin pages) backed by the self-contained `modules/report-center/` module
 - iFESS dashboard in `app/ifess-control/`
 
 ### Express Gateway (server.js)

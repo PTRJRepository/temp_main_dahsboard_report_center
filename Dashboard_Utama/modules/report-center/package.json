@@ -1,0 +1,18 @@
+{
+  "name": "report-center-module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Report Center module for PT Rebinmas Main Dashboard. Self-contained (components/store/lib) so it can be extracted into its own micro-repo. Root app is the central hub; this folder is one service module.",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@tanstack/react-query": "^5.100.10",
+    "framer-motion": "^12.23.25",
+    "lucide-react": "^0.555.0",
+    "next": "16.0.7",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "recharts": "^3.10.0",
+    "zustand": "^5.0.13"
+  },
+  "scripts": {}
+}
