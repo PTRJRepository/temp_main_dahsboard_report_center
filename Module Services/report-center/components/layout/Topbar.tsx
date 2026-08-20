@@ -1,8 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bell, ChevronLeft, Database, Globe2, Menu, Search } from 'lucide-react'
-import { usePathname } from 'next/navigation'
+import { Bell, CalendarDays, ChevronLeft, Database, Globe2, Menu, Search, Server } from 'lucide-react'
+import { usePathname, useSearchParams } from 'next/navigation'
+import {
+  SQL_GATEWAY_FALLBACK,
+  SQL_GATEWAY_PRESETS,
+  SQL_GATEWAY_PRIMARY,
+} from '@/lib/reports/sql-gateway-config'
+import {
+  readClientSqlGatewayBase,
+  writeClientSqlGatewayBase,
+} from '@/lib/reports/sql-gateway-client'
 
 const LABELS: Record<string, string> = {
   inventory: 'Inventory',
@@ -23,12 +32,21 @@ type UserProfile = {
 }
 
 type ReportSource = 'estate' | 'pabrik'
+type ActivePeriod = { period: string; label: string }
 
 const REPORT_SOURCE_STORAGE_KEY = 'report-center:last-source'
 const REPORT_SOURCES: Array<{ id: ReportSource; label: string; shortLabel: string; description: string }> = [
   { id: 'estate', label: 'Estate / Kebun', shortLabel: 'Estate', description: 'SERVER_PROFILE_2 / db_ptrj' },
   { id: 'pabrik', label: 'Pabrik', shortLabel: 'Pabrik', description: 'SERVER_PROFILE_3 / db_ptrj_mill' },
 ]
+
+function shortGatewayLabel(base: string) {
+  if (base.includes('10.0.0.110') && base.includes(':8001')) return '10.0.0.110'
+  if (base.includes('localhost') && base.includes(':8001')) return 'localhost'
+  if (base.includes('10.0.0.110') && base.includes('3001')) return '110:3001'
+  if (base.includes('localhost') && base.includes('3001')) return 'local:3001'
+  return base.replace(/^https?:\/\//, '').slice(0, 18)
+}
 
 function roleLabel(role?: string) {
   const normalized = String(role ?? '').trim().toLowerCase()
@@ -86,17 +104,28 @@ function pageTitle(pathname: string) {
 
 export default function Topbar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const sourceParam = searchParams.get('source')
+  const periodParam = searchParams.get('period')
   const searchRef = useRef<HTMLInputElement>(null)
+  const gatewayMenuRef = useRef<HTMLDivElement>(null)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
-  const [reportSource, setReportSource] = useState<ReportSource>('estate')
+  const [reportSource, setReportSource] = useState<ReportSource>(() => normalizeSource(sourceParam))
+  const [activePeriod, setActivePeriod] = useState<ActivePeriod | null>(() => periodParam ? { period: periodParam, label: periodParam } : null)
+  const [gatewayBase, setGatewayBase] = useState(SQL_GATEWAY_PRIMARY)
+  const [gatewayOpen, setGatewayOpen] = useState(false)
+  const [gatewayOnline, setGatewayOnline] = useState<boolean | null>(null)
   const [title, subtitle] = pageTitle(pathname)
   const name = displayName(currentUser)
   const role = roleLabel(currentUser?.role)
 
   useEffect(() => {
-    setCurrentUser(readStoredUser())
-    const params = new URLSearchParams(window.location.search)
-    setReportSource(normalizeSource(params.get('source') ?? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY)))
+    window.queueMicrotask(() => {
+      setCurrentUser(readStoredUser())
+      const params = new URLSearchParams(window.location.search)
+      setReportSource(normalizeSource(params.get('source') ?? window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY)))
+      setGatewayBase(readClientSqlGatewayBase())
+    })
     const handler = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
@@ -108,12 +137,60 @@ export default function Topbar() {
     const handleSourceChange = (event: Event) => {
       setReportSource(normalizeSource((event as CustomEvent<string>).detail))
     }
+    const handleGatewayChange = (event: Event) => {
+      setGatewayBase(String((event as CustomEvent<string>).detail || SQL_GATEWAY_PRIMARY))
+    }
+    const handlePeriodChange = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<ActivePeriod>>).detail
+      const period = String(detail?.period ?? '').trim()
+      const label = String(detail?.label ?? period).trim()
+      setActivePeriod(period ? { period, label: label || period } : null)
+    }
     window.addEventListener('report-center-source-change', handleSourceChange)
+    window.addEventListener('report-center-gateway-change', handleGatewayChange)
+    window.addEventListener('report-center-period-change', handlePeriodChange)
     return () => {
       window.removeEventListener('keydown', handler)
       window.removeEventListener('report-center-source-change', handleSourceChange)
+      window.removeEventListener('report-center-gateway-change', handleGatewayChange)
+      window.removeEventListener('report-center-period-change', handlePeriodChange)
     }
-  }, [])
+  }, [sourceParam])
+
+  useEffect(() => {
+    if (periodParam) setActivePeriod({ period: periodParam, label: periodParam })
+  }, [periodParam])
+
+  useEffect(() => {
+    if (!pathname.startsWith('/report-center')) return
+    let cancelled = false
+    const check = async () => {
+      try {
+        const params = new URLSearchParams({ source: reportSource, gatewayBase })
+        const res = await fetch(`/api/reports/system-status?${params.toString()}`, {
+          cache: 'no-store',
+          headers: { 'x-sql-gateway-base': gatewayBase },
+        })
+        const data = (await res.json().catch(() => ({}))) as { gatewayOnline?: boolean }
+        if (!cancelled) setGatewayOnline(Boolean(data.gatewayOnline))
+      } catch {
+        if (!cancelled) setGatewayOnline(false)
+      }
+    }
+    void check()
+    return () => {
+      cancelled = true
+    }
+  }, [gatewayBase, pathname, reportSource])
+
+  useEffect(() => {
+    if (!gatewayOpen) return
+    const onDoc = (event: MouseEvent) => {
+      if (!gatewayMenuRef.current?.contains(event.target as Node)) setGatewayOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [gatewayOpen])
 
   const openSidebar = () => document.getElementById('mobile-sidebar-opener')?.click()
 
@@ -128,17 +205,23 @@ export default function Topbar() {
     }
   }
 
+  const selectGateway = (base: string) => {
+    const next = writeClientSqlGatewayBase(base)
+    setGatewayBase(next)
+    setGatewayOpen(false)
+  }
+
   const openGlobalSearch = () => {
     window.dispatchEvent(new CustomEvent('report-center-open-search'))
     searchRef.current?.blur()
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-[78px] shrink-0 items-center gap-4 border-b border-[#E2E8F0] bg-white px-4 text-slate-950 shadow-sm lg:px-7">
+    <header className="sticky top-0 z-30 flex h-[78px] shrink-0 items-center gap-4 border-b border-[var(--rc-border)] bg-[#0b1018]/92 px-4 text-[var(--rc-text)] shadow-none backdrop-blur-xl lg:px-7">
       <button
         type="button"
         onClick={openSidebar}
-        className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+        className="rounded-xl p-2 text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)] lg:hidden"
         aria-label="Buka sidebar"
       >
         <Menu size={20} />
@@ -147,7 +230,7 @@ export default function Topbar() {
       <div className="flex min-w-[220px] items-center gap-3">
         <button
           type="button"
-          className="hidden h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 lg:grid"
+          className="hidden h-10 w-10 place-items-center rounded-xl border border-[var(--rc-border)] bg-white/5 text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)] lg:grid"
           aria-label="Navigasi"
         >
           <ChevronLeft size={18} />
@@ -167,7 +250,7 @@ export default function Topbar() {
             placeholder="Cari laporan, kategori, atau kata kunci..."
             onFocus={openGlobalSearch}
             onClick={openGlobalSearch}
-            className="h-[42px] w-full rounded-xl border border-[#DDE5EF] bg-white pl-10 pr-20 text-sm font-medium text-slate-950 outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+            className="h-[42px] w-full rounded-xl border border-[var(--rc-border)] bg-[#0f172a]/90 pl-10 pr-20 text-sm font-medium text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-[var(--rc-accent)] focus:ring-4 focus:ring-amber-500/10"
           />
           <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
             Ctrl + K
@@ -178,20 +261,66 @@ export default function Topbar() {
       <div className="ml-auto flex items-center gap-2">
         <button
           type="button"
-          className="hidden h-[42px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:inline-flex"
+          className="hidden h-[42px] items-center gap-2 rounded-xl border border-[var(--rc-border)] bg-white/5 px-3 text-sm font-semibold text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)] sm:inline-flex"
         >
           <Globe2 size={16} />
           ID
         </button>
+        {pathname.startsWith('/report-center') ? (
+          <div ref={gatewayMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setGatewayOpen((open) => !open)}
+              title={`SQL Gateway: ${gatewayBase} (default ${SQL_GATEWAY_PRIMARY}, fallback ${SQL_GATEWAY_FALLBACK})`}
+              className="inline-flex h-[42px] max-w-[190px] items-center gap-2 rounded-xl border border-[var(--rc-border)] bg-white/5 px-3 text-xs font-bold text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
+            >
+              <Server size={15} />
+              <span className="truncate">{shortGatewayLabel(gatewayBase)}</span>
+              <span
+                className={[
+                  'h-2 w-2 shrink-0 rounded-full',
+                  gatewayOnline === null ? 'bg-slate-500' : gatewayOnline ? 'bg-emerald-400' : 'bg-rose-400',
+                ].join(' ')}
+                aria-hidden
+              />
+            </button>
+            {gatewayOpen ? (
+              <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[280px] rounded-xl border border-[var(--rc-border)] bg-[#0f172a] p-2 shadow-xl">
+                <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Koneksi SQL Gateway
+                </p>
+                <p className="px-2 pb-2 text-[11px] leading-4 text-slate-500">
+                  Default {SQL_GATEWAY_PRIMARY.replace('http://', '')}. Fallback {SQL_GATEWAY_FALLBACK.replace('http://', '')}.
+                </p>
+                {SQL_GATEWAY_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => selectGateway(preset.baseUrl)}
+                    className={[
+                      'mb-1 flex w-full flex-col rounded-lg px-2.5 py-2 text-left transition',
+                      gatewayBase === preset.baseUrl
+                        ? 'bg-[var(--rc-accent)]/20 text-[var(--rc-text)] ring-1 ring-[var(--rc-accent)]/40'
+                        : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
+                    ].join(' ')}
+                  >
+                    <span className="text-xs font-bold">{preset.label}</span>
+                    <span className="text-[11px] opacity-80">{preset.baseUrl}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <button
           type="button"
-          className="relative grid h-[42px] w-[42px] place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+          className="relative grid h-[42px] w-[42px] place-items-center rounded-xl border border-[var(--rc-border)] bg-white/5 text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]"
           aria-label="Notification"
         >
           <Bell size={18} />
-          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#22C55E]" />
+          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--rc-accent)]" />
         </button>
-        <div className="hidden h-[42px] items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm lg:flex">
+        <div className="hidden h-[42px] items-center rounded-xl border border-[var(--rc-border)] bg-white/5 p-1 shadow-none lg:flex">
           {REPORT_SOURCES.map((source) => (
             <button
               key={source.id}
@@ -201,8 +330,8 @@ export default function Topbar() {
               className={[
                 'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-extrabold transition',
                 reportSource === source.id
-                  ? 'bg-[#16834A] text-white shadow-sm'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
+                  ? 'bg-[var(--rc-accent)] text-slate-950 shadow-none'
+                  : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
               ].join(' ')}
             >
               <Database size={13} />
@@ -210,8 +339,19 @@ export default function Topbar() {
             </button>
           ))}
         </div>
-        <div className="flex h-[42px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-2.5 pr-3 hover:bg-slate-50">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#16834A] text-xs font-bold text-white">{initials(name)}</span>
+        {pathname.startsWith('/report-center/procurement') && activePeriod ? (
+          <div
+            className="hidden h-[42px] max-w-[230px] items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 text-xs font-black text-amber-100 lg:inline-flex"
+            title={`Periode aktif procurement: ${activePeriod.label} (${activePeriod.period})`}
+          >
+            <CalendarDays size={14} />
+            <span className="text-amber-100/60">Periode</span>
+            <span className="truncate tabular-nums">{activePeriod.label}</span>
+            <span className="rounded-md bg-black/25 px-1.5 py-0.5 text-[10px] text-amber-100/70">{activePeriod.period}</span>
+          </div>
+        ) : null}
+        <div className="flex h-[42px] items-center gap-3 rounded-xl border border-[var(--rc-border)] bg-white/5 px-2.5 pr-3 hover:bg-white/10">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--rc-accent)] text-xs font-bold text-slate-950">{initials(name)}</span>
           <span className="hidden text-left lg:block">
             <span className="block text-sm font-bold leading-tight text-slate-900">{name}</span>
             <span className="block text-[11px] font-medium text-slate-500">{role} · {sourceLabel(reportSource)}</span>

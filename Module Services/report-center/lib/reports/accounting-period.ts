@@ -31,6 +31,10 @@ function padMonth(month: number) {
   return String(month).padStart(2, '0')
 }
 
+function nextActualMonth(year: number, month: number) {
+  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
+}
+
 export function normalizeAccountingMonth(value: string | number | null | undefined) {
   const month = toInteger(value)
   return month !== null && month >= 1 && month <= 12 ? month : null
@@ -90,6 +94,49 @@ export function actualToAccountingPeriod(
     accMonth,
     accountingPeriod: `${accYear}-${padMonth(accMonth)}`,
   }
+}
+
+export function actualPeriodBounds(
+  actualYearValue: string | number | null | undefined,
+  actualMonthValue: string | number | null | undefined,
+) {
+  const actualYear = normalizeAccountingYear(actualYearValue)
+  const actualMonth = normalizeAccountingMonth(actualMonthValue)
+  if (actualYear === null || actualMonth === null) return null
+
+  const next = nextActualMonth(actualYear, actualMonth)
+  return {
+    startInclusive: `${actualYear}-${padMonth(actualMonth)}-01`,
+    endExclusive: `${next.year}-${padMonth(next.month)}-01`,
+  }
+}
+
+/** Actual period 'YYYY-MM' di zona waktu Asia/Jakarta untuk tanggal `now`. */
+export function currentActualPeriodJakarta(now: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now)
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
+  return { year: Number(get('year')), month: Number(get('month')), period: `${get('year')}-${get('month')}` }
+}
+
+/**
+ * True bila (actualYear, actualMonth) adalah bulan CLOSED — yaitu lebih awal dari
+ * bulan berjalan di Asia/Jakarta. Bulan berjalan (current) dan masa depan = false
+ * (data masih berubah, tidak boleh diagregasi).
+ */
+export function isClosedActualPeriod(
+  actualYearValue: string | number | null | undefined,
+  actualMonthValue: string | number | null | undefined,
+  now: Date = new Date(),
+) {
+  const actualYear = normalizeAccountingYear(actualYearValue)
+  const actualMonth = normalizeAccountingMonth(actualMonthValue)
+  if (actualYear === null || actualMonth === null) return false
+  const current = currentActualPeriodJakarta(now)
+  return actualYear < current.year || (actualYear === current.year && actualMonth < current.month)
 }
 
 export function sqlIntegerExpression(expression: string) {

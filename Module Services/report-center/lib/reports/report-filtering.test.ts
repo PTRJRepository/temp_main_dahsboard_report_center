@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
+import { mergeReportFilterAction } from './report-detail-performance'
 import {
   applyReportFilters,
+  filtersFromReportFilterAction,
   filtersFromSearchParams,
   hasActiveReportFilters,
   inferReportSchema,
+  normalizeInventoryAnalysisGroupFilters,
   parseNaturalFilterLocally,
   validateNaturalLanguageReadOnly,
   validateReadOnlySql,
@@ -162,7 +165,7 @@ const filtered = applyReportFilters(
     ],
     columns: ['Tanggal', 'Gudang', 'Kendaraan', 'NamaFuel', 'QtyFuel', 'Amount'],
     summary: {},
-    chart: [],
+    chart: [] as Record<string, unknown>[],
     metadata: {},
   },
   {
@@ -183,8 +186,125 @@ assert.equal(filtered.rows.length, 1)
 assert.equal(filtered.rows[0].NamaFuel, 'DIESEL')
 assert.equal((filtered.summary as Record<string, unknown>).FilteredRows, 1)
 
+const groupedValuation = applyReportFilters(
+  {
+    rows: [
+      { product_type_code: 'SPARE', item_code: 'A', total_amount: 100, total_quantity: 1 },
+      { product_type_code: 'SPARE', item_code: 'B', total_amount: 250, total_quantity: 2 },
+      { product_type_code: 'TOOLS', item_code: 'C', total_amount: 75, total_quantity: 1 },
+    ],
+    columns: ['product_type_code', 'item_code', 'total_amount', 'total_quantity'],
+    summary: { total_item: 1420, total_amount: 3413952950.27 },
+    chart: [] as Record<string, unknown>[],
+    metadata: { filteredRows: 1420, totalRows: 1420 },
+  },
+  { groupBy: 'product_type_code' },
+)
+assert.equal((groupedValuation.summary as Record<string, unknown>).total_item, 1420)
+assert.equal((groupedValuation.summary as Record<string, unknown>).total_amount, 3413952950.27)
+assert.equal((groupedValuation.metadata as Record<string, unknown>).filteredRows, 1420)
+assert.equal(groupedValuation.chart?.[0]?.Label, 'SPARE')
+
 const movementCategoryParams = filtersFromSearchParams(new URLSearchParams('movementCategory=Fast+Moving'))
 assert.equal(movementCategoryParams.movementCategory, 'Fast Moving')
+
+const movementDefinitionParams = filtersFromSearchParams(new URLSearchParams('movementFastMin=10&movementMovingMin=3&movementMovingMax=9&movementSlowCount=2'))
+assert.equal(movementDefinitionParams.movementFastMin, 10)
+assert.equal(movementDefinitionParams.movementMovingMin, 3)
+assert.equal(movementDefinitionParams.movementMovingMax, 9)
+assert.equal(movementDefinitionParams.movementSlowCount, 2)
+
+const itemTypeParams = filtersFromSearchParams(new URLSearchParams('itemType=workshop'))
+assert.equal(itemTypeParams.itemType, 'workshop')
+
+const officialMonthlyParams = filtersFromSearchParams(new URLSearchParams('include_workshop_item=No&analysis_group=Product+Type+Code&prodTypeCode=SUND'))
+assert.equal(officialMonthlyParams.includeWorkshopItem, 'No')
+assert.equal(officialMonthlyParams.itemType, 'gudang')
+assert.equal(officialMonthlyParams.groupBy, 'Product Type Code')
+assert.equal(officialMonthlyParams.productType, 'SUND')
+
+const normalizedOfficialMonthlyParams = normalizeInventoryAnalysisGroupFilters(officialMonthlyParams)
+assert.equal(normalizedOfficialMonthlyParams.groupBy, 'ProductTypeCode')
+assert.equal(normalizedOfficialMonthlyParams.chartDimension, 'ProductTypeCode')
+
+const taxonomyParams = filtersFromSearchParams(new URLSearchParams('productType=SP&productCategory=CHEM&productBrand=NALCO&productModel=X1&productMaterial=SS'))
+assert.equal(taxonomyParams.productType, 'SP')
+assert.equal(taxonomyParams.productCategory, 'CHEM')
+assert.equal(taxonomyParams.productBrand, 'NALCO')
+assert.equal(taxonomyParams.productModel, 'X1')
+assert.equal(taxonomyParams.productMaterial, 'SS')
+
+const productTypeScope = normalizeInventoryAnalysisGroupFilters({
+  stockAnalysis: 'MEMOV',
+  category: 'MEMOV',
+  productType: 'CHEM-O',
+  groupBy: 'ProductTypeCode',
+  chartDimension: 'StockAnalysisCode',
+})
+assert.equal(productTypeScope.stockAnalysis, undefined)
+assert.equal(productTypeScope.category, undefined)
+assert.equal(productTypeScope.productType, 'CHEM-O')
+assert.equal(productTypeScope.groupBy, 'ProductTypeCode')
+assert.equal(productTypeScope.chartDimension, 'ProductTypeCode')
+
+// Stock Analysis Code removed — legacy SA group maps to ProductTypeCode and SA filters clear.
+const stockAnalysisScope = normalizeInventoryAnalysisGroupFilters({
+  stockAnalysis: 'MEMOV',
+  productType: 'CHEM-O',
+  groupBy: 'StockAnalysisCode',
+})
+assert.equal(stockAnalysisScope.stockAnalysis, undefined)
+assert.equal(stockAnalysisScope.category, undefined)
+assert.equal(stockAnalysisScope.groupBy, 'ProductTypeCode')
+assert.equal(stockAnalysisScope.chartDimension, 'ProductTypeCode')
+
+const stockAnalysisParams = filtersFromSearchParams(new URLSearchParams('stockAnalysis=DEADS'))
+// URL may still parse the raw param, but normalize path clears SA on analysis-group normalize.
+assert.equal(stockAnalysisParams.stockAnalysis, 'DEADS')
+const stockAnalysisNormalized = normalizeInventoryAnalysisGroupFilters(stockAnalysisParams)
+assert.equal(stockAnalysisNormalized.stockAnalysis, undefined)
+assert.equal(stockAnalysisNormalized.category, undefined)
+
+const movementFilterAction = filtersFromReportFilterAction({
+  type: 'set-filter',
+  semanticDimensionId: 'movement-category',
+  field: 'MovementCategory',
+  value: 'Fast Moving',
+})
+assert.equal(movementFilterAction.movementCategory, 'Fast Moving')
+assert.equal(movementFilterAction.stockAnalysis, undefined)
+assert.equal(movementFilterAction.groupBy, 'MovementCategory')
+assert.equal(movementFilterAction.chartDimension, 'MovementCategory')
+
+const stockAnalysisFilterAction = filtersFromReportFilterAction({
+  type: 'set-column-filter',
+  semanticDimensionId: 'stock-analysis',
+  field: 'StockAnalysisCode',
+  value: 'DEADS',
+})
+assert.equal(stockAnalysisFilterAction.movementCategory, undefined)
+assert.equal(stockAnalysisFilterAction.stockAnalysis, undefined)
+assert.equal(stockAnalysisFilterAction.columnFilters?.[0].field, 'StockAnalysisCode')
+assert.equal(stockAnalysisFilterAction.groupBy, 'StockAnalysisCode')
+
+const productTypeFilterAction = filtersFromReportFilterAction({
+  type: 'set-filter',
+  semanticDimensionId: 'product-type',
+  value: 'SUND',
+})
+assert.equal(productTypeFilterAction.productType, 'SUND')
+assert.equal(productTypeFilterAction.category, undefined)
+assert.equal(productTypeFilterAction.groupBy, 'ProductTypeCode')
+assert.equal(productTypeFilterAction.chartDimension, 'ProductTypeCode')
+
+const productTypeCardFromStockAnalysisScope = normalizeInventoryAnalysisGroupFilters(mergeReportFilterAction(
+  { groupBy: 'StockAnalysisCode', chartDimension: 'StockAnalysisCode', stockAnalysis: 'DEADS' },
+  { type: 'set-filter', semanticDimensionId: 'product-type', value: 'VSPARE' },
+))
+assert.equal(productTypeCardFromStockAnalysisScope.groupBy, 'ProductTypeCode')
+assert.equal(productTypeCardFromStockAnalysisScope.chartDimension, 'ProductTypeCode')
+assert.equal(productTypeCardFromStockAnalysisScope.productType, 'VSPARE')
+assert.equal(productTypeCardFromStockAnalysisScope.stockAnalysis, undefined)
 
 const movementFiltered = applyReportFilters(
   {
@@ -205,6 +325,40 @@ const movementFiltered = applyReportFilters(
 assert.equal(movementFiltered.rows.length, 2)
 assert.equal((movementFiltered.summary as Record<string, unknown>).FilteredRows, 2)
 assert.equal((movementFiltered.summary as Record<string, unknown>).TotalStockIssueMovementCount, 14)
+
+const stockAnalysisFiltered = applyReportFilters(
+  {
+    rows: [
+      { ItemCode: 'A', StockAnalysisCode: 'DEADS', MovementCategory: 'Dead Stock' },
+      { ItemCode: 'B', StockAnalysisCode: 'MEMOV', MovementCategory: 'Fast Moving' },
+    ],
+    columns: ['ItemCode', 'StockAnalysisCode', 'MovementCategory'],
+    summary: {},
+    chart: [],
+    metadata: {},
+  },
+  {
+    stockAnalysis: 'DEADS',
+  },
+)
+assert.equal(stockAnalysisFiltered.rows.length, 1)
+assert.equal(stockAnalysisFiltered.rows[0].StockAnalysisCode, 'DEADS')
+
+const productBrandFiltered = applyReportFilters(
+  {
+    rows: [
+      { ItemCode: 'A', ProductBrandCode: 'NALCO', total_amount: 100 },
+      { ItemCode: 'B', ProductBrandCode: 'SKF', total_amount: 200 },
+    ],
+    columns: ['ItemCode', 'ProductBrandCode', 'total_amount'],
+    summary: {},
+    chart: [],
+    metadata: {},
+  },
+  { productBrand: 'NALCO' },
+)
+assert.equal(productBrandFiltered.rows.length, 1)
+assert.equal(productBrandFiltered.rows[0].ItemCode, 'A')
 
 const limitedDisplay = applyReportFilters(
   {

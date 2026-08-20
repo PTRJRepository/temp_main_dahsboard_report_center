@@ -706,7 +706,7 @@ function normalizeKpi(card: unknown, analysis: AiAnalysisPayload): AiKpiCard | n
     format: raw.format && allowedFormats.has(raw.format) ? raw.format : inferFormat(summaryField, 'number') ?? 'number',
     suffix: raw.suffix ? String(raw.suffix) : undefined,
     severity: raw.severity && allowedSeverity.has(raw.severity) ? raw.severity : 'neutral',
-    description: String(raw.description ?? 'KPI dihitung dari summary payload.'),
+    description: String(raw.description ?? descriptionForSummaryField(summaryField)),
   }
 }
 
@@ -902,6 +902,14 @@ function formatForKey(key: string): AiFormat {
   return 'number'
 }
 
+function descriptionForSummaryField(field: string) {
+  const label = labelFromField(field)
+  if (isCurrencyField(field)) return `${label} amount in IDR from report summary.`
+  if (isQtyField(field)) return `${label} count/quantity from report summary.`
+  if (/period|bulan|month/i.test(field)) return `${label} period from report summary.`
+  return `${label} from report summary.`
+}
+
 function topRow(rows: DbRow[], valueField = 'itemCount') {
   return [...rows].sort((a, b) => toNumber(b[valueField]) - toNumber(a[valueField]))[0]
 }
@@ -1021,7 +1029,7 @@ function buildKpis(analysis: AiAnalysisPayload): AiKpiCard[] {
     format: formatForKey(key),
     suffix: /umur|age|bulan|month/i.test(key) ? 'bulan' : undefined,
     severity: severityForKey(key),
-    description: `Nilai ${labelFromField(key)} dari summary payload.`,
+    description: descriptionForSummaryField(key),
   }))
 }
 

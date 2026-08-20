@@ -7,7 +7,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { MODULE_IDS, getModuleConfig } from '@/lib/reports/config';
-import { getMockReportsByModule } from '@/lib/reports/mock-data';
 import ModuleToolbar from './ModuleToolbar';
 
 // ─── Static params ─────────────────────────────────────────────────────────────
@@ -53,7 +52,7 @@ export default async function ModuleDetailPage({ params }: PageProps) {
     redirect('/report-center/inventory');
   }
 
-  if (MODULE_IDS.includes(module)) {
+  if ((MODULE_IDS as readonly string[]).includes(module)) {
     redirect(`/report-center?module=${module}#modules`);
   }
 
@@ -63,7 +62,15 @@ export default async function ModuleDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const reports: ReturnType<typeof getMockReportsByModule> = [];
+  const reports: Array<{
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    lastRun: string;
+    status: ReportStatus;
+    rows: number;
+  }> = [];
 
   const completedCount = reports.filter((r) => r.status === 'completed').length;
   const runningCount = reports.filter((r) => r.status === 'running').length;

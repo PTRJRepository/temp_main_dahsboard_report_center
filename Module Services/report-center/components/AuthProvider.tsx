@@ -17,17 +17,11 @@ interface AuthContextType {
     logout: () => Promise<void>
 }
 
-const fallbackLogout = async () => {
-    if (typeof window !== 'undefined') {
-        window.location.href = '/logout'
-    }
-}
-
 const AuthContext = createContext<AuthContextType>({
     user: null,
     token: null,
     isLoading: true,
-    logout: fallbackLogout
+    logout: async () => { }
 })
 
 export function useAuth() {
