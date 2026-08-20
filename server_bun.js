@@ -67,8 +67,6 @@ const DASHBOARD_TARGET = process.env.DASHBOARD_TARGET || `http://127.0.0.1:${DAS
 const FIREBIRD_QUERY_TARGET = process.env.FIREBIRD_QUERY_TARGET || 'http://localhost:8004';
 const START_DASHBOARD = process.env.START_DASHBOARD !== 'false';
 const START_MODULE_SERVICES = process.env.START_MODULE_SERVICES !== 'false';
-const AUTO_INSTALL_MODULE_SERVICES = process.env.AUTO_INSTALL_MODULE_SERVICES !== 'false';
-const MONITORING_SERVICE_DIR = `${ROOT_DIR}/Module Services/rebinmas-jaya-server`;
 const NETWORK_MONITOR_DIR = `${ROOT_DIR}/Module Services/Wifi_LAN_Monitor/reference-design`;
 const CACHE_MAX_SIZE = 50;
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -120,48 +118,9 @@ const verifyJwtForRoot = (token) => verifyJWT(token, ROOT_DIR);
 const IFESS_API_KEY = process.env.IFESS_API_KEY || 'ptrj-rebinmas-air-ruak-parit-gunung-darul';
 // Phase 5: Proxy route API keys
 const QUERY_API_KEY = process.env.QUERY_API_KEY || 'ptrj-query-gateway-key';
-const UPATH_API_KEY = process.env.UPATH_API_KEY || 'ptrj-upath-key';
 const IFESS_CLIENT_API_KEY = process.env.IFESS_CLIENT_API_KEY || 'ptrj-ifess-client-key';
 
-const IFESS_DATA_DIR = `${ROOT_DIR}/data/ifess`;
-
-// IFESS data cache
-let ifessData = {
-    clients: [],
-    configs: {},
-    commands: [],
-    moduleStatuses: [],
-    heartbeatLogs: []
-};
-
 function getServerTime() { return new Date().toISOString(); }
-
-function loadIFESSData() {
-    try {
-        const clientsPath = `${IFESS_DATA_DIR}/clients.json`;
-        const configsPath = `${IFESS_DATA_DIR}/configs.json`;
-        const commandsPath = `${IFESS_DATA_DIR}/commands.json`;
-        const statusesPath = `${IFESS_DATA_DIR}/module-statuses.json`;
-        const logsPath = `${IFESS_DATA_DIR}/heartbeat-logs.json`;
-
-        ifessData.clients = JSON.parse(readFileSync(clientsPath, 'utf-8') || '[]');
-        ifessData.configs = JSON.parse(readFileSync(configsPath, 'utf-8') || '{}');
-        ifessData.commands = JSON.parse(readFileSync(commandsPath, 'utf-8') || '[]');
-        ifessData.moduleStatuses = JSON.parse(readFileSync(statusesPath, 'utf-8') || '[]');
-        ifessData.heartbeatLogs = JSON.parse(readFileSync(logsPath, 'utf-8') || '[]');
-    } catch { /* files may not exist yet */ }
-}
-
-function saveIFESSData() {
-    try {
-        require('fs').mkdirSync(IFESS_DATA_DIR, { recursive: true });
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/clients.json`, JSON.stringify(ifessData.clients, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/configs.json`, JSON.stringify(ifessData.configs, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/commands.json`, JSON.stringify(ifessData.commands, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/module-statuses.json`, JSON.stringify(ifessData.moduleStatuses, null, 2));
-        require('fs').writeFileSync(`${IFESS_DATA_DIR}/heartbeat-logs.json`, JSON.stringify(ifessData.heartbeatLogs, null, 2));
-    } catch (e) { console.error('IFESS save error:', e); }
-}
 
 function validateApiKey(req) {
     const key = req.headers.get('x-api-key');
@@ -170,7 +129,7 @@ function validateApiKey(req) {
 }
 
 // Frontend proxy handler - delegates to shared IFESS service
-async function handleFrontendProxy(req) {
+async function handleIFESSActionDispatcher(req) {
     try {
         const body = await req.arrayBuffer();
         const { action, params = {} } = JSON.parse(new TextDecoder().decode(body) || '{}');
@@ -2781,7 +2740,7 @@ function handleIFESSApi(req, reqPath) {
 
     // Frontend proxy handler (POST with {action, params} format) - bypass auth
     if (req.method === 'POST' && reqPath === '/api/ifess') {
-        return handleFrontendProxy(req);
+        return handleIFESSActionDispatcher(req);
     }
 
     // Query Gateway routes under /api/ifess are proxied to Firebird Query Service
@@ -2895,30 +2854,6 @@ function handleIFESSApi(req, reqPath) {
     return new Response(JSON.stringify({ error: 'Not Found', path: reqPath }), {
         status: 404, headers: { 'Content-Type': 'application/json' }
     });
-}
-
-// Query Gateway Data Store
-const queryData = {
-    templates: [],
-    history: [],
-    batches: {}
-};
-
-function loadQueryData() {
-    try {
-        const templatesPath = `${DATA_DIR}/query-templates.json`;
-        const historyPath = `${DATA_DIR}/query-history.json`;
-        if (existsSync(templatesPath)) queryData.templates = JSON.parse(readFileSync(templatesPath, 'utf-8'));
-        if (existsSync(historyPath)) queryData.history = JSON.parse(readFileSync(historyPath, 'utf-8'));
-    } catch { /* first run */ }
-}
-
-function saveQueryData() {
-    try {
-        mkdirSync(`${DATA_DIR}`, { recursive: true });
-        writeFileSync(`${DATA_DIR}/query-templates.json`, JSON.stringify(queryData.templates));
-        writeFileSync(`${DATA_DIR}/query-history.json`, JSON.stringify(queryData.history));
-    } catch { /* ignore */ }
 }
 
 function handleQueryGateway(req, reqPath) {
@@ -3087,10 +3022,6 @@ function spawnFbMigration(scriptPath, args, syncJobId) {
         ifessService.updateSyncJob(syncJobId, { status: 'failed', finishedAt: new Date().toISOString(), errorMessage: 'spawn failed: ' + (e && e.message || e) });
     }
 }
-
-// Remove old query data and load/save functions (now handled by service module)
-
-loadQueryData();
 
 // Stuck-command reaper: every 30s, fail any Received command whose client hasn't reported a
 // result within 120s (client crashed / network drop mid-execution). Keeps the command queue
@@ -3424,81 +3355,6 @@ async function startDashboardIfNeeded() {
     }
 
     console.warn(`Dashboard upstream did not become ready yet: ${DASHBOARD_TARGET}`);
-}
-async function ensureNodeDependencies(serviceDir, label) {
-    if (existsSync(`${serviceDir}/node_modules`)) return true;
-
-    if (!AUTO_INSTALL_MODULE_SERVICES) {
-        console.warn(`${label} dependencies missing: ${serviceDir}/node_modules`);
-        return false;
-    }
-
-    if (!existsSync(`${serviceDir}/package-lock.json`)) {
-        console.warn(`${label} package-lock.json not found, cannot auto-install`);
-        return false;
-    }
-
-    const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    console.log(`Installing ${label} dependencies with npm ci...`);
-    const child = Bun.spawn({
-        cmd: [npmExecutable, 'ci', '--ignore-scripts', '--no-audit', '--no-fund'],
-        cwd: serviceDir,
-        stdout: 'inherit',
-        stderr: 'inherit',
-        env: process.env,
-    });
-
-    const exitCode = await child.exited;
-    if (exitCode !== 0) {
-        console.warn(`${label} dependency install failed with exit code ${exitCode}`);
-        return false;
-    }
-
-    return true;
-}
-
-async function startRouteServiceIfNeeded(routeId, options) {
-    const route = findBaseRoute(routeId);
-    if (!route || !isHttpTarget(route.target)) return;
-
-    if (await isUpstreamReady(route.target)) {
-        console.log(`${options.label} upstream ready: ${route.target}`);
-        return;
-    }
-
-    if (!START_MODULE_SERVICES) {
-        console.log(`${options.label} upstream not ready: ${route.target}`);
-        return;
-    }
-
-    const dependenciesReady = await ensureNodeDependencies(options.cwd, options.label);
-    if (!dependenciesReady) return;
-
-    const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    console.log(`Starting ${options.label} upstream with npm run ${options.script} at ${route.target}...`);
-    const child = Bun.spawn({
-        cmd: [npmExecutable, 'run', options.script],
-        cwd: options.cwd,
-        stdout: 'inherit',
-        stderr: 'inherit',
-        env: {
-            ...process.env,
-            PORT: String(options.port),
-            ...(options.env || {}),
-        },
-    });
-
-    process.on('exit', () => child.kill());
-
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-        await Bun.sleep(500);
-        if (await isUpstreamReady(route.target)) {
-            console.log(`${options.label} upstream ready: ${route.target}`);
-            return;
-        }
-    }
-
-    console.warn(`${options.label} upstream did not become ready yet: ${route.target}`);
 }
 
 async function startModuleServicesIfNeeded() {
