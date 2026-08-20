@@ -1414,7 +1414,7 @@ if (!shouldRewriteContent) {
 | Dashboard_Utama | `D:\Gawean Rebinmas\Main Dashboard\Dashboard_Utama` |
 | keys/ | `D:\Gawean Rebinmas\Main Dashboard\keys` |
 | public/ | `D:\Gawean Rebinmas\Main Dashboard\public` |
-| Dokumentasi/ | `D:\Gawean Rebinmas\Main Dashboard\Dokumentasi` |
+| ../ | `D:\Gawean Rebinmas\Main Dashboard\Dokumentasi` |
 | Services/ | `D:\Gawean Rebinmas\Main Dashboard\Services` |
 
 ---

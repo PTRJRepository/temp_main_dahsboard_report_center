@@ -3,7 +3,7 @@
 **Last verified:** 2026-07-21  
 **Scope:** Main Dashboard monorepo (Bun/Express gateway + `Dashboard_Utama` Next.js app + IFESS/query services)
 
-This index is the canonical navigation for human operators and AI agents. Older docs remain under numbered folders, `ai-context/`, `Dashboard_Utama/docs/`, and `Dokumentasi/`. Prefer this numbered series when content conflicts; mark gaps as **Unverified** rather than inventing behavior.
+This index is the canonical navigation for human operators and AI agents. Older docs remain under numbered folders, `ai-context/`, `Dashboard_Utama/docs/`, and `../`. Prefer this numbered series when content conflicts; mark gaps as **Unverified** rather than inventing behavior.
 
 ## Start here
 
@@ -48,11 +48,12 @@ This index is the canonical navigation for human operators and AI agents. Older 
 
 ## Related legacy / deep docs
 
-- Root agent notes: [`AGENTS.md`](../AGENTS.md), [`CLAUDE.md`](../CLAUDE.md), [`AGENT_GUIDE.md`](../AGENT_GUIDE.md)
-- IFESS: [`IFESS_QUICKSTART.md`](./IFESS_QUICKSTART.md), [`IFESS_CONTROL_SERVER.md`](./IFESS_CONTROL_SERVER.md)
+- Root agent notes: [`AGENTS.md`](../AGENTS.md), [`CLAUDE.md`](../CLAUDE.md), [`AGENT_GUIDE.md`](./dev-meta/AGENT_GUIDE.md)
+- Dev meta: [`CHANGELOG-GUIDE.md`](./dev-meta/CHANGELOG-GUIDE.md), [`CONTRIBUTING.md`](./dev-meta/CONTRIBUTING.md)
 - AI context pack: [`ai-context/README.md`](./ai-context/README.md)
 - Dashboard PRDs: `Dashboard_Utama/docs/PRD/`
-- Table deep dives: `Dokumentasi/Report-Center-Tables/` (if present), root `IN_*_MCP.md`
+- Table deep dives: [`13-report-system/Report-Center-Tables/`](./13-report-system/Report-Center-Tables/), DB/MCP docs → [`database/`](./database/)
+- Archived exploration: [`archive/report-center-exploration/`](./archive/report-center-exploration/)
 - Inventory schema notes: `Dashboard_Utama/docs/inventory-in-database/`
 
 ## Coverage matrix (2026-07-21)

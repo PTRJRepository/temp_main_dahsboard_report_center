@@ -6,7 +6,7 @@
 
 ## Background
 
-During Phase 0 discovery (`Dokumentasi/PHASE_0-Discovery-Baseline.md`), scanning revealed
+During Phase 0 discovery (`../PHASE_0-Discovery-Baseline.md`), scanning revealed
 two Report Center codebases:
 
 | Aspect | `Dashboard_Utama/` | `Module Services/report-center/` |

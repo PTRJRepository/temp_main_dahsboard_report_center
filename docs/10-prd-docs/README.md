@@ -19,7 +19,7 @@ Dokumentasi lengkap untuk semua Product Requirements Documents (PRD), arsitektur
 
 ## 1. PRD: Report Detail Performance Optimization
 
-**File Path:** `D:\Gawean Rebinmas\Main Dashboard\PRD-Report-Detail-Performance-Optimization.md`
+**File Path:** `docs/10-prd-docs/PRD-Report-Detail-Performance-Optimization.md`
 
 ### 1.1 Context & Problem Statement
 
@@ -589,7 +589,7 @@ Services/module/inventory/
 - `Services/module/inventory/db_ptrj_mill/schema/IN_ITEM.json`
 - `Services/module/inventory/db_ptrj_mill/samples/IN_ITEM.json`
 - `Services/module/inventory/queries/*.sql`
-- `Dokumentasi/SQL_GATEWAY_INVENTORY_MODULE.md`
+- `../SQL_GATEWAY_INVENTORY_MODULE.md`
 
 ### 3.6 Next Steps
 
@@ -745,7 +745,7 @@ routes-config.json extended with cache/maxAge/rewriteExtensions support.
 
 ## 6. Plans Overview (PLANS.md)
 
-**File Path:** `D:\Gawean Rebinmas\Main Dashboard\PLANS.md`
+**File Path:** `docs/plans/PLANS.md`
 
 ### 6.1 Overview
 
@@ -771,7 +771,7 @@ Dokumentasi ini berisi semua rencana pengembangan yang telah dan sedang berjalan
 
 ### 6.4 Related Documentation
 
-- **PRD:** `PRD-Report-Detail-Performance-Optimization.md`
+- **PRD:** `PRD-Report-Detail-Performance-Optimization.md` (in this dir)
 - **Gateway:** `.hermes/plans/2026-05-16_0945_gateway-routing-architecture.md`
 - **Inventory:** `.hermes/plans/2026-05-16_0955_inventory-module-exploration-via-query-gateway.md`
 - **MCP Setup:** `.hermes/plans/2026-05-16_000000_mcp-otak-digital-atta-setup.md`
@@ -785,12 +785,12 @@ Berikut adalah path absolut dari semua file yang diacu dalam dokumentasi ini:
 
 | Dokumentasi | File Path |
 |-------------|-----------|
-| PRD Report Detail | `D:\Gawean Rebinmas\Main Dashboard\PRD-Report-Detail-Performance-Optimization.md` |
+| PRD Report Detail | `docs/10-prd-docs/PRD-Report-Detail-Performance-Optimization.md` |
 | Gateway Routing | `D:\Gawean Rebinmas\Main Dashboard\.hermes\plans\2026-05-16_0945_gateway-routing-architecture.md` |
 | Inventory Module | `D:\Gawean Rebinmas\Main Dashboard\.hermes\plans\2026-05-16_0955_inventory-module-exploration-via-query-gateway.md` |
 | MCP Setup | `D:\Gawean Rebinmas\Main Dashboard\.hermes\plans\2026-05-16_000000_mcp-otak-digital-atta-setup.md` |
 | Prompt Notes | `D:\Gawean Rebinmas\Main Dashboard\prompt\current.txt` |
-| Plans Overview | `D:\Gawean Rebinmas\Main Dashboard\PLANS.md` |
+| Plans Overview | `docs/plans/PLANS.md` |
 | **This Document** | `D:\Gawean Rebinmas\Main Dashboard\docs\10-prd-docs\README.md` |
 
 ---

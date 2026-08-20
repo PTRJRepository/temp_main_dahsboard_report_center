@@ -6,10 +6,10 @@ ke Claude Code / Codex / Cursor / Hermes agent.
 Prompt ini **self-contained**. Agent tidak perlu chat history.
 
 **Dokumen pendukung (baca, jangan mengarang ulang):**
-- `Dokumentasi/PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md`
-- `Dokumentasi/KATALOG_KPI_PROCUREMENT_KOMPREHENSIF.md`
-- `Dokumentasi/INVENTORY_REPORT_REGISTRY_SNAPSHOT_2026-07-21.md`
-- `Dokumentasi/procurement_documentation.md` (skema; **jangan salin API key** jika ada)
+- `../PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md`
+- `../KATALOG_KPI_PROCUREMENT_KOMPREHENSIF.md`
+- `../INVENTORY_REPORT_REGISTRY_SNAPSHOT_2026-07-21.md`
+- `../procurement_documentation.md` (skema; **jangan salin API key** jika ada)
 - `Dashboard_Utama/lib/reports/inventory/metric-dictionary.md` (jika ada)
 - Skill/report-center iron laws bila tersedia
 
@@ -146,12 +146,12 @@ Anda **tidak berhenti di Phase 1** kecuali ada blocker data keras.
 Target akhir sesi: **Phase 1 + Phase 2 minimal**, Phase 3 jika waktu/latency memungkinkan.
 
 ## PHASE 0 — Discovery & contracts (wajib, singkat, evidence-based)
-1. Baca file entry di atas + plan/katalog di `Dokumentasi/`.
+1. Baca file entry di atas + plan/katalog di `../`.
 2. Cek response summary aktual:
    - `GET /api/reports/inventory?report=pengeluaran-barang&source=estate&period=YYYY-MM&page=1&pageSize=5`
    - sama untuk `return-barang`, `goods-receiving-receipt-activity`, `purchase-order-history`, `all-stock-movement-analysis`
 3. Catat field summary yang **sudah ada** vs **harus ditambah** di builder API.
-4. Tulis singkat di `Dokumentasi/PROCUREMENT_KPI_DECK_IMPLEMENTATION_LOG.md`:
+4. Tulis singkat di `../PROCUREMENT_KPI_DECK_IMPLEMENTATION_LOG.md`:
    - field map, keputusan event=line, gaps
 5. Jangan invent field yang API tidak kirim — **enrich API** dulu.
 
@@ -262,7 +262,7 @@ npx tsx lib/reports/procurement-workspace.test.ts
 
 ### Handoff artifacts
 Tulis/update:
-- `Dokumentasi/PROCUREMENT_KPI_DECK_IMPLEMENTATION_LOG.md` (apa berubah, field map, sisa gap)
+- `../PROCUREMENT_KPI_DECK_IMPLEMENTATION_LOG.md` (apa berubah, field map, sisa gap)
 - Opsional commit message usulan (jangan commit kecuali user minta):
   `feat(procurement): command deck issue usage + top analysis rails`
 
@@ -317,7 +317,7 @@ Hero KPIs: (list)
 Issue top: yes/no
 Verify: tsc= / tests= / browser=
 Known gaps: (honest)
-Log: Dokumentasi/PROCUREMENT_KPI_DECK_IMPLEMENTATION_LOG.md
+Log: ../PROCUREMENT_KPI_DECK_IMPLEMENTATION_LOG.md
 ```
 
 # ORDER OF EXECUTION (COPY THIS AS YOUR TODO)
@@ -345,7 +345,7 @@ Kerjakan sekarang sampai checklist hijau. Jangan berhenti di “rencana”.
 ```
 Implement FULL Procurement KPI Command Deck di Dashboard_Utama sampai production-ready.
 Primary: components/report-center/ProcurementKpiStrip.tsx + API inventory summary enrichment.
-Baca: Dokumentasi/PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md + KATALOG_KPI_PROCUREMENT_KOMPREHENSIF.md.
+Baca: ../PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md + KATALOG_KPI_PROCUREMENT_KOMPREHENSIF.md.
 Locked: IssueEvents=COUNT lines; NetFlow=Receive−Issue+Return; Top default item by amount; AccCode=dept not GL; period≠movementWindow; hero≤5; forest UI; READ-ONLY SQL.
 P0: map existing summary fields. P1: fetch pengeluaran-barang+return; hero valuasi/net/issue/risk; clear filter labels. P2: TopItems/TopCostCenters in summary + Issue Analysis tab (toggle amount/qty/freq). P3: optional command-deck composite + polish/a11y/extract. P4: tsc, formula tests, browser estate+pabrik, implementation log.
 Reuse format.ts + hrefWithFilters. Jangan edit ReportViewerClient monolit. Jangan secrets. Jangan fake KPI.
@@ -358,7 +358,7 @@ Return OK/FAIL + files + verify.
 
 ### Phase 1 only
 ```
-Implement Phase 1 only of Dokumentasi/PROMPT_AGENT_PROCUREMENT_KPI_DECK_COMPLETE.md:
+Implement Phase 1 only of ../PROMPT_AGENT_PROCUREMENT_KPI_DECK_COMPLETE.md:
 enrich/use pengeluaran-barang (+return) summaries; hero Net Flow + Total Issue + freq chips; keep existing valuasi/process/risk; clarify period vs movement labels; tests for NetFlow/Freq/ReturnRate/POFillRate; tsc clean. No top-list yet unless free.
 ```
 

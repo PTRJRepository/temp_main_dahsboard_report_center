@@ -21,15 +21,15 @@
 
 | Doc | When |
 | --- | --- |
-| `Dokumentasi/REPORT_CENTER_EXPLORATION_INDEX_2026-07-21.md` | Full pack index |
-| `Dokumentasi/MASTER_AGENT_BRIEF_REPORT_CENTER_REDESIGN_2026-07-21.md` | 1-page brief |
-| `Dokumentasi/REPORT_CENTER_UNIFIED_IMPLEMENTATION_CHECKLIST_2026-07-21.md` | Component tree + P0–P9 |
-| `Dokumentasi/REPORT_DETAIL_REDUNDANCY_KILL_LIST_2026-07-21.md` | K1–K23 delete targets |
-| `Dokumentasi/REPORT_VIEWER_CLIENT_SECTION_LINE_MAP_2026-07-21.md` | Line map monolith |
-| `Dokumentasi/mocks/report-detail-monthly-wireframe-2026-07-21.html` | Visual target |
+| `../REPORT_CENTER_EXPLORATION_INDEX_2026-07-21.md` | Full pack index |
+| `../MASTER_AGENT_BRIEF_REPORT_CENTER_REDESIGN_2026-07-21.md` | 1-page brief |
+| `../REPORT_CENTER_UNIFIED_IMPLEMENTATION_CHECKLIST_2026-07-21.md` | Component tree + P0–P9 |
+| `../REPORT_DETAIL_REDUNDANCY_KILL_LIST_2026-07-21.md` | K1–K23 delete targets |
+| `../REPORT_VIEWER_CLIENT_SECTION_LINE_MAP_2026-07-21.md` | Line map monolith |
+| `../mocks/report-detail-monthly-wireframe-2026-07-21.html` | Visual target |
 | `Dashboard_Utama/lib/reports/inventory/metric-dictionary.md` | Metric kinds |
-| `Dokumentasi/REPORT_DETAIL_IMPLEMENTATION_REFERENCE.md` | Shared contracts |
-| `Dokumentasi/MASTER_PROMPT_REPORT_CENTER_REDESIGN_ADVANCED.md` | Long charter |
+| `../REPORT_DETAIL_IMPLEMENTATION_REFERENCE.md` | Shared contracts |
+| `../MASTER_PROMPT_REPORT_CENTER_REDESIGN_ADVANCED.md` | Long charter |
 
 ---
 
@@ -193,7 +193,7 @@ Feel: **premium enterprise ops/accounting analytics** — dense when needed, cal
 | PDF pratinjau | Export PDF (implies official full) |
 | SQL (audit) | SQL Debug on executive toolbar |
 
-Full glossary: `Dokumentasi/REPORT_CENTER_PRODUCT_GLOSSARY_ID_EN_2026-07-21.md`.
+Full glossary: `../REPORT_CENTER_PRODUCT_GLOSSARY_ID_EN_2026-07-21.md`.
 
 ---
 
@@ -458,7 +458,7 @@ Never force-push unless explicitly requested. Never commit `.env*`.
 | Live report count docs stale | Trust `config.ts` (~19 live + 1 hold) |
 | CSS !important remaps | Prefer tokens; watch subtotal greens |
 
-Full register: `Dokumentasi/REPORT_CENTER_RISK_REGRESSION_REGISTER_2026-07-21.md`.
+Full register: `../REPORT_CENTER_RISK_REGRESSION_REGISTER_2026-07-21.md`.
 
 ---
 
@@ -471,7 +471,7 @@ Full register: `Dokumentasi/REPORT_CENTER_RISK_REGRESSION_REGISTER_2026-07-21.md
 | Q9 | Purchasing net vs GR+Retur? | GR + Retur separate (dictionary) |
 | Q13 | Feature flag workspaces? | Optional `NEXT_PUBLIC_REPORT_DETAIL_V2` |
 
-Log: `Dokumentasi/REPORT_CENTER_OPEN_QUESTIONS_2026-07-21.md`.
+Log: `../REPORT_CENTER_OPEN_QUESTIONS_2026-07-21.md`.
 
 ---
 

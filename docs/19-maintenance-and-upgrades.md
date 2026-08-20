@@ -31,7 +31,7 @@
 
 ## Release checklist
 
-- [ ] Changelog notes ([CHANGELOG-GUIDE.md](../CHANGELOG-GUIDE.md))
+- [ ] Changelog notes ([CHANGELOG-GUIDE.md](./dev-meta/CHANGELOG-GUIDE.md))
 - [ ] Docs updated if behavior changed
 - [ ] Env example keys updated
 - [ ] Production routes config reviewed

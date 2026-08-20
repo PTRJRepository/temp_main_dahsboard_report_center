@@ -17,7 +17,7 @@ Main Dashboard/
 ├── server.js                    # Express gateway (standalone mode, port 3001)
 ├── routes-config.json           # Proxy route definitions (hot-reload)
 ├── keys/                        # JWT RSA keypairs
-├── Dokumentasi/                 # Service usage guides
+├── docs/                         # Canonical documentation (indexed)
 ├── Services/
 │   ├── ifess-control-server/  # iFESS Control Server (JS)
 │   └── query/                  # SQL Gateway

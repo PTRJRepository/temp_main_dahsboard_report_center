@@ -38,12 +38,12 @@ Tugas: **refactor bertahap** berdasarkan audit & dokumentasi yang sudah ada, den
 
 **Entry agent (baca pertama):**
 ```
-D:/Gawean Rebinmas/Main Dashboard/Dokumentasi/AGENT_INDEX_REPORT_CENTER_UI.md
+D:/Gawean Rebinmas/Main Dashboard/../AGENT_INDEX_REPORT_CENTER_UI.md
 ```
 
 **Pack UI living docs:**
 ```
-D:/Gawean Rebinmas/Main Dashboard/Dokumentasi/UI-REPORT-CENTER-CURRENT/
+D:/Gawean Rebinmas/Main Dashboard/../UI-REPORT-CENTER-CURRENT/
   00-INDEX.md
   02-KPI-COMMAND-DECK.md          ← KPI live
   04-TABLE-AND-DETAIL-DESIGN.md
@@ -57,10 +57,10 @@ D:/Gawean Rebinmas/Main Dashboard/Dokumentasi/UI-REPORT-CENTER-CURRENT/
 
 **KPI / plan / prompts terkait:**
 ```
-Dokumentasi/PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md
-Dokumentasi/KATALOG_KPI_PROCUREMENT_KOMPREHENSIF.md
-Dokumentasi/PROMPT_AGENT_PROCUREMENT_KPI_DECK_COMPLETE.md
-Dokumentasi/REPORT_CENTER_EXPLORATION_INDEX_2026-07-21.md
+../PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md
+../KATALOG_KPI_PROCUREMENT_KOMPREHENSIF.md
+../PROMPT_AGENT_PROCUREMENT_KPI_DECK_COMPLETE.md
+../REPORT_CENTER_EXPLORATION_INDEX_2026-07-21.md
 ```
 
 **Skill (jika ada di environment):** `report-center-development`
@@ -111,12 +111,12 @@ git diff --stat
 ### 0.1 Jika ada perubahan **dokumentasi** yang relevan & aman
 Stage **hanya** docs (contoh):
 ```
-Dokumentasi/AGENT_INDEX_REPORT_CENTER_UI.md
-Dokumentasi/UI-REPORT-CENTER-CURRENT/**
-Dokumentasi/PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md
-Dokumentasi/PROMPT_AGENT_*.md
-Dokumentasi/KATALOG_KPI_*.md
-Dokumentasi/REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html
+../AGENT_INDEX_REPORT_CENTER_UI.md
+../UI-REPORT-CENTER-CURRENT/**
+../PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md
+../PROMPT_AGENT_*.md
+../KATALOG_KPI_*.md
+../REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html
 ```
 Commit message contoh:
 ```
@@ -136,7 +136,7 @@ git log -3 --oneline
 Catat SHA checkpoint di laporan akhir (contoh: `CHECKPOINT_DOCS=abc1234`).
 
 ### 0.4 Update log singkat (opsional file)
-Append ke `Dokumentasi/UI-REPORT-CENTER-CURRENT/11-CHANGELOG-UI-SNAPSHOT.md` bahwa refactor agent mulai dari SHA X — **hanya docs**.
+Append ke `../UI-REPORT-CENTER-CURRENT/11-CHANGELOG-UI-SNAPSHOT.md` bahwa refactor agent mulai dari SHA X — **hanya docs**.
 
 **STOP & REPORT** jika:
 - Merge conflict  
@@ -332,7 +332,7 @@ REMAINING: (honest)
 ## Versi super-pendek
 
 ```
-Baca Dokumentasi/AGENT_INDEX_REPORT_CENTER_UI.md + UI-REPORT-CENTER-CURRENT/19-EXECUTIVE-SUMMARY-AUDIT.md + 18-PDF-REDESIGN-SPEC.md.
+Baca ../AGENT_INDEX_REPORT_CENTER_UI.md + UI-REPORT-CENTER-CURRENT/19-EXECUTIVE-SUMMARY-AUDIT.md + 18-PDF-REDESIGN-SPEC.md.
 UTAMAKAN: git status → commit dulu docs/checkpoint BERSIH sebelum refactor.
 Lalu implement berurutan + commit kecil tiap fase:
 P1 unify PDF/export honesty catalog+detail (pratinjau filename+watermark+preflight catalog)
@@ -349,8 +349,8 @@ Return OK/FAIL + SHAs + tsc.
 
 ## Catatan untuk user (bukan bagian prompt agent)
 
-- Prompt file: `Dokumentasi/PROMPT_AGENT_REPORT_CENTER_REFACTOR_COMMIT_FIRST.md`  
-- Agent index: `Dokumentasi/AGENT_INDEX_REPORT_CENTER_UI.md`  
+- Prompt file: `../PROMPT_AGENT_REPORT_CENTER_REFACTOR_COMMIT_FIRST.md`  
+- Agent index: `../AGENT_INDEX_REPORT_CENTER_UI.md`  
 - Audit: `UI-REPORT-CENTER-CURRENT/19-EXECUTIVE-SUMMARY-AUDIT.md`  
 - Scope default = **P0 export/PDF dulu**, baru densitas KPI & tabel — sesuai skor audit.  
 - Jika Anda **belum** ingin commit otomatis, tambahkan di chat agent: “Phase 0: tampilkan git status saja, commit setelah saya setuju.”

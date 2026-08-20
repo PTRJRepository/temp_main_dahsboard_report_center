@@ -171,7 +171,7 @@ Full guide: [docs/12-deployment.md](./docs/12-deployment.md)
 | [Troubleshooting](./docs/18-troubleshooting.md) | Support |
 | [AI handoff](./docs/ai-context/21_AI_HANDOFF_CONTEXT.md) | Coding agents |
 
-Also: [CONTRIBUTING.md](./CONTRIBUTING.md), [AGENTS.md](./AGENTS.md), [CLAUDE.md](./CLAUDE.md)
+Also: [CONTRIBUTING.md](./docs/dev-meta/CONTRIBUTING.md), [AGENTS.md](./AGENTS.md), [CLAUDE.md](./CLAUDE.md)
 
 ## Security reporting
 
@@ -179,7 +179,7 @@ Do not file public issues with secrets. Rotate exposed keys immediately. Prefer 
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+See [CONTRIBUTING.md](./docs/dev-meta/CONTRIBUTING.md).
 
 ## License
 

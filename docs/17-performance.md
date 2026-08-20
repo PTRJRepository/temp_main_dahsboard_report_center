@@ -32,5 +32,5 @@
 
 ## Related PRDs
 
-- `PRD-Report-Detail-Performance-Optimization.md` (root / Dashboard docs)
+- `docs/10-prd-docs/PRD-Report-Detail-Performance-Optimization.md`
 - `lib/reports/report-detail-performance.ts`

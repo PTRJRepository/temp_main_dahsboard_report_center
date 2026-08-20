@@ -48,4 +48,4 @@ Explicit `dateFrom`/`dateTo` → stock/ws fall back to calendar (parity with mon
 ## Outdated docs
 
 - Prefer this file + `fuel-issue-sql.ts` + `stockIssue` in `route.ts` over notes that say Usage excludes fuel or uses PostDate-only for stock.
-- Agent index: `Dokumentasi/AGENT_INDEX_REPORT_CENTER_UI.md` → section Fuel / Metric confusion.
+- Agent index: `../AGENT_INDEX_REPORT_CENTER_UI.md` → section Fuel / Metric confusion.

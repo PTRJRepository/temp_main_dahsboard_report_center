@@ -171,9 +171,8 @@ D:/Gawean Rebinmas/Main Dashboard/
 │   ├── tailwind.config.ts     # Tailwind config (deprecated, v4)
 │   └── postcss.config.mjs    # PostCSS v4 config
 │
-├── Dokumentasi/                 # Parent documentation
-│   └── diagram/
-│       └── mermaid-diagram.png
+├── docs/                        # Canonical documentation (indexed)
+│   └── ...
 │
 └── Keys/                       # RSA keys
 ```

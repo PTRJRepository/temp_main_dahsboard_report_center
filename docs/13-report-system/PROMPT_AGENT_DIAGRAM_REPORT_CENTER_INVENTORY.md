@@ -24,7 +24,7 @@ Boleh baca repo + tulis file baru di folder target.
 - API: `app/api/reports/inventory/route.ts`
 - Metrics: `utils/format.ts` + `lib/reports/inventory/metric-dictionary.md`
 - Registry live: `Dashboard_Utama/lib/reports/inventory/config.ts`  
-  Snapshot: `Dokumentasi/INVENTORY_REPORT_REGISTRY_SNAPSHOT_2026-07-21.md`  
+  Snapshot: `../INVENTORY_REPORT_REGISTRY_SNAPSHOT_2026-07-21.md`  
   ≈ **19 live + 1 hold** — **jangan percaya “27 reports”** tanpa hitung ulang
 - SQL: **READ-ONLY** via SQL Gateway. **CUD dilarang.**
 
@@ -42,22 +42,22 @@ Boleh baca repo + tulis file baru di folder target.
 11. **Jangan salin secret/API key** dari docs lama
 
 ## BACA DULU (urutan)
-1. `Dokumentasi/REPORT_CENTER_EXPLORATION_INDEX_2026-07-21.md`
-2. `Dokumentasi/MASTER_PROMPT_REPORT_CENTER_REDESIGN_ADVANCED.md`
-3. `Dokumentasi/INVENTORY_REPORT_REGISTRY_SNAPSHOT_2026-07-21.md`
-4. `Dokumentasi/Monthly-Stock-Account-Movement-Details/README.md` + 01…12
-5. `Dokumentasi/Report Inventory Kebun/good_receipt_correlation.md`
-6. `Dokumentasi/Report Inventory Kebun/good_receipt_db_diagram.excalidraw` (contoh diagram bagus)
-7. `Dokumentasi/Report-Center-Tables/**` (MASTER, STOCK_FLOW, MONTHLY_END, PURCHASING, LOOKUP)
+1. `../REPORT_CENTER_EXPLORATION_INDEX_2026-07-21.md`
+2. `../MASTER_PROMPT_REPORT_CENTER_REDESIGN_ADVANCED.md`
+3. `../INVENTORY_REPORT_REGISTRY_SNAPSHOT_2026-07-21.md`
+4. `../Monthly-Stock-Account-Movement-Details/README.md` + 01…12
+5. `../Report Inventory Kebun/good_receipt_correlation.md`
+6. `../Report Inventory Kebun/good_receipt_db_diagram.excalidraw` (contoh diagram bagus)
+7. `../Report-Center-Tables/**` (MASTER, STOCK_FLOW, MONTHLY_END, PURCHASING, LOOKUP)
 8. `Dashboard_Utama/docs/inventory-in-database/*`
 9. `Dashboard_Utama/lib/reports/inventory/metric-dictionary.md`
 10. Live: `config.ts`, monthly domain TS, API route
-11. Opsional: `Dokumentasi/REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html` (jika ada, boleh evolve/replace)
+11. Opsional: `../REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html` (jika ada, boleh evolve/replace)
 
 ## DELIVERABLE UTAMA (WAJIB) — SATU FILE DIAGRAM
 Buat **satu file HTML tunggal**:
 
-`Dokumentasi/REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html`
+`../REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html`
 
 ### Syarat layout (HARD REQUIREMENT)
 - **14 diagram terpisah**, masing-masing di dalam **box/card sendiri**
@@ -104,7 +104,7 @@ Hitung ulang dari `config.ts` saat menulis.
 Jika token/waktu cukup, buat juga hub:
 
 ```
-Dokumentasi/REPORT-CENTER-INVENTORY-DOCS/
+../REPORT-CENTER-INVENTORY-DOCS/
   00-INDEX.md          ← peta baca + link ke HTML onefile
   03-INVENTORY-REPORT-REGISTRY.md
   05-REPORT-RPTIN1000015-MONTHLY-MOVEMENT.md
@@ -159,7 +159,7 @@ Sisanya boleh menyusul.
 ## Versi super-pendek (jika token ketat)
 
 ```
-Buat SATU file HTML: Dokumentasi/REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html
+Buat SATU file HTML: ../REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html
 14 diagram Mermaid, masing-masing di BOX TERPISAH, jarak antar box gap 40–48px, TOC + nomor 01–14.
 Tema navy #071426 + green #167A3A.
 Isi: C4 context, container, page map inventory, sequence API→SQL, ER stock, ER GR (★PU_POLN, ⛔IN_STOCKRECEIVE empty), month-end, formula RPTIN1000015 (6 KPI + placeholder_zero), accounting vs calendar, viewer IA single controls, export/AI 3-layer honesty, registry live dari config.ts (~19+1 hold), server SP1/SP2 routing, monolith extraction.
@@ -173,5 +173,5 @@ Return OK/FAIL + path absolut.
 ## Catatan untuk user
 - Prompt di atas **self-contained** — agent lain tidak perlu chat history ini.
 - File diagram contoh/hasil sebelumnya (jika ada):  
-  `Dokumentasi/REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html`  
+  `../REPORT-CENTER-INVENTORY-DIAGRAMS-ONEFILE.html`  
   Agent boleh **ganti/perbaiki** file itu selama syarat box+jarak terpenuhi.

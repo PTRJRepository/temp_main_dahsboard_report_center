@@ -294,7 +294,7 @@ connection_string = (
 
 ## 5. PR_TABLES Schema Detail
 
-**Referensi:** `D:\Gawean Rebinmas\Main Dashboard\PR_TABLES_MCP.md`
+**Referensi:** `docs/database/PR_TABLES_MCP.md`
 
 ### Overview
 
@@ -808,7 +808,7 @@ MovementCategory ditentukan oleh `StockIssueEventCount` (total stock issue event
 | Routes Config (Prod) | `D:\Gawean Rebinmas\Main Dashboard\routes-config.production.json` |
 | PR Tables Deep Dive | `D:\Gawean Rebinmas\Main Dashboard\pr_tables_deepdive.json` |
 | PR Tables Extra | `D:\Gawean Rebinmas\Main Dashboard\pr_tables_extra.json` |
-| PR Tables MCP Doc | `D:\Gawean Rebinmas\Main Dashboard\PR_TABLES_MCP.md` |
+| PR Tables MCP Doc | `docs/database/PR_TABLES_MCP.md` |
 | Report Config | `D:\Gawean Rebinmas\Main Dashboard\Dashboard_Utama\lib\reports\inventory\config.ts` |
 | Report Route Handler | `D:\Gawean Rebinmas\Main Dashboard\Dashboard_Utama\app\api\reports\inventory\route.ts` |
 

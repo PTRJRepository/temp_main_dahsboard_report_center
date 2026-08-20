@@ -182,7 +182,7 @@ GET  /sync/jobs/:id                    → sync job status
 
 - `.env.local.example` — placeholders only
 - `Module Services/rebinmas-jaya-server/.env.example` — placeholders only
-- `Dokumentasi/architecture-multi-service.md` — IPs are topology, not credentials
+- `../architecture-multi-service.md` — IPs are topology, not credentials
 
 ---
 
@@ -304,8 +304,8 @@ Before Phase 1 begins, these must be completed:
   - Known residual: single-row wide header with single "=" separator still returns 1 column
 - [x] **R-04**: Create `isReadOnlySql` corpus test — `tests/baseline/firebird-readonly-validator.test.js` (41 tests)
   - 2 known false positives (documented): `SELECT UPDATE FROM EMP`, `LIKE '%DROP%'`
-- [x] **R-05**: ADR-001 created — `Dokumentasi/ADR-001-Report-Center-Canonical.md` (mark deprecated, merge components before delete)
-- [x] **R-02, R-03, R-08**: Credential rotation plan documented — `Dokumentasi/SEC-Credential-Rotation-Plan.md`
+- [x] **R-05**: ADR-001 created — `../ADR-001-Report-Center-Canonical.md` (mark deprecated, merge components before delete)
+- [x] **R-02, R-03, R-08**: Credential rotation plan documented — `../SEC-Credential-Rotation-Plan.md`
 - [x] Verify `npm run build:dashboard` passes — Next.js build succeeds (exit 0)
 - [x] Verify `npx tsc --noEmit` in `Dashboard_Utama/` passes — TypeScript clean (exit 0)
 

@@ -56,7 +56,7 @@ D:\Gawean Rebinmas\Main Dashboard\
 ├── package.json                 # Dependencies
 ├── .env.production              # Production environment config
 ├── keys/                        # JWT RSA keypairs
-├── Dokumentasi/                 # Service usage guides
+├── docs/                   # Service usage guides
 ├── Services/                    # Upstream services (upah, absen, dll)
 └── Dashboard_Utama/             # Next.js dashboard app
     └── app/
@@ -576,6 +576,6 @@ const PORT = parseInt(process.env.PORT || '3002');
 
 ## Related Documentation
 
-- [Panduan Komprehensif Layanan](./Dokumentasi/panduan_komprehensif_layanan.md)
-- [PLANS.md](./PLANS.md) — Proxy Gateway Optimization Plan
+- [Panduan Komprehensif Layanan](../12-proxy-gateway/panduan_komprehensif_layanan.md)
+- [PLANS.md](../plans/PLANS.md) — Proxy Gateway Optimization Plan
 - [CLAUDE.md](./CLAUDE.md) — Project-specific Claude Code guidance

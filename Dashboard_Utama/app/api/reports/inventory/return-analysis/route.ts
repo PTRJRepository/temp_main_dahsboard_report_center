@@ -16,7 +16,7 @@ import {
  *
  * 1. PURCHASING (retur ke supplier) — PU_GOODSRET × PU_GOODSRETLN.
  *    Kolom TERVERIFIKASI (bukan karangan):
- *    - Dokumentasi/Monthly-Stock-Account-Movement-Details/09-GOODS-RECEIVE.md
+ *    - docs/database/Monthly-Stock-Account-Movement-Details/09-GOODS-RECEIVE.md
  *      (baris 112-130): header GoodsRetId/LocCode/AccYear/AccMonth/Status,
  *      line ItemCode/QtyReturn/ReturnStockQty/Amount/Cost/POLnID.
  *    - SQL terbukti jalan di `app/api/reports/inventory/route.ts:4471-4567`

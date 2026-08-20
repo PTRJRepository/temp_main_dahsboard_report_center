@@ -3558,7 +3558,7 @@ async function stockReceive({ limit, search, ctx, filters }: ReportHandlerOption
         'SupplierName fallback ke SupplierCode jika master supplier kosong.',
       ],
       sqlAppliedFilters: scope.applied,
-      sourceDocument: 'D:/Gawean Rebinmas/Main Dashboard/Dokumentasi/Report Inventory Kebun/good_receipt_correlation.md',
+      sourceDocument: 'D:/Gawean Rebinmas/Main Dashboard/docs/13-report-system/Report Inventory Kebun/good_receipt_correlation.md',
     }),
   }
 }

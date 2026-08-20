@@ -5,7 +5,7 @@
 **Target UI:** Command deck atas di `/report-center/procurement`  
 **Kode sekarang:** `Dashboard_Utama/components/report-center/ProcurementKpiStrip.tsx`  
 **Workspace:** `ProcurementModuleWorkspace.tsx` + `lib/reports/procurement-workspace.ts`  
-**UI docs terkini:** `Dokumentasi/UI-REPORT-CENTER-CURRENT/` (mulai `00-INDEX.md`)
+**UI docs terkini:** `../UI-REPORT-CENTER-CURRENT/` (mulai `00-INDEX.md`)
 
 ---
 

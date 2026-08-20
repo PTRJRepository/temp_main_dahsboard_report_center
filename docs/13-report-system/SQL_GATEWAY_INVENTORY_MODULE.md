@@ -256,5 +256,5 @@ Services/module/inventory/
     ├── row_counts.sql
     └── foreign_keys.sql
 
-Dokumentasi/SQL_GATEWAY_INVENTORY_MODULE.md  # Full integration guide
+../SQL_GATEWAY_INVENTORY_MODULE.md  # Full integration guide
 ```

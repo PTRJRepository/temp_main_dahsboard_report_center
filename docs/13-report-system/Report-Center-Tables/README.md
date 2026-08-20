@@ -1,6 +1,6 @@
 # Report Center — Tabel Database Lengkap
 
-> **Folder:** `Dokumentasi/Report-Center-Tables/`
+> **Folder:** `../Report-Center-Tables/`
 > **Source:** Analyzed dari `app/api/reports/inventory/route.ts` (4,234 baris) + seluruh `app/api/reports/`
 > **Database:** MSSQL — `db_ptrj` (estate) dan `db_ptrj_mill` (pabrik)
 
@@ -9,7 +9,7 @@
 ## Struktur Folder
 
 ```
-Dokumentasi/Report-Center-Tables/
+../Report-Center-Tables/
 ├── README.md                          ← File ini (overview + index)
 ├── MODULES/
 │   └── INVENTORY/

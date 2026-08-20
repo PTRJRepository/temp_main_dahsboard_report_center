@@ -16,7 +16,7 @@
 | `data/ifess/` | JSON persistence for IFESS | Templates, clients | Commit sensitive host data |
 | `keys/` | JWT RSA keypairs | Generate locally | Never commit private keys |
 | `docs/` | Canonical documentation | Keep current | — |
-| `Dokumentasi/` | Long-form ops/table guides | Reference | May lag code |
+| `../` | Long-form ops/table guides | Reference | May lag code |
 | `scripts/` | Smoke/start helpers | Add verifiable scripts | — |
 | `sql/` | SQL assets | Review before run | Prod write scripts |
 | `tests/` | Root tests if any | — | — |

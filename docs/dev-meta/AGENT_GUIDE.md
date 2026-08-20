@@ -67,5 +67,5 @@ npm run dev  # From root - gateway + Next.js
 ## Getting Help
 
 - `CLAUDE.md` - Detailed project documentation
-- `Dokumentasi/` - Service usage guides
+- `../` - Service usage guides
 - `Services/*/README.md` - Module-specific docs

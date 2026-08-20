@@ -19,7 +19,7 @@ import {
  * identik) — dikhususkan untuk item fuel (ItemType <> '4' di sisi gudang).
  *
  * Kolom kendaraan (`l.VehCode`) ADA di skema IN_FUELISSUELN (verified via
- * `Dokumentasi/FUEL_TABLES_DEEP_DIVE.md` — nilai seperti BE002/VN008), tetapi
+ * `docs/database/FUEL_TABLES_DEEP_DIVE.md` — nilai seperti BE002/VN008), tetapi
  * response `top` tetap per item (KodeBarang/NamaBarang) sesuai spesifikasi;
  * kolom unit/kendaraan tidak ikut digrup agar bentuk response stabil.
  *
