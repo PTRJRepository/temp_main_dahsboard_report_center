@@ -3,7 +3,7 @@
 import { Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { inventoryReports } from '@/modules/report-center/lib/reports/inventory/config'
-import { useReportStore } from '@/store/reportStore'
+import { useReportStore } from '@/modules/report-center/store/reportStore'
 
 function formatRelative(isoString: string) {
   const date = new Date(isoString)

@@ -3,7 +3,7 @@
 import { Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { inventoryReports } from '@/modules/report-center/lib/reports/inventory/config'
-import { useReportStore } from '@/store/reportStore'
+import { useReportStore } from '@/modules/report-center/store/reportStore'
 
 function getReport(id: string) {
   return inventoryReports.find((report) => report.id === id)

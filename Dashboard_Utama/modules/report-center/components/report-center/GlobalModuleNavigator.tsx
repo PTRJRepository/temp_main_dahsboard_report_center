@@ -9,7 +9,7 @@ import {
   type ReportModuleAvailability,
   type ReportModuleIcon,
 } from '@/modules/report-center/lib/reports/module-registry'
-import { useReportStore } from '@/store/reportStore'
+import { useReportStore } from '@/modules/report-center/store/reportStore'
 
 type ReportSource = 'estate' | 'pabrik'
 

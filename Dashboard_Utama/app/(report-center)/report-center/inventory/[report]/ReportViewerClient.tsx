@@ -51,7 +51,7 @@ import {
   selectSubtotalColumns,
   type ReportTableRenderRow,
 } from '@/modules/report-center/lib/reports/report-detail-performance'
-import { useReportStore } from '@/store/reportStore'
+import { useReportStore } from '@/modules/report-center/store/reportStore'
 import {
   filtersFromSearchParams,
   normalizeInventoryAnalysisGroupFilters,
