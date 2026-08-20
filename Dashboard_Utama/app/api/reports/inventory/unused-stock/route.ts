@@ -3,13 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-import { validateReadOnlySql } from '@/lib/reports/report-filtering'
+import { validateReadOnlySql } from '@/modules/report-center/lib/reports/report-filtering'
 import {
   gatewayOverrideFromRequest,
   resolveSqlGatewayApiKey,
   resolveSqlGatewayBase,
   sqlGatewayQueryUrl,
-} from '@/lib/reports/sql-gateway-config'
+} from '@/modules/report-center/lib/reports/sql-gateway-config'
 
 /**
  * Unused stock — analisis barang TIDAK JADI DIGUNAKAN dari inventory stock.

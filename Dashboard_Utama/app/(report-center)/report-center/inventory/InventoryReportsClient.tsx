@@ -33,14 +33,14 @@ import {
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@/lib/reports/inventory/config'
-import type { InsightContent } from '@/lib/reports/intelligence'
+import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@/modules/report-center/lib/reports/inventory/config'
+import type { InsightContent } from '@/modules/report-center/lib/reports/intelligence'
 import AiDynamicDashboard from '@/modules/report-center/components/report/AiDynamicDashboard'
 import ReportRail from '@/modules/report-center/components/report-center/ReportRail'
-import type { AiDashboardDefinition } from '@/lib/reports/ai-dashboard'
+import type { AiDashboardDefinition } from '@/modules/report-center/lib/reports/ai-dashboard'
 import { useReportStore } from '@/store/reportStore'
-import type { ReportFilterInput } from '@/lib/reports/report-filtering'
-import { saveReportPdfPreview } from '@/lib/reports/export-pdf-preview'
+import type { ReportFilterInput } from '@/modules/report-center/lib/reports/report-filtering'
+import { saveReportPdfPreview } from '@/modules/report-center/lib/reports/export-pdf-preview'
 
 type DbRow = Record<string, unknown>
 

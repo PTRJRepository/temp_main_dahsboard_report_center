@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-import { currentActualPeriodJakarta } from '@/lib/reports/accounting-period'
-import { listAggregates, deleteAggregate } from '@/lib/reports/inventory/monthly-aggregate-store'
-import { resolveAggregationPeriod } from '@/lib/reports/inventory/monthly-aggregate'
+import { currentActualPeriodJakarta } from '@/modules/report-center/lib/reports/accounting-period'
+import { listAggregates, deleteAggregate } from '@/modules/report-center/lib/reports/inventory/monthly-aggregate-store'
+import { resolveAggregationPeriod } from '@/modules/report-center/lib/reports/inventory/monthly-aggregate'
 
 /**
  * Control room API untuk agregasi KPI bulanan pre-rendered.

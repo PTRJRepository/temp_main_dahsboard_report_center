@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, ArrowRight, FileText, Layers3 } from 'lucide-react'
-import { getModulePanel } from '@/lib/reports/module-panel'
+import { getModulePanel } from '@/modules/report-center/lib/reports/module-panel'
 import ProcurementModuleWorkspace from '@/modules/report-center/components/report-center/ProcurementModuleWorkspace'
 
 export const dynamic = 'force-dynamic'

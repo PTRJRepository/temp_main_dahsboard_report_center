@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import ReportControlBar from '@/modules/report-center/components/report-center/ReportControlBar'
-import type { ReportFilterInput } from '@/lib/reports/report-filtering'
+import type { ReportFilterInput } from '@/modules/report-center/lib/reports/report-filtering'
 
 type DbRow = Record<string, unknown>
 

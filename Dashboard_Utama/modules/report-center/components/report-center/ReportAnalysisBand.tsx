@@ -10,9 +10,9 @@ import {
   PackageSearch,
   Table2,
 } from 'lucide-react'
-import type { InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
-import type { ReportBreakdownEntry, ReportFilterAction } from '@/lib/reports/report-experience'
-import type { ReportFilterInput } from '@/lib/reports/report-filtering'
+import type { InventoryAnalyticsContract } from '@/modules/report-center/lib/reports/inventory/analytics-contract'
+import type { ReportBreakdownEntry, ReportFilterAction } from '@/modules/report-center/lib/reports/report-experience'
+import type { ReportFilterInput } from '@/modules/report-center/lib/reports/report-filtering'
 
 type ReportAnalysisBandProps = {
   analytics?: InventoryAnalyticsContract

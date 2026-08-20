@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Brain, Clipboard, Send, Sparkles } from 'lucide-react'
-import type { InsightContent } from '@/lib/reports/intelligence'
+import type { InsightContent } from '@/modules/report-center/lib/reports/intelligence'
 
 export type AIInsightRequestContext = {
   moduleId?: string

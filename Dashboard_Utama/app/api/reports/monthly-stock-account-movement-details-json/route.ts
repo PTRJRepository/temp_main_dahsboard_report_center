@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   adaptMonthlyStockMovementNestedResponse,
   createMonthlyStockAccountMovementPayload,
-} from '@/lib/reports/inventory/monthly-stock-account-movement'
+} from '@/modules/report-center/lib/reports/inventory/monthly-stock-account-movement'
 import {
   getInventoryQueryContext,
   normalizeInventoryQueryLimit,
   type InventoryReportSource,
-} from '@/lib/reports/inventory/query-gateway'
-import { filtersFromSearchParams } from '@/lib/reports/report-filtering'
+} from '@/modules/report-center/lib/reports/inventory/query-gateway'
+import { filtersFromSearchParams } from '@/modules/report-center/lib/reports/report-filtering'
 
 export const dynamic = 'force-dynamic'
 

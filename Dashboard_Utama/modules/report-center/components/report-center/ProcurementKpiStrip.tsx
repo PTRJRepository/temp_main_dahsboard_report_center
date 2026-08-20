@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { startTransition, useEffect, useState } from 'react'
 import { ArrowRight, CircleDollarSign, ClipboardList, Copy, Fuel, Gauge, Layers3, Package, SlidersHorizontal, TrendingUp, Truck, Wrench, X } from 'lucide-react'
-import { frequencyPerDay, poFillRate, returnRate } from '@/lib/reports/procurement-kpi-math'
+import { frequencyPerDay, poFillRate, returnRate } from '@/modules/report-center/lib/reports/procurement-kpi-math'
 import KpiCarousel from './KpiCarousel'
 import MovementTrendChart from './MovementTrendChart'
 import TopMovementScatter from './TopMovementScatter'
@@ -16,7 +16,7 @@ import Sparkline, { MomentumDelta } from './Sparkline'
 import InsightTicker from './InsightTicker'
 import MarketTicker, { type MarketTickerItem } from './MarketTicker'
 import ProcurementFlowStrip, { type FlowStage } from './ProcurementFlowStrip'
-import type { ReportSource } from '@/lib/reports/procurement-workspace'
+import type { ReportSource } from '@/modules/report-center/lib/reports/procurement-workspace'
 
 type DeckSection = 'valuasi' | 'proses' | 'movement'
 

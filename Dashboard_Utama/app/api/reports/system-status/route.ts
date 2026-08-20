@@ -7,7 +7,7 @@ import {
   SQL_GATEWAY_FALLBACK,
   SQL_GATEWAY_PRIMARY,
   SQL_GATEWAY_PRESETS,
-} from '@/lib/reports/sql-gateway-config'
+} from '@/modules/report-center/lib/reports/sql-gateway-config'
 
 export const dynamic = 'force-dynamic'
 

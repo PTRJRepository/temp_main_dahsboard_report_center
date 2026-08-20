@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, Clipboard, Loader2, RefreshCw, Send, ShieldCheck, StopCircle } from 'lucide-react'
-import type { InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
-import type { InsightContent } from '@/lib/reports/intelligence'
-import type { ReportBreakdownEntry } from '@/lib/reports/report-experience'
-import type { ReportFilterInput } from '@/lib/reports/report-filtering'
+import type { InventoryAnalyticsContract } from '@/modules/report-center/lib/reports/inventory/analytics-contract'
+import type { InsightContent } from '@/modules/report-center/lib/reports/intelligence'
+import type { ReportBreakdownEntry } from '@/modules/report-center/lib/reports/report-experience'
+import type { ReportFilterInput } from '@/modules/report-center/lib/reports/report-filtering'
 
 type DbRow = Record<string, unknown>
 

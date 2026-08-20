@@ -3,15 +3,15 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-import { actualToAccountingPeriod } from '@/lib/reports/accounting-period'
-import { validateReadOnlySql } from '@/lib/reports/report-filtering'
+import { actualToAccountingPeriod } from '@/modules/report-center/lib/reports/accounting-period'
+import { validateReadOnlySql } from '@/modules/report-center/lib/reports/report-filtering'
 import {
   gatewayOverrideFromRequest,
   resolveSqlGatewayApiKey,
   resolveSqlGatewayBase,
   sqlGatewayQueryUrl,
-} from '@/lib/reports/sql-gateway-config'
-import { fuelIssueDocumentDateExpression, fuelIssueStatusFilter } from '@/lib/reports/inventory/fuel-issue-sql'
+} from '@/modules/report-center/lib/reports/sql-gateway-config'
+import { fuelIssueDocumentDateExpression, fuelIssueStatusFilter } from '@/modules/report-center/lib/reports/inventory/fuel-issue-sql'
 
 /**
  * Movement matrix — heatmap barang (Y) × periode bulan (X).

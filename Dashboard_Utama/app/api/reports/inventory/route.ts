@@ -1,24 +1,24 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { NextRequest, NextResponse } from 'next/server'
-import { getInventoryReport } from '@/lib/reports/inventory/config'
-import { attachInventoryAnalytics, type InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
-import { buildMonthlyStockAccountMovementAnalytics } from '@/lib/reports/inventory/monthly-stock-account-movement'
-import { buildInventoryReportAnalytics } from '@/lib/reports/inventory/report-analytics'
+import { getInventoryReport } from '@/modules/report-center/lib/reports/inventory/config'
+import { attachInventoryAnalytics, type InventoryAnalyticsContract } from '@/modules/report-center/lib/reports/inventory/analytics-contract'
+import { buildMonthlyStockAccountMovementAnalytics } from '@/modules/report-center/lib/reports/inventory/monthly-stock-account-movement'
+import { buildInventoryReportAnalytics } from '@/modules/report-center/lib/reports/inventory/report-analytics'
 import {
   fuelIssueDocumentDateExpression,
   fuelIssueFiscalPeriodFilter,
   fuelIssueStatusFilter,
   FUEL_ISSUE_PERIOD_RULE,
-} from '@/lib/reports/inventory/fuel-issue-sql'
-import { accountingActualPeriodSelectSql, accountingToActualPeriod, actualToAccountingPeriod } from '@/lib/reports/accounting-period'
-import { persistAggregate, serveAggregate } from '@/lib/reports/inventory/monthly-aggregate'
+} from '@/modules/report-center/lib/reports/inventory/fuel-issue-sql'
+import { accountingActualPeriodSelectSql, accountingToActualPeriod, actualToAccountingPeriod } from '@/modules/report-center/lib/reports/accounting-period'
+import { persistAggregate, serveAggregate } from '@/modules/report-center/lib/reports/inventory/monthly-aggregate'
 import {
   applyReportFilters,
   filtersFromSearchParams,
   normalizeInventoryAnalysisGroupFilters,
   validateReadOnlySql,
   type ReportFilterInput,
-} from '@/lib/reports/report-filtering'
+} from '@/modules/report-center/lib/reports/report-filtering'
 import {
   MOVEMENT_CATEGORY_ORDER,
   buildMovementCategoryBalancedRows,
@@ -30,19 +30,19 @@ import {
   movementCategorySqlCase,
   normalizeMovementCategoryThresholds,
   type MovementCategoryThresholds,
-} from '@/lib/reports/movement-category'
+} from '@/modules/report-center/lib/reports/movement-category'
 import {
   buildMovementPeriodMetadata,
   resolveMovementWindowScope,
   type MovementWindowScope,
-} from '@/lib/reports/inventory/movement-period'
+} from '@/modules/report-center/lib/reports/inventory/movement-period'
 import { verifyToken } from '@/utils/jwt'
 import {
   gatewayOverrideFromRequest,
   resolveSqlGatewayApiKey,
   resolveSqlGatewayBase,
   sqlGatewayQueryUrl,
-} from '@/lib/reports/sql-gateway-config'
+} from '@/modules/report-center/lib/reports/sql-gateway-config'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'

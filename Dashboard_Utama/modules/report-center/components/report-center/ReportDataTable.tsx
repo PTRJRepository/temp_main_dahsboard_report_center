@@ -2,7 +2,7 @@
 
 import { Fragment, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import type { ReportTableRenderRow } from '@/lib/reports/report-detail-performance'
+import type { ReportTableRenderRow } from '@/modules/report-center/lib/reports/report-detail-performance'
 import ReportRowDetail from '@/modules/report-center/components/report-center/ReportRowDetail'
 import { renderReportCell } from '@/modules/report-center/components/report-center/reportTableCells'
 

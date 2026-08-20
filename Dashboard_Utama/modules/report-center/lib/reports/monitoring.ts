@@ -1,4 +1,4 @@
-import type { VisualPoint } from '@/lib/reports/intelligence'
+import type { VisualPoint } from '@/modules/report-center/lib/reports/intelligence'
 
 export type MonitoringTone = 'green' | 'blue' | 'gold' | 'red' | 'slate'
 

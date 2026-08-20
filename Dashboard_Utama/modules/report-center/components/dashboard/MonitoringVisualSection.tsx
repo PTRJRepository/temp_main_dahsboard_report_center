@@ -1,9 +1,9 @@
 'use client'
 
 import { AlertTriangle, BarChart3, LineChart, PieChart, Trophy } from 'lucide-react'
-import type { IntelligenceModule, VisualPoint } from '@/lib/reports/intelligence'
-import { overviewIntelligence } from '@/lib/reports/intelligence'
-import type { MonitoringVisualData } from '@/lib/reports/monitoring'
+import type { IntelligenceModule, VisualPoint } from '@/modules/report-center/lib/reports/intelligence'
+import { overviewIntelligence } from '@/modules/report-center/lib/reports/intelligence'
+import type { MonitoringVisualData } from '@/modules/report-center/lib/reports/monitoring'
 
 type MonitoringVisualSectionProps = {
   module?: IntelligenceModule | null

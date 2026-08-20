@@ -4,7 +4,7 @@ import {
   getReportModuleConfig as getCanonicalReportModuleConfig,
   type ReportModuleIcon,
   type ReportModuleStatus,
-} from '@/lib/reports/module-registry';
+} from '@/modules/report-center/lib/reports/module-registry';
 
 export type ModuleStatus = ReportModuleStatus;
 export type ModuleIcon = ReportModuleIcon;

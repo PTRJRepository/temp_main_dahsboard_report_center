@@ -1,6 +1,6 @@
 'use client'
 
-import { formatInventoryQuantityBreakdown } from '@/lib/reports/report-detail-performance'
+import { formatInventoryQuantityBreakdown } from '@/modules/report-center/lib/reports/report-detail-performance'
 import { formatMetric } from '@/utils/format'
 import { movementTone } from '@/modules/report-center/components/report-center/reportTableCells'
 

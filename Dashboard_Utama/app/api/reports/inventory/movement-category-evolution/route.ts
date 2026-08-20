@@ -3,20 +3,20 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-import { actualToAccountingPeriod } from '@/lib/reports/accounting-period'
-import { validateReadOnlySql } from '@/lib/reports/report-filtering'
+import { actualToAccountingPeriod } from '@/modules/report-center/lib/reports/accounting-period'
+import { validateReadOnlySql } from '@/modules/report-center/lib/reports/report-filtering'
 import {
   MOVEMENT_CATEGORY_ORDER,
   normalizeMovementCategoryThresholds,
   type MovementCategory,
   type MovementCategoryThresholds,
-} from '@/lib/reports/movement-category'
+} from '@/modules/report-center/lib/reports/movement-category'
 import {
   gatewayOverrideFromRequest,
   resolveSqlGatewayApiKey,
   resolveSqlGatewayBase,
   sqlGatewayQueryUrl,
-} from '@/lib/reports/sql-gateway-config'
+} from '@/modules/report-center/lib/reports/sql-gateway-config'
 
 /**
  * Movement category evolution — stacked history of item count / qty / amount

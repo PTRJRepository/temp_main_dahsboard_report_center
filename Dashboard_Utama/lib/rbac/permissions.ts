@@ -5,7 +5,7 @@
  * TypeScript strict mode.
  */
 
-import { getReportModuleConfig } from '@/lib/reports/module-registry';
+import { getReportModuleConfig } from '@/modules/report-center/lib/reports/module-registry';
 import type { ModuleId, ReportCenterModuleId, Role } from './types';
 
 export type { ModuleId } from './types';

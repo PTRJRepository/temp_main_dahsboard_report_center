@@ -36,10 +36,10 @@ import ReportDataTable from '@/modules/report-center/components/report-center/Re
 import { bucketTone, isAmountField, movementTone, renderReportCell, riskTone } from '@/modules/report-center/components/report-center/reportTableCells'
 import ReportDetailLoadingScreen from '@/modules/report-center/components/report-center/ReportDetailLoadingScreen'
 import ReportQuestionPanel, { type ReportQuestionRequest } from '@/modules/report-center/components/report-center/ReportQuestionPanel'
-import type { InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
-import { inventoryColumnLabel, inventoryColumnTitleAttribute } from '@/lib/reports/inventory/column-glossary'
-import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@/lib/reports/inventory/config'
-import type { AiDashboardDefinition } from '@/lib/reports/ai-dashboard'
+import type { InventoryAnalyticsContract } from '@/modules/report-center/lib/reports/inventory/analytics-contract'
+import { inventoryColumnLabel, inventoryColumnTitleAttribute } from '@/modules/report-center/lib/reports/inventory/column-glossary'
+import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@/modules/report-center/lib/reports/inventory/config'
+import type { AiDashboardDefinition } from '@/modules/report-center/lib/reports/ai-dashboard'
 import {
   buildReportTableGroups,
   buildReportTableRows,
@@ -50,7 +50,7 @@ import {
   normalizeReportTableWindow,
   selectSubtotalColumns,
   type ReportTableRenderRow,
-} from '@/lib/reports/report-detail-performance'
+} from '@/modules/report-center/lib/reports/report-detail-performance'
 import { useReportStore } from '@/store/reportStore'
 import {
   filtersFromSearchParams,
@@ -58,7 +58,7 @@ import {
   type ReportColumnFilter,
   type ReportColumnOperator,
   type ReportFilterInput,
-} from '@/lib/reports/report-filtering'
+} from '@/modules/report-center/lib/reports/report-filtering'
 import {
   ASSET_VALUATION_REPORT_IDS,
   MONTHLY_CONTEXT_DETAIL_COLUMNS,
@@ -72,10 +72,10 @@ import {
   type ProfileBuilders,
   type ReportPreset,
   type ReportViewerProfile,
-} from '@/lib/reports/inventory/viewer-profiles'
-import type { ReportFilterAction } from '@/lib/reports/report-experience'
-import { actualToAccountingPeriod } from '@/lib/reports/accounting-period'
-import { saveReportPdfPreview } from '@/lib/reports/export-pdf-preview'
+} from '@/modules/report-center/lib/reports/inventory/viewer-profiles'
+import type { ReportFilterAction } from '@/modules/report-center/lib/reports/report-experience'
+import { actualToAccountingPeriod } from '@/modules/report-center/lib/reports/accounting-period'
+import { saveReportPdfPreview } from '@/modules/report-center/lib/reports/export-pdf-preview'
 import { formatCurrency, formatKpiValue, formatMetric, inferMetricKind } from '@/utils/format'
 
 type DbRow = Record<string, unknown>

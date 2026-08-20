@@ -1,6 +1,6 @@
-import type { ReportFilterInput } from '@/lib/reports/report-filtering'
-import type { InventoryAnalyticsContract } from '@/lib/reports/inventory/analytics-contract'
-import type { ReportFilterAction } from '@/lib/reports/report-experience'
+import type { ReportFilterInput } from '@/modules/report-center/lib/reports/report-filtering'
+import type { InventoryAnalyticsContract } from '@/modules/report-center/lib/reports/inventory/analytics-contract'
+import type { ReportFilterAction } from '@/modules/report-center/lib/reports/report-experience'
 
 export type DbRow = Record<string, unknown>
 
@@ -72,6 +72,6 @@ export type ProfileBuilders = {
   stockAgingQualityItems: ReportViewerProfile['qualityBuilder']
   stockAgingTopItems: ReportViewerProfile['topRowsBuilder']
   assetValuationKpis: (summary: DbRow, metadata: DbRow, rows: DbRow[]) => ReportKpiCard[]
-  monthlyStockMovementKpis: (payload: ReportPayload, filters?: import('@/lib/reports/report-filtering').ReportFilterInput, tableGroupField?: string) => ReportKpiCard[]
+  monthlyStockMovementKpis: (payload: ReportPayload, filters?: import('@/modules/report-center/lib/reports/report-filtering').ReportFilterInput, tableGroupField?: string) => ReportKpiCard[]
   toNumber: (value: unknown) => number
 }

@@ -7,10 +7,10 @@ import {
   type AiDashboardOptions,
   type DbRow,
   type ReportPayload,
-} from '@/lib/reports/ai-dashboard'
-import { buildAiEvidenceBundle, formatAiEvidenceForPrompt } from '@/lib/reports/ai-evidence'
-import { callAnthropicMessages, getAnthropicProviderConfig } from '@/lib/reports/ai-provider'
-import { compactReportPayloadForAi } from '@/lib/reports/report-detail-performance'
+} from '@/modules/report-center/lib/reports/ai-dashboard'
+import { buildAiEvidenceBundle, formatAiEvidenceForPrompt } from '@/modules/report-center/lib/reports/ai-evidence'
+import { callAnthropicMessages, getAnthropicProviderConfig } from '@/modules/report-center/lib/reports/ai-provider'
+import { compactReportPayloadForAi } from '@/modules/report-center/lib/reports/report-detail-performance'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'

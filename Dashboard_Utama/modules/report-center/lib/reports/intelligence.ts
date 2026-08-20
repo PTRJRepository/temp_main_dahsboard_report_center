@@ -5,7 +5,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-react'
-import { liveInventoryReports } from '@/lib/reports/inventory/config'
+import { liveInventoryReports } from '@/modules/report-center/lib/reports/inventory/config'
 import {
   REPORT_GLOBAL_MODULES,
   getReportModuleConfig,

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, BarChart3, Pin, PinOff } from 'lucide-react'
-import { intelligenceModules, type IntelligenceModule } from '@/lib/reports/intelligence'
+import { intelligenceModules, type IntelligenceModule } from '@/modules/report-center/lib/reports/intelligence'
 
 export type Module = IntelligenceModule
 

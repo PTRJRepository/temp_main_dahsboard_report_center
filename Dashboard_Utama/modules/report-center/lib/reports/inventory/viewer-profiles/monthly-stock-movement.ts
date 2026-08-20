@@ -1,5 +1,5 @@
-import { inventoryColumnLabel } from '@/lib/reports/inventory/column-glossary'
-import type { ReportFilterInput } from '@/lib/reports/report-filtering'
+import { inventoryColumnLabel } from '@/modules/report-center/lib/reports/inventory/column-glossary'
+import type { ReportFilterInput } from '@/modules/report-center/lib/reports/report-filtering'
 import { formatKpiValue, formatMetric } from '@/utils/format'
 import type { ReportKpiCard, ReportPayload } from './types'
 

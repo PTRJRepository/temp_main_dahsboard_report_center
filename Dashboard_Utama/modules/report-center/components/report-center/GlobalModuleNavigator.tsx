@@ -8,7 +8,7 @@ import {
   type ReportGlobalModuleConfig,
   type ReportModuleAvailability,
   type ReportModuleIcon,
-} from '@/lib/reports/module-registry'
+} from '@/modules/report-center/lib/reports/module-registry'
 import { useReportStore } from '@/store/reportStore'
 
 type ReportSource = 'estate' | 'pabrik'

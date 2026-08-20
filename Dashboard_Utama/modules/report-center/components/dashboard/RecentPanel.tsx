@@ -2,7 +2,7 @@
 
 import { Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { inventoryReports } from '@/lib/reports/inventory/config'
+import { inventoryReports } from '@/modules/report-center/lib/reports/inventory/config'
 import { useReportStore } from '@/store/reportStore'
 
 function formatRelative(isoString: string) {

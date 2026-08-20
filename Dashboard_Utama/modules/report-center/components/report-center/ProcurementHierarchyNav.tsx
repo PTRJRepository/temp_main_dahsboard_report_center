@@ -13,8 +13,8 @@ import {
   type HierarchyEntry,
   type ProcurementCategory,
   type ProcurementSubModule,
-} from '@/lib/reports/procurement-hierarchy'
-import type { ReportSource } from '@/lib/reports/procurement-workspace'
+} from '@/modules/report-center/lib/reports/procurement-hierarchy'
+import type { ReportSource } from '@/modules/report-center/lib/reports/procurement-workspace'
 import InventoryReportsClient from '@/app/(report-center)/report-center/inventory/InventoryReportsClient'
 
 type ScopeFilter = 'all' | 'gudang' | 'workshop'
