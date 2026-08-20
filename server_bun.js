@@ -15,32 +15,16 @@
  */
 
 // ─── ESM Imports (must be at top) ────────────────────────────────────────────
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { Buffer } from 'node:buffer';
 import { verifyJWT, extractToken } from './shared/auth/jwt.js';
 import {
     isProtectedPath, isDashboardPublicPath, isDashboardPath,
     redirectToLogin, wantsJson,
 } from './shared/auth/paths.js';
 import { createMonitoring } from './shared/monitoring/index.js';
-import { promises as dnsPromises } from 'node:dns';
-import { createSocket } from 'node:dgram';
-import { Socket } from 'node:net';
-import { connect as tlsConnect } from 'node:tls';
-import {
-    arch,
-    cpus,
-    freemem,
-    hostname as osHostname,
-    loadavg,
-    networkInterfaces,
-    platform,
-    release,
-    totalmem,
-    uptime,
-} from 'node:os';
+import { platform } from 'node:os';
 
 // IFESS shared service (kept in CommonJS for Bun/Node compatibility)
 const ifessService = require('./Services/ifess-control-server/service');
