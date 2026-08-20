@@ -3321,14 +3321,6 @@ const VERSION_HASH_RE = /-[a-f0-9]{6,}\.[a-z]+$/;
 const DEFAULT_STATIC_ROOTS = [
     { prefix: '/ifess-assets', dir: `${DASHBOARD_DIR}/public/ifess-assets`, immutable: false },
     { prefix: '/assets', dir: `${DASHBOARD_DIR}/public/assets`, immutable: false },
-    { prefix: '/upah/assets', dir: `${ROOT_DIR}/Services/upah/dist/assets`, immutable: true },
-    { prefix: '/upah/images', dir: `${ROOT_DIR}/Services/upah/dist/images`, immutable: false },
-    { prefix: '/upah/vite.svg', file: `${ROOT_DIR}/Services/upah/dist/vite.svg`, immutable: false },
-    { prefix: '/absen/assets', dir: `${ROOT_DIR}/Services/absen/dist/assets`, immutable: true },
-    { prefix: '/absen/images', dir: `${ROOT_DIR}/Services/absen/dist/images`, immutable: false },
-    { prefix: '/absen/vite.svg', file: `${ROOT_DIR}/Services/absen/dist/vite.svg`, immutable: false },
-    { prefix: '/monitoring-beras/assets', dir: `${ROOT_DIR}/Services/monitoring-beras/dist/assets`, immutable: true },
-    { prefix: '/monitoring-beras/vite.svg', file: `${ROOT_DIR}/Services/monitoring-beras/dist/vite.svg`, immutable: false },
 ];
 
 function normalizeStaticRoots(route) {

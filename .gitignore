@@ -42,6 +42,9 @@ context_portal/
 temp_bundle.js
 prompt/
 _dev_utils/
+*.excalidraw
+*_deepdive.json
+test-delegation.txt
 
 # Python artifacts
 __pycache__/
@@ -66,7 +69,12 @@ iTunes_Control/
 
 # Logs
 *.log
+*.err
+*.out.log
+*.err.log
 logs/
+watchdog.*
+_*.log
 
 # nul on Windows
 nul
