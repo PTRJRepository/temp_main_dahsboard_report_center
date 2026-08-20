@@ -25,7 +25,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
+import AiDynamicDashboard from '@/modules/report-center/components/report/AiDynamicDashboard'
 import ReportAnalysisBand from '@/modules/report-center/components/report-center/ReportAnalysisBand'
 import AppliedFilterBar from '@/modules/report-center/components/report-center/AppliedFilterBar'
 import MonthlyStockRingkasan from '@/modules/report-center/components/report-center/MonthlyStockRingkasan'

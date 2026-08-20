@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { Activity, Boxes, ChevronDown, ChevronRight, Database, FileText, Users } from 'lucide-react'
-import GlobalSearch from '@/components/dashboard/GlobalSearch'
-import FavoritesPanel from '@/components/dashboard/FavoritesPanel'
-import RecentPanel from '@/components/dashboard/RecentPanel'
-import SystemInfoPanel from '@/components/dashboard/SystemInfoPanel'
-import { IntelligenceWidget } from '@/components/intelligence/IntelligenceWidget'
+import GlobalSearch from '@/modules/report-center/components/dashboard/GlobalSearch'
+import FavoritesPanel from '@/modules/report-center/components/dashboard/FavoritesPanel'
+import RecentPanel from '@/modules/report-center/components/dashboard/RecentPanel'
+import SystemInfoPanel from '@/modules/report-center/components/dashboard/SystemInfoPanel'
+import { IntelligenceWidget } from '@/modules/report-center/components/intelligence/IntelligenceWidget'
 import GlobalModuleNavigator from '@/modules/report-center/components/report-center/GlobalModuleNavigator'
 import Sparkline from '@/modules/report-center/components/report-center/Sparkline'
-import { REPORT_GLOBAL_MODULES } from '@/lib/reports/module-registry'
+import { REPORT_GLOBAL_MODULES } from '@/modules/report-center/lib/reports/module-registry'
 
 const MOCK_RECOMMENDATIONS = [
   { id: '1', reportName: 'Stok Persediaan per Gudang', module: 'Procurement / Inventory', reason: 'similar' as const, reasonText: 'Report Inventory live siap dibuka', confidence: 0.92, subtitle: 'Gudang PG1A' },

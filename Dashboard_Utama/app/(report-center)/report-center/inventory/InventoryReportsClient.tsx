@@ -35,7 +35,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@/lib/reports/inventory/config'
 import type { InsightContent } from '@/lib/reports/intelligence'
-import AiDynamicDashboard from '@/components/report/AiDynamicDashboard'
+import AiDynamicDashboard from '@/modules/report-center/components/report/AiDynamicDashboard'
 import ReportRail from '@/modules/report-center/components/report-center/ReportRail'
 import type { AiDashboardDefinition } from '@/lib/reports/ai-dashboard'
 import { useReportStore } from '@/store/reportStore'
