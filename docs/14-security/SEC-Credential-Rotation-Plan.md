@@ -52,13 +52,20 @@ GRANT SELECT ON DATABASE::extend_db_ptrj TO report_reader;
 
 | Location | Exposure | Rotation Owner |
 |----------|----------|----------------|
-| `server_bun.js:182` (hardcoded default) | Protects IFESS endpoints | Dev |
+| ~~`server_bun.js` (hardcoded default)~~ | **REMOVED 2026-08-20** — env-sourced only, fail-fast in prod | Dev |
 | `.env.local.example` (placeholder) | Not committed | — |
+| `.env.development` (dev values) | Gitignored, local only | Dev |
+
+**Status (2026-08-20):** hardcoded fallback removed from `server_bun.js`. Three keys
+(`IFESS_API_KEY`, `QUERY_API_KEY`, `IFESS_CLIENT_API_KEY`) now read from env only;
+production boots fail fast if any is unset. `POST /api/ifess` RPC dispatcher now
+requires `X-API-Key` (was unauthenticated). The committed secret value itself
+remains exposed in git history — actual key rotation is still pending below.
 
 **Rotation steps:**
 1. Generate new key: `openssl rand -hex 32`
 2. Set `IFESS_API_KEY=newkey` in environment (all IFESS clients must update)
-3. Remove hardcoded default from `server_bun.js`
+3. ~~Remove hardcoded default from `server_bun.js`~~ (done)
 4. Update IFESS SuperApp clients with new key
 
 ---

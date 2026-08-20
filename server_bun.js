@@ -100,16 +100,23 @@ const assetCache = new LRUCache(CACHE_MAX_SIZE * 2, 30 * 60 * 1000);
 const verifyJwtForRoot = (token) => verifyJWT(token, ROOT_DIR);
 
 // ─── IFESS Control Server Handler (Bun Native) ─────────────────────────────────
-const IFESS_API_KEY = process.env.IFESS_API_KEY || 'ptrj-rebinmas-air-ruak-parit-gunung-darul';
-// Phase 5: Proxy route API keys
-const QUERY_API_KEY = process.env.QUERY_API_KEY || 'ptrj-query-gateway-key';
-const IFESS_CLIENT_API_KEY = process.env.IFESS_CLIENT_API_KEY || 'ptrj-ifess-client-key';
+// API keys are env-sourced only — no hardcoded fallback. Dev values live in
+// .env.development (gitignored). Production MUST set all three or the gateway
+// refuses to boot. Rotation tracked in docs/14-security/SEC-Credential-Rotation-Plan.md.
+const IFESS_API_KEY = process.env.IFESS_API_KEY;
+const QUERY_API_KEY = process.env.QUERY_API_KEY;
+const IFESS_CLIENT_API_KEY = process.env.IFESS_CLIENT_API_KEY;
+if (process.env.NODE_ENV === 'production') {
+    if (!IFESS_API_KEY || !QUERY_API_KEY || !IFESS_CLIENT_API_KEY) {
+        throw new Error('FATAL: IFESS_API_KEY, QUERY_API_KEY, and IFESS_CLIENT_API_KEY must be set in production.');
+    }
+}
 
 function getServerTime() { return new Date().toISOString(); }
 
 function validateApiKey(req) {
     const key = req.headers.get('x-api-key');
-    if (!key) return false;
+    if (!key || !IFESS_API_KEY) return false;
     return key === IFESS_API_KEY;
 }
 
@@ -370,8 +377,13 @@ function handleIFESSApi(req, reqPath) {
         return new Response(JSON.stringify(ifessService.getServerInfo()), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // Frontend proxy handler (POST with {action, params} format) - bypass auth
+    // Frontend RPC handler (POST with {action, params} format) — requires X-API-Key.
     if (req.method === 'POST' && reqPath === '/api/ifess') {
+        if (!validateApiKey(req)) {
+            return new Response(JSON.stringify({ error: 'Unauthorized', message: 'Valid X-API-Key header is required.' }), {
+                status: 401, headers: { 'Content-Type': 'application/json' },
+            });
+        }
         return handleIFESSActionDispatcher(req);
     }
 
