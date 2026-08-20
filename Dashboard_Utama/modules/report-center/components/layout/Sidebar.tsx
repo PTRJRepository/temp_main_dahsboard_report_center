@@ -22,8 +22,8 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { useReportStore } from '@/store/reportStore'
-import { useAuth } from '@/components/AuthProvider'
+import { useReportStore } from '@/modules/report-center/store/reportStore'
+import { useAuth } from '@/modules/report-center/components/AuthProvider'
 
 type NavItem = {
   label: string

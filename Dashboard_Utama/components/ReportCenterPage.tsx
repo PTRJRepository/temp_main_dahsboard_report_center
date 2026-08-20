@@ -7,8 +7,8 @@ import FavoritesPanel from '@/components/dashboard/FavoritesPanel'
 import RecentPanel from '@/components/dashboard/RecentPanel'
 import SystemInfoPanel from '@/components/dashboard/SystemInfoPanel'
 import { IntelligenceWidget } from '@/components/intelligence/IntelligenceWidget'
-import GlobalModuleNavigator from '@/components/report-center/GlobalModuleNavigator'
-import Sparkline from '@/components/report-center/Sparkline'
+import GlobalModuleNavigator from '@/modules/report-center/components/report-center/GlobalModuleNavigator'
+import Sparkline from '@/modules/report-center/components/report-center/Sparkline'
 import { REPORT_GLOBAL_MODULES } from '@/lib/reports/module-registry'
 
 const MOCK_RECOMMENDATIONS = [

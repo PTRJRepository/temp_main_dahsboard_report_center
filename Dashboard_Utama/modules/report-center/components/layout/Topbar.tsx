@@ -7,11 +7,11 @@ import {
   SQL_GATEWAY_FALLBACK,
   SQL_GATEWAY_PRESETS,
   SQL_GATEWAY_PRIMARY,
-} from '@/lib/reports/sql-gateway-config'
+} from '@/modules/report-center/lib/reports/sql-gateway-config'
 import {
   readClientSqlGatewayBase,
   writeClientSqlGatewayBase,
-} from '@/lib/reports/sql-gateway-client'
+} from '@/modules/report-center/lib/reports/sql-gateway-client'
 
 const LABELS: Record<string, string> = {
   inventory: 'Inventory',

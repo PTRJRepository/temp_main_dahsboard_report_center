@@ -3,8 +3,8 @@
 import { Fragment, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { ReportTableRenderRow } from '@/lib/reports/report-detail-performance'
-import ReportRowDetail from '@/components/report-center/ReportRowDetail'
-import { renderReportCell } from '@/components/report-center/reportTableCells'
+import ReportRowDetail from '@/modules/report-center/components/report-center/ReportRowDetail'
+import { renderReportCell } from '@/modules/report-center/components/report-center/reportTableCells'
 
 type DbRow = Record<string, unknown>
 

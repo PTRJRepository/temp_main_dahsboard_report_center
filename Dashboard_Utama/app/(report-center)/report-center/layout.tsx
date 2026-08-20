@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { verifyToken } from '@/utils/jwt'
-import ReportCenterShell from './ReportCenterShell'
+import ReportCenterShell from '@/modules/report-center/components/ReportCenterShell'
 
 export const runtime = 'nodejs'
 // Cookie/JWT auth makes every report-center page request-time only.
