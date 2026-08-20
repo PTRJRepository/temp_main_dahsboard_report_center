@@ -6,9 +6,9 @@
  */
 
 import { getReportModuleConfig } from '@/modules/report-center/lib/reports/module-registry';
-import type { ModuleId, ReportCenterModuleId, Role } from './types';
+import type { ModuleId, ReportCenterModuleId, Role } from '@/lib/rbac/types';
 
-export type { ModuleId } from './types';
+export type { ModuleId } from '@/lib/rbac/types';
 
 // ─── Module Registry ─────────────────────────────────────────────────────────
 

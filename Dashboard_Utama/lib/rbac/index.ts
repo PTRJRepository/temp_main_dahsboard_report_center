@@ -8,16 +8,8 @@ export { ROLE_LABELS } from './types';
 export type { UserSession, AuthContextValue } from './types';
 export { AuthProvider, useAuthContext, MOCK_USER_LIST } from './AuthContext';
 
-export type { ModuleId, ReportId, ExportFormat } from './permissions';
-export { MODULE_LABELS, REPORT_LABELS } from './permissions';
-export {
-  canAccessModule,
-  canViewReport,
-  canExport,
-  getAccessibleModules,
-  getViewableReports,
-  getExportableFormats,
-} from './permissions';
+// NOTE: permission helpers (canAccessModule, etc.) moved to
+// modules/report-center/lib/rbac/permissions.ts (report-center module scope).
 
 export { usePermission, useModuleAccess, useReportAccess, useExportAccess } from './usePermission';
 

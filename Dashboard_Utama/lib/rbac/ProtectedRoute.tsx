@@ -10,8 +10,8 @@
 
 import React from 'react'
 import { redirect } from 'next/navigation'
-import { useAuth } from '@/components/AuthProvider'
-import { canAccessModule, canAccessReportCenterModule } from './permissions'
+import { useAuth } from '@/modules/report-center/components/AuthProvider'
+import { canAccessModule, canAccessReportCenterModule } from '@/modules/report-center/lib/rbac/permissions'
 import type { ModuleId, ReportCenterModuleId, Role } from './types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────

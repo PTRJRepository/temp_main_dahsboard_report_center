@@ -6,7 +6,7 @@
 
 import { useCallback } from 'react';
 import { useAuthContext } from './AuthContext';
-import type { ModuleId, ReportId, ExportFormat } from './permissions';
+import type { ModuleId, ReportId, ExportFormat } from '@/modules/report-center/lib/rbac/permissions';
 import {
   canAccessModule,
   canViewReport,
@@ -14,7 +14,7 @@ import {
   getAccessibleModules,
   getViewableReports,
   getExportableFormats,
-} from './permissions';
+} from '@/modules/report-center/lib/rbac/permissions';
 
 // ─── Core hook ───────────────────────────────────────────────────────────────
 
