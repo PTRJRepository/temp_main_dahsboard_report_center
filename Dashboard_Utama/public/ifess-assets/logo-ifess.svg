@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="IFESS Control">
-  <defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#46dcff"/><stop offset="1" stop-color="#16c9bd"/></linearGradient></defs>
-  <ellipse cx="24" cy="11" rx="15" ry="6" fill="url(#g)"/>
-  <path d="M9 11v11c0 3.3 6.7 6 15 6s15-2.7 15-6V11" fill="url(#g)" opacity=".9"/>
-  <path d="M9 22v10c0 3.3 6.7 6 15 6s15-2.7 15-6V22" fill="url(#g)" opacity=".74"/>
-</svg>

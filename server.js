@@ -48,11 +48,6 @@ if (typeof Bun !== 'undefined') {
 console.log(`📡 Backend Host: ${process.env.BACKEND_HOST || 'localhost'}`);
 console.log(`📡 Fallback Host: ${process.env.BACKEND_HOST_FALLBACK || 'localhost'}`);
 
-// IFESS Control Server configuration
-console.log(`🔧 IFESS Server Host: ${process.env.IFESS_SERVER_HOST || 'localhost'}`);
-console.log(`🔧 IFESS Server Port: ${process.env.IFESS_SERVER_PORT || PORT}`);
-console.log(`🔧 IFESS Base URL: ${process.env.IFESS_BASE_URL || `http://localhost:${PORT}`}`);
-console.log(`🔧 IFESS API Key: ${process.env.IFESS_API_KEY ? '***' + process.env.IFESS_API_KEY.slice(-4) : 'NOT SET'}`);
 
 // Next.js 16 resolves production artifacts from process.cwd() in this embedded server.
 // Keep gateway paths rooted at ROOT_DIR, but run Next from the dashboard app directory.
@@ -621,47 +616,6 @@ nextApp.prepare().then(() => {
             res.json({ status: 'unhealthy', error: error.message });
         }
     });
-
-    // ============================================
-    // IFESS CONTROL SERVER INTEGRATION
-    // ============================================
-
-    // Load IFESS Control Server routes
-    let ifessRouter;
-    let ifessAuth;
-    try {
-        const ifessModule = require('./Services/ifess-control-server/routes');
-        ifessRouter = ifessModule.router;
-        ifessAuth = ifessModule.auth;
-        console.log('✅ IFESS Control Server loaded');
-    } catch (error) {
-        console.error('❌ Failed to load IFESS Control Server:', error.message);
-        ifessRouter = null;
-    }
-
-    // IFESS API routes - with authentication for /api/ifess paths
-    if (ifessRouter) {
-        // Apply body parser for IFESS routes
-        app.use('/api/ifess', express.json());
-
-        // Apply API key authentication middleware (except health and server-info endpoints)
-        app.use('/api/ifess', (req, res, next) => {
-            console.log(`[IFESS Auth] Processing: ${req.method} ${req.path}`);
-            // Skip auth for public endpoints
-            const publicPaths = ['/health', '/server-info'];
-            if (publicPaths.includes(req.path)) {
-                console.log(`[IFESS Auth] Public path - skipping auth`);
-                return next();
-            }
-            // Apply auth middleware
-            ifessAuth.authMiddleware(req, res, next);
-        });
-
-        // Mount IFESS routes
-        app.use('/api/ifess', ifessRouter);
-
-        console.log('🔗 IFESS Control Server routes mounted at /api/ifess');
-    }
 
     // ============================================
     // LEGACY API ROUTES FOR BACKWARD COMPATIBILITY

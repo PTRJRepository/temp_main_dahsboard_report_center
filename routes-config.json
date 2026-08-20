@@ -182,14 +182,5 @@
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": true
-  },
-  {
-    "id": "ifess",
-    "path": "/ifess",
-    "target": "http://localhost:8003",
-    "description": "IFESS Client Gateway",
-    "enabled": true,
-    "rewriteContent": false,
-    "rewritePath": true
   }
 ]
