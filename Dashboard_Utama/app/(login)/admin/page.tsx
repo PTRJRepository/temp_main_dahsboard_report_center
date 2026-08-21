@@ -17,6 +17,20 @@ async function getUsers() {
     return await userRepository.findAllWithPlainPassword()
 }
 
+async function getUserServiceMap(): Promise<Map<number, string[]>> {
+    const map = new Map<number, string[]>()
+    try {
+        const users = await userRepository.findAll()
+        for (const u of users) {
+            const svcs = await userRepository.getUserServices(u.id)
+            map.set(u.id, svcs)
+        }
+    } catch (e) {
+        console.error('Failed to load user services:', e)
+    }
+    return map
+}
+
 async function getServices() {
     return await serviceRepository.findAll()
 }
@@ -74,6 +88,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     const services = await getServices()
     const permissions = await getPermissions()
     const roles = await getRoles()
+    const userServices = await getUserServiceMap()
 
     return (
         <div className="space-y-6">
@@ -110,7 +125,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
 
             {tab === 'users' ? (
-                <UserManagement users={users} services={services} roles={roles} />
+                <UserManagement users={users} services={services} roles={roles} userServices={userServices} />
             ) : (
                 <div className="space-y-8">
                     <PermissionsTable services={services} permissions={permissions} roles={roles} />

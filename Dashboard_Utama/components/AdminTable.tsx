@@ -15,12 +15,14 @@ interface User {
 
 interface AdminTableProps {
     users: User[]
+    services: { serviceId: string; name: string }[]
+    userServices?: Map<number, string[]>
     onDelete: (id: number) => void
     onEdit: (id: number) => void
     onResetPassword: (id: number) => void
 }
 
-export default function AdminTable({ users, onDelete, onEdit, onResetPassword }: AdminTableProps) {
+export default function AdminTable({ users, services, userServices, onDelete, onEdit, onResetPassword }: AdminTableProps) {
     const [visiblePasswords, setVisiblePasswords] = useState<Set<number>>(new Set())
 
     const togglePasswordVisibility = (userId: number) => {
@@ -33,6 +35,14 @@ export default function AdminTable({ users, onDelete, onEdit, onResetPassword }:
             }
             return newSet
         })
+    }
+
+    const serviceName = (serviceId: string) => {
+        return services.find(s => s.serviceId === serviceId)?.name || serviceId
+    }
+
+    const assignedServices = (userId: number): string[] => {
+        return userServices?.get(userId) || []
     }
 
     return (
@@ -54,6 +64,9 @@ export default function AdminTable({ users, onDelete, onEdit, onResetPassword }:
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Divisi
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Layanan
                         </th>
                         <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Aksi
@@ -115,6 +128,19 @@ export default function AdminTable({ users, onDelete, onEdit, onResetPassword }:
                                 <div className="text-sm text-gray-900">
                                     {user.divisi || '-'}
                                 </div>
+                            </td>
+                            <td className="px-6 py-4">
+                                {assignedServices(user.id).length === 0 ? (
+                                    <span className="text-xs text-gray-400 italic">Semua (role)</span>
+                                ) : (
+                                    <div className="flex flex-wrap gap-1 max-w-xs">
+                                        {assignedServices(user.id).map(svcId => (
+                                            <span key={svcId} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-medium">
+                                                {serviceName(svcId)}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <button

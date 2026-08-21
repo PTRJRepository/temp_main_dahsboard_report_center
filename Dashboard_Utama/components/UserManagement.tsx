@@ -30,9 +30,10 @@ interface UserManagementProps {
     users: User[]
     services: Service[]
     roles: Role[]
+    userServices?: Map<number, string[]>
 }
 
-export default function UserManagement({ users, services, roles }: UserManagementProps) {
+export default function UserManagement({ users, services, roles, userServices }: UserManagementProps) {
     const [showAddForm, setShowAddForm] = useState(false)
 
     return (
@@ -46,7 +47,7 @@ export default function UserManagement({ users, services, roles }: UserManagemen
                     Tambah Pengguna Baru
                 </button>
             </div>
-            <AdminTableWrapper users={users} services={services} roles={roles} />
+            <AdminTableWrapper users={users} services={services} roles={roles} userServices={userServices} />
 
             {showAddForm && (
                 <AddUserForm onClose={() => setShowAddForm(false)} services={services} roles={roles} />

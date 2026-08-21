@@ -30,9 +30,10 @@ interface AdminTableWrapperProps {
     users: User[]
     services: Service[]
     roles: Role[]
+    userServices?: Map<number, string[]>
 }
 
-export default function AdminTableWrapper({ users, services, roles }: AdminTableWrapperProps) {
+export default function AdminTableWrapper({ users, services, roles, userServices }: AdminTableWrapperProps) {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [editingUser, setEditingUser] = useState<User | null>(null)
@@ -95,6 +96,8 @@ export default function AdminTableWrapper({ users, services, roles }: AdminTable
         <>
             <AdminTable
                 users={users}
+                services={services}
+                userServices={userServices}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
                 onResetPassword={handleResetPassword}
