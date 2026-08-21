@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buildAiEvidenceBundle, formatAiEvidenceForPrompt } from '@/modules/report-center/lib/reports/ai-evidence'
-import { callAnthropicMessages, getAnthropicProviderConfig } from '@/modules/report-center/lib/reports/ai-provider'
-import type { InsightContent } from '@/modules/report-center/lib/reports/intelligence'
+import { buildAiEvidenceBundle, formatAiEvidenceForPrompt } from '@modules/report-center/lib/reports/ai-evidence'
+import { callAnthropicMessages, getAnthropicProviderConfig } from '@modules/report-center/lib/reports/ai-provider'
+import type { InsightContent } from '@modules/report-center/lib/reports/intelligence'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'

@@ -20,9 +20,11 @@ const nextConfig = {
     allowedDevOrigins: LAN_DEV_ORIGINS,
     // Keep mssql/tedious out of Next worker bundling.
     serverExternalPackages: ['mssql'],
-    // Configure Turbopack root to avoid lockfile detection issues
+    // Turbopack root = repo root so `@modules/*` (Module Services/) resolves.
+    // Bare packages resolve from the hoisted repo-root node_modules (npm
+    // workspaces). See root package.json `workspaces`.
     turbopack: {
-        root: __dirname,
+        root: require('path').resolve(__dirname, '..'),
     },
     // Fix WebSocket HMR issues
     webpack: (config, { dev, isServer }) => {

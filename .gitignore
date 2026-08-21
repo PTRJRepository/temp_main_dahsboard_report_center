@@ -1,5 +1,7 @@
 node_modules/
 .next/
+# Module Services dev symlink -> Dashboard_Utama/node_modules (recreated per machine, see Module Services/report-center/README.md)
+Module Services/node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

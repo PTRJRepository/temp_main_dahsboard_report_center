@@ -1,9 +1,9 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Sidebar from '@/components/layout/Sidebar'
-import Topbar from '@/components/layout/Topbar'
-import { useReportStore } from '@/store/reportStore'
+import Sidebar from '@modules/report-center/components/layout/Sidebar'
+import Topbar from '@modules/report-center/components/layout/Topbar'
+import { useReportStore } from '@modules/report-center/store/reportStore'
 
 const REPORT_CENTER_THEME_V2 = process.env.NEXT_PUBLIC_REPORT_CENTER_THEME_V2 !== 'false'
 

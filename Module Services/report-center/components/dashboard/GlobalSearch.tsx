@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Search, X, FileText, ArrowRight, Star, StarOff } from 'lucide-react'
-import { inventoryReports } from '@/lib/reports/inventory/config'
-import { useReportStore } from '@/store/reportStore'
+import { inventoryReports } from '@modules/report-center/lib/reports/inventory/config'
+import { useReportStore } from '@modules/report-center/store/reportStore'
 import { useRouter } from 'next/navigation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────

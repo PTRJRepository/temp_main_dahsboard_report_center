@@ -159,25 +159,6 @@
     "image": "/assets/kebun sawit.webp"
   },
   {
-    "id": "report-center-assets",
-    "path": "/report-center-assets",
-    "target": "http://localhost:3200",
-    "description": "Static assets for Report Center service",
-    "enabled": false,
-    "rewriteContent": false,
-    "hidden": true
-  },
-  {
-    "id": "backend-report-center",
-    "path": "/api/reports",
-    "target": "http://localhost:3200",
-    "description": "Report Center API",
-    "enabled": false,
-    "rewriteContent": false,
-    "rewritePath": false,
-    "hidden": true
-  },
-  {
     "id": "query",
     "path": "/query",
     "target": "http://localhost:8001",

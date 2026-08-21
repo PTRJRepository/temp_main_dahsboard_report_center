@@ -8,8 +8,8 @@ import MovementTable from './MovementTable'
 import FrequencyInsights from './FrequencyInsights'
 import ItemDrilldown from './ItemDrilldown'
 import MovementCategoryEvolution from './MovementCategoryEvolution'
-import { buildCategoryEvolutionFromMatrix } from '@/lib/reports/movement-category-evolution'
-import { MOVEMENT_CATEGORY_THRESHOLDS } from '@/lib/reports/movement-category'
+import { buildCategoryEvolutionFromMatrix } from '@modules/report-center/lib/reports/movement-category-evolution'
+import { MOVEMENT_CATEGORY_THRESHOLDS } from '@modules/report-center/lib/reports/movement-category'
 
 /**
  * MovementAnalytics — pembungkus section analisis movement.

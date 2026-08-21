@@ -6,8 +6,8 @@
  * a Server Component page.
  */
 
-import ExportButtonGroup from '@/modules/report-center/components/shared/ExportButtonGroup';
-import type { ExportFormat } from '@/modules/report-center/components/shared/ExportButtonGroup';
+import ExportButtonGroup from '@modules/report-center/components/shared/ExportButtonGroup';
+import type { ExportFormat } from '@modules/report-center/components/shared/ExportButtonGroup';
 
 interface ModuleToolbarProps {
   totalRows: number;

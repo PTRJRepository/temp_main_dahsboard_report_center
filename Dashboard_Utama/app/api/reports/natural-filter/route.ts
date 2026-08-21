@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getInventoryReport } from '@/modules/report-center/lib/reports/inventory/config'
+import { getInventoryReport } from '@modules/report-center/lib/reports/inventory/config'
 import {
   normalizeReportFilters,
   parseNaturalFilterLocally,
   validateNaturalLanguageReadOnly,
   type ReportColumnFilter,
   type ReportFilterInput,
-} from '@/modules/report-center/lib/reports/report-filtering'
+} from '@modules/report-center/lib/reports/report-filtering'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'

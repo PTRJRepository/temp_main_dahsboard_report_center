@@ -84,8 +84,7 @@ export function filterHashFor(filters: Record<string, unknown> | null | undefine
 }
 
 // Prisma client lazy singleton — hindari koneksi berganda saat hot-reload dev.
-// Stub class (__prisma_stub.ts) — Prisma engine tidak di-generate di module ini.
-import { PrismaClient } from './__prisma_stub'
+import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as { __rcPrisma?: PrismaClient }
 

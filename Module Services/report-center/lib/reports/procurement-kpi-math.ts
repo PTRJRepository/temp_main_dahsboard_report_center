@@ -1,6 +1,6 @@
 /**
  * Pure KPI math untuk Procurement Command Deck.
- * Kontrak mengikuti docs/10-prd-docs/PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md §5.2 & M.
+ * Kontrak mengikuti Dokumentasi/PLAN_PROCUREMENT_KPI_COMMAND_DECK_WOW.md §5.2 & M.
  * Semua fungsi murni — tanpa fetch/SQL — agar mudah diuji.
  */
 

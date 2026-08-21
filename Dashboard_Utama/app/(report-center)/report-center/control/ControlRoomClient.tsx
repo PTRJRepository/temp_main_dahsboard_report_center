@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, Database, Factory, LayoutDashboard, TreePine, Zap } from 'lucide-react'
-import AggregationControlPanel from '@/modules/report-center/components/report-center/AggregationControlPanel'
+import AggregationControlPanel from '@modules/report-center/components/report-center/AggregationControlPanel'
 
 /**
  * Halaman ruang kontrol agregasi KPI bulanan pre-rendered.

@@ -25,21 +25,21 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import AiDynamicDashboard from '@/modules/report-center/components/report/AiDynamicDashboard'
-import ReportAnalysisBand from '@/modules/report-center/components/report-center/ReportAnalysisBand'
-import AppliedFilterBar from '@/modules/report-center/components/report-center/AppliedFilterBar'
-import MonthlyStockRingkasan from '@/modules/report-center/components/report-center/MonthlyStockRingkasan'
-import ExportPreflightDialog, { type ExportPreflightKind } from '@/modules/report-center/components/report-center/ExportPreflightDialog'
-import ReportWorkspaceTabs, { type WorkspaceTabId } from '@/modules/report-center/components/report-center/ReportWorkspaceTabs'
-import ReportTableToolbar from '@/modules/report-center/components/report-center/ReportTableToolbar'
-import ReportDataTable from '@/modules/report-center/components/report-center/ReportDataTable'
-import { bucketTone, isAmountField, movementTone, renderReportCell, riskTone } from '@/modules/report-center/components/report-center/reportTableCells'
-import ReportDetailLoadingScreen from '@/modules/report-center/components/report-center/ReportDetailLoadingScreen'
-import ReportQuestionPanel, { type ReportQuestionRequest } from '@/modules/report-center/components/report-center/ReportQuestionPanel'
-import type { InventoryAnalyticsContract } from '@/modules/report-center/lib/reports/inventory/analytics-contract'
-import { inventoryColumnLabel, inventoryColumnTitleAttribute } from '@/modules/report-center/lib/reports/inventory/column-glossary'
-import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@/modules/report-center/lib/reports/inventory/config'
-import type { AiDashboardDefinition } from '@/modules/report-center/lib/reports/ai-dashboard'
+import AiDynamicDashboard from '@modules/report-center/components/report/AiDynamicDashboard'
+import ReportAnalysisBand from '@modules/report-center/components/report-center/ReportAnalysisBand'
+import AppliedFilterBar from '@modules/report-center/components/report-center/AppliedFilterBar'
+import MonthlyStockRingkasan from '@modules/report-center/components/report-center/MonthlyStockRingkasan'
+import ExportPreflightDialog, { type ExportPreflightKind } from '@modules/report-center/components/report-center/ExportPreflightDialog'
+import ReportWorkspaceTabs, { type WorkspaceTabId } from '@modules/report-center/components/report-center/ReportWorkspaceTabs'
+import ReportTableToolbar from '@modules/report-center/components/report-center/ReportTableToolbar'
+import ReportDataTable from '@modules/report-center/components/report-center/ReportDataTable'
+import { bucketTone, isAmountField, movementTone, renderReportCell, riskTone } from '@modules/report-center/components/report-center/reportTableCells'
+import ReportDetailLoadingScreen from '@modules/report-center/components/report-center/ReportDetailLoadingScreen'
+import ReportQuestionPanel, { type ReportQuestionRequest } from '@modules/report-center/components/report-center/ReportQuestionPanel'
+import type { InventoryAnalyticsContract } from '@modules/report-center/lib/reports/inventory/analytics-contract'
+import { inventoryColumnLabel, inventoryColumnTitleAttribute } from '@modules/report-center/lib/reports/inventory/column-glossary'
+import { getInventoryReport, liveInventoryReports, type InventoryReport } from '@modules/report-center/lib/reports/inventory/config'
+import type { AiDashboardDefinition } from '@modules/report-center/lib/reports/ai-dashboard'
 import {
   buildReportTableGroups,
   buildReportTableRows,
@@ -50,15 +50,15 @@ import {
   normalizeReportTableWindow,
   selectSubtotalColumns,
   type ReportTableRenderRow,
-} from '@/modules/report-center/lib/reports/report-detail-performance'
-import { useReportStore } from '@/modules/report-center/store/reportStore'
+} from '@modules/report-center/lib/reports/report-detail-performance'
+import { useReportStore } from '@modules/report-center/store/reportStore'
 import {
   filtersFromSearchParams,
   normalizeInventoryAnalysisGroupFilters,
   type ReportColumnFilter,
   type ReportColumnOperator,
   type ReportFilterInput,
-} from '@/modules/report-center/lib/reports/report-filtering'
+} from '@modules/report-center/lib/reports/report-filtering'
 import {
   ASSET_VALUATION_REPORT_IDS,
   MONTHLY_CONTEXT_DETAIL_COLUMNS,
@@ -72,10 +72,10 @@ import {
   type ProfileBuilders,
   type ReportPreset,
   type ReportViewerProfile,
-} from '@/modules/report-center/lib/reports/inventory/viewer-profiles'
-import type { ReportFilterAction } from '@/modules/report-center/lib/reports/report-experience'
-import { actualToAccountingPeriod } from '@/modules/report-center/lib/reports/accounting-period'
-import { saveReportPdfPreview } from '@/modules/report-center/lib/reports/export-pdf-preview'
+} from '@modules/report-center/lib/reports/inventory/viewer-profiles'
+import type { ReportFilterAction } from '@modules/report-center/lib/reports/report-experience'
+import { actualToAccountingPeriod } from '@modules/report-center/lib/reports/accounting-period'
+import { saveReportPdfPreview } from '@modules/report-center/lib/reports/export-pdf-preview'
 import { formatCurrency, formatKpiValue, formatMetric, inferMetricKind } from '@/utils/format'
 
 type DbRow = Record<string, unknown>

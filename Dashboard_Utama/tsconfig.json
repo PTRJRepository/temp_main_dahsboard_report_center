@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@modules/*": [
+        "../Module Services/*"
       ]
     }
   },

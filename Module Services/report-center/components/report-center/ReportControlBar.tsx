@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReportFilterInput } from '@/lib/reports/report-filtering'
+import type { ReportFilterInput } from '@modules/report-center/lib/reports/report-filtering'
 
 export type ItemTypeScope = 'inventory' | 'gudang' | 'workshop'
 

@@ -13,7 +13,7 @@ import {
   createProcurementReportHref,
   getProcurementWorkspace,
   type ReportSource,
-} from '@/lib/reports/procurement-workspace'
+} from '@modules/report-center/lib/reports/procurement-workspace'
 import InventoryOverview from './InventoryOverview'
 import type { MovementWindowValue } from './MovementWindowTimeline'
 import ProcurementHierarchyNav from './ProcurementHierarchyNav'

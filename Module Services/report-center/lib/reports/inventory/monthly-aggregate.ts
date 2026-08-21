@@ -3,7 +3,7 @@ import {
   isClosedActualPeriod,
   normalizeAccountingMonth,
   normalizeAccountingYear,
-} from '@/lib/reports/accounting-period'
+} from '@modules/report-center/lib/reports/accounting-period'
 import {
   filterHashFor,
   readAggregate,

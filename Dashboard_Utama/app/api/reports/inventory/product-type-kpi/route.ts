@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-import { actualToAccountingPeriod, sqlIntegerExpression } from '@/modules/report-center/lib/reports/accounting-period'
-import { validateReadOnlySql } from '@/modules/report-center/lib/reports/report-filtering'
+import { actualToAccountingPeriod, sqlIntegerExpression } from '@modules/report-center/lib/reports/accounting-period'
+import { validateReadOnlySql } from '@modules/report-center/lib/reports/report-filtering'
 import {
   gatewayOverrideFromRequest,
   resolveSqlGatewayApiKey,
   resolveSqlGatewayBase,
   sqlGatewayQueryUrl,
-} from '@/modules/report-center/lib/reports/sql-gateway-config'
+} from '@modules/report-center/lib/reports/sql-gateway-config'
 
 /**
  * KPI per product type — drill-down satu level di atas item.

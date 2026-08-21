@@ -1,5 +1,5 @@
-import type { InsightContent } from '@/lib/reports/intelligence'
-import type { MonitoringVisualData } from '@/lib/reports/monitoring'
+import type { InsightContent } from '@modules/report-center/lib/reports/intelligence'
+import type { MonitoringVisualData } from '@modules/report-center/lib/reports/monitoring'
 
 export type InventoryDbRow = Record<string, unknown>
 

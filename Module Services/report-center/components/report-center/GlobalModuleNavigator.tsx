@@ -8,8 +8,8 @@ import {
   type ReportGlobalModuleConfig,
   type ReportModuleAvailability,
   type ReportModuleIcon,
-} from '@/lib/reports/module-registry'
-import { useReportStore } from '@/store/reportStore'
+} from '@modules/report-center/lib/reports/module-registry'
+import { useReportStore } from '@modules/report-center/store/reportStore'
 
 type ReportSource = 'estate' | 'pabrik'
 

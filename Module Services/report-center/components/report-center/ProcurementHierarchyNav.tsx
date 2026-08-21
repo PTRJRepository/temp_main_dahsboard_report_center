@@ -13,8 +13,8 @@ import {
   type HierarchyEntry,
   type ProcurementCategory,
   type ProcurementSubModule,
-} from '@/lib/reports/procurement-hierarchy'
-import type { ReportSource } from '@/lib/reports/procurement-workspace'
+} from '@modules/report-center/lib/reports/procurement-hierarchy'
+import type { ReportSource } from '@modules/report-center/lib/reports/procurement-workspace'
 import InventoryReportsClient from '@/app/(report-center)/report-center/inventory/InventoryReportsClient'
 
 type ScopeFilter = 'all' | 'gudang' | 'workshop'
@@ -209,7 +209,7 @@ export default function ProcurementHierarchyNav({ source, initialSubModule = 'in
                 {entries.filter((e) => e.status === 'live').length} laporan live · {entries.filter((e) => e.status === 'soon').length} segera menyusul
               </p>
             ) : null}
-            <InventoryReportsClient />
+            <InventoryReportsClient embedded fixedSource={source} itemType={scope === 'all' ? undefined : scope} />
           </div>
         ) : entries.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

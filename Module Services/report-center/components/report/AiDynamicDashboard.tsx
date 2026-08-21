@@ -27,7 +27,7 @@ import {
   type AiPriorityTable,
   type DbRow,
   type ReportPayload,
-} from '@/lib/reports/ai-dashboard'
+} from '@modules/report-center/lib/reports/ai-dashboard'
 
 type AiDynamicDashboardProps = {
   definition: AiDashboardDefinition | null

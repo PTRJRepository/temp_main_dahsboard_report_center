@@ -1,6 +1,6 @@
 'use client'
 
-import { formatInventoryQuantityBreakdown } from '@/lib/reports/report-detail-performance'
+import { formatInventoryQuantityBreakdown } from '@modules/report-center/lib/reports/report-detail-performance'
 import { formatMetric, inferMetricKind } from '@/utils/format'
 
 export type ReportTableDbRow = Record<string, unknown>
