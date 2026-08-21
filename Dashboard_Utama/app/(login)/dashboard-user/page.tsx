@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import LogoutButton from '@/components/LogoutButton'
 import ChangePasswordButton from '@/components/ChangePasswordButton'
-import ServiceCard from '@/components/ServiceCard'
+import ServiceGrid from '@/components/ServiceGrid'
 
 // Force Node.js runtime
 export const runtime = 'nodejs'
@@ -146,17 +146,17 @@ export default async function DashboardUserPage() {
                 <span className="absolute top-1/3 -right-48 h-[520px] w-[520px] rounded-full bg-teal-800/30 blur-[140px] animate-[drift_26s_var(--ease-in-out)_infinite_alternate-reverse]" />
                 <span className="absolute bottom-0 left-1/4 h-[380px] w-[380px] rounded-full bg-emerald-950/60 blur-[120px] animate-[drift_22s_var(--ease-in-out)_infinite_alternate]" />
                 {/* Topographic contour motif (dark) */}
-                <svg className="absolute inset-0 w-full h-full opacity-[0.5]" xmlns="http://www.w3.org/2000/svg">
+                <svg className="absolute inset-0 w-full h-full opacity-[0.9]" xmlns="http://www.w3.org/2000/svg">
                     <defs>
                         <pattern id="topo-dark" width="280" height="280" patternUnits="userSpaceOnUse">
-                            <path d="M0 70 Q70 40 140 70 T280 70" fill="none" stroke="rgba(52,211,153,0.07)" strokeWidth="1.2" />
-                            <path d="M0 120 Q70 85 140 120 T280 120" fill="none" stroke="rgba(52,211,153,0.05)" strokeWidth="1.2" />
-                            <path d="M0 170 Q70 130 140 170 T280 170" fill="none" stroke="rgba(52,211,153,0.07)" strokeWidth="1.2" />
-                            <path d="M0 220 Q70 180 140 220 T280 220" fill="none" stroke="rgba(52,211,153,0.04)" strokeWidth="1.2" />
+                            <path d="M0 70 Q70 40 140 70 T280 70" fill="none" stroke="rgba(52,211,153,0.16)" strokeWidth="1.2" />
+                            <path d="M0 120 Q70 85 140 120 T280 120" fill="none" stroke="rgba(52,211,153,0.12)" strokeWidth="1.2" />
+                            <path d="M0 170 Q70 130 140 170 T280 170" fill="none" stroke="rgba(52,211,153,0.16)" strokeWidth="1.2" />
+                            <path d="M0 220 Q70 180 140 220 T280 220" fill="none" stroke="rgba(52,211,153,0.09)" strokeWidth="1.2" />
                             <circle cx="60" cy="60" r="22" fill="none" stroke="rgba(52,211,153,0.06)" strokeWidth="1.2" />
-                            <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(52,211,153,0.04)" strokeWidth="1.2" />
-                            <circle cx="215" cy="200" r="28" fill="none" stroke="rgba(245,158,11,0.05)" strokeWidth="1.2" />
-                            <circle cx="215" cy="200" r="46" fill="none" stroke="rgba(245,158,11,0.03)" strokeWidth="1.2" />
+                            <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(52,211,153,0.09)" strokeWidth="1.2" />
+                            <circle cx="215" cy="200" r="28" fill="none" stroke="rgba(245,158,11,0.12)" strokeWidth="1.2" />
+                            <circle cx="215" cy="200" r="46" fill="none" stroke="rgba(245,158,11,0.08)" strokeWidth="1.2" />
                         </pattern>
                     </defs>
                     <rect width="100%" height="100%" fill="url(#topo-dark)" />
@@ -247,49 +247,21 @@ export default async function DashboardUserPage() {
                         )}
                     </div>
                 ) : (
-                    <div className="space-y-14">
-                        {groups.map((group, gi) => (
-                            <section
-                                key={group.key}
-                                className="animate-[fade-up_0.55s_var(--ease-out)_both]"
-                                style={{ animationDelay: `${gi * 90}ms` }}
-                            >
-                                {/* Group header */}
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-lg shadow-emerald-900/40 flex items-center justify-center shrink-0 text-white ring-1 ring-emerald-400/30">
-                                        <group.icon className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h2 className="text-xl font-bold text-white tracking-tight leading-tight">{group.label}</h2>
-                                        <p className="text-xs text-slate-400">{group.hint}</p>
-                                    </div>
-                                    <span className="ml-auto shrink-0 h-px flex-1 max-w-[80px] bg-gradient-to-r from-white/15 to-transparent" />
-                                    <span className="shrink-0 px-3 py-1 rounded-full bg-white/[0.07] text-emerald-200 text-xs font-bold ring-1 ring-white/10 backdrop-blur-sm">
-                                        {group.items.length} layanan
-                                    </span>
-                                </div>
-
-                                {/* Cards */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                                    {group.items.map((service, si) => (
-                                        <div
-                                            key={service.serviceId}
-                                            className="animate-[fade-up_0.5s_var(--ease-out)_both]"
-                                            style={{ animationDelay: `${gi * 90 + si * 60}ms` }}
-                                        >
-                                            <ServiceCard
-                                                name={service.name}
-                                                description={service.description || ''}
-                                                icon={null}
-                                                routeUrl={service.path || `/${service.serviceId}`}
-                                                imagePath={service.imagePath}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        ))}
-                    </div>
+                    /* Tabbed grid — one screen, no long scroll */
+                    <ServiceGrid
+                        groups={groups.map(g => ({
+                            key: g.key,
+                            label: g.label,
+                            hint: g.hint,
+                            items: g.items.map(s => ({
+                                serviceId: s.serviceId,
+                                name: s.name,
+                                description: s.description || null,
+                                path: s.path,
+                                imagePath: s.imagePath,
+                            })),
+                        }))}
+                    />
                 )}
             </main>
 

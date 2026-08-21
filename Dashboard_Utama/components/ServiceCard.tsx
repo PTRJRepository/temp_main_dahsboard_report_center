@@ -71,61 +71,61 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
         : resolveStyle(name)
 
     return (
-        <a href={routeUrl} className="group block h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-[24px]">
-            <div className="relative h-full flex flex-col overflow-hidden rounded-[24px] border border-white/10 bg-gradient-to-br from-white to-slate-100 shadow-[0_16px_40px_rgba(0,0,0,0.45)] hover:shadow-[0_24px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(52,211,153,0.35)] transition-all duration-500 hover:-translate-y-2.5">
+        <a href={routeUrl} className="group block h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-[20px]">
+            <div className="relative h-full flex flex-col overflow-hidden rounded-[20px] border border-white/10 bg-gradient-to-br from-white to-slate-100 shadow-[0_12px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_18px_44px_rgba(0,0,0,0.5),0_0_0_1px_rgba(52,211,153,0.35)] transition-all duration-400 hover:-translate-y-1.5">
 
-                {/* ── Banner ─────────────────────────────────────── */}
-                <div className="relative h-60 overflow-hidden shrink-0">
+                {/* ── Banner (compact) ───────────────────────────── */}
+                <div className="relative h-36 overflow-hidden shrink-0">
                     <Image
                         src={url}
                         alt={name}
                         fill
-                        sizes="(min-width: 1280px) 40vw, (min-width: 768px) 50vw, 100vw"
+                        sizes="(min-width: 1280px) 25vw, (min-width: 640px) 50vw, 100vw"
                         className="object-cover transition-transform duration-[1.2s] group-hover:scale-[1.15]"
                     />
                     {/* Color tint + depth scrim */}
                     <div className={`absolute inset-0 bg-gradient-to-tr ${tint} mix-blend-multiply`} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/5" />
 
                     {/* Top-right arrow button */}
-                    <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/35 flex items-center justify-center opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 transition-all duration-400">
-                        <LucideIcons.ArrowUpRight className="w-5 h-5 text-white" />
+                    <div className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/35 flex items-center justify-center opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300">
+                        <LucideIcons.ArrowUpRight className="w-4 h-4 text-white" />
                     </div>
 
-                    {/* Bottom-left embossed icon chip — overlaps the body */}
-                    <div className="absolute -bottom-8 left-6">
+                    {/* Bottom-left icon chip — overlaps the body */}
+                    <div className="absolute -bottom-6 left-5">
                         <div className="relative">
-                            <div className={`absolute inset-0 rounded-[22px] bg-gradient-to-br ${tint} blur-xl opacity-60 group-hover:opacity-90 transition-opacity`} />
-                            <div className="relative w-[72px] h-[72px] rounded-[22px] bg-gradient-to-br from-white to-slate-100 shadow-lg ring-1 ring-white/80 flex items-center justify-center text-slate-700 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6">
-                                <Icon style={{ width: 32, height: 32 }} />
+                            <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${tint} blur-lg opacity-60 group-hover:opacity-90 transition-opacity`} />
+                            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-white to-slate-100 shadow-lg ring-1 ring-white/80 flex items-center justify-center text-slate-700 transition-transform duration-400 group-hover:scale-110 group-hover:-rotate-6">
+                                <Icon style={{ width: 24, height: 24 }} />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* ── Body ───────────────────────────────────────── */}
-                <div className="flex-1 flex flex-col px-7 pb-6" style={{ paddingTop: 46 }}>
-                    <h3 className="text-xl font-bold text-slate-900 tracking-tight leading-snug group-hover:text-emerald-400 transition-colors">
+                {/* ── Body (compact) ─────────────────────────────── */}
+                <div className="flex-1 flex flex-col px-5 pb-4" style={{ paddingTop: 34 }}>
+                    <h3 className="text-base font-bold text-slate-900 tracking-tight leading-snug group-hover:text-emerald-600 transition-colors line-clamp-1">
                         {name}
                     </h3>
                     {description && (
-                        <p className="mt-2.5 text-sm text-slate-500 leading-relaxed line-clamp-2 flex-1">
+                        <p className="mt-1.5 text-xs text-slate-500 leading-relaxed line-clamp-2 flex-1">
                             {description}
                         </p>
                     )}
 
                     {/* Footer row — status + CTA */}
-                    <div className="mt-6 pt-5 border-t border-slate-200/70 flex items-center justify-between">
-                        <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            <span className="relative flex h-2 w-2">
+                    <div className="mt-3 pt-3 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                            <span className="relative flex h-1.5 w-1.5">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
                             </span>
                             Aktif
                         </span>
-                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-5 py-2.5 text-[13px] font-bold text-slate-700 transition-all duration-300 group-hover:text-white group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-emerald-700">
-                            Buka Layanan
-                            <LucideIcons.ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3.5 py-1.5 text-xs font-bold text-slate-700 transition-all duration-300 group-hover:text-white group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-emerald-700">
+                            Buka
+                            <LucideIcons.ArrowRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-0.5" />
                         </span>
                     </div>
                 </div>
