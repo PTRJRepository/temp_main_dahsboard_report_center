@@ -109,3 +109,26 @@ export function syncUpdateServiceEnabled(serviceId: string, enabled: boolean): {
         return routes.map(r => (r.id === serviceId ? { ...r, enabled } : r))
     })
 }
+
+// ── Route config page helpers (read all / toggle / remove raw routes) ──────
+export interface RouteConfigRow extends RouteConfig {
+    _source: 'dev' | 'prod'
+}
+
+export function listAllRoutes(): { dev: RouteConfig[]; prod: RouteConfig[] } {
+    const paths = configPaths()
+    return {
+        dev: readConfig(paths.dev),
+        prod: readConfig(paths.prod),
+    }
+}
+
+export function setRouteEnabled(routeId: string, enabled: boolean): { dev: boolean; prod: boolean } {
+    return syncAllFiles(routes =>
+        routes.map(r => (r.id === routeId ? { ...r, enabled } : r))
+    )
+}
+
+export function deleteRoute(routeId: string): { dev: boolean; prod: boolean } {
+    return syncAllFiles(routes => routes.filter(r => r.id !== routeId))
+}

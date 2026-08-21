@@ -4,7 +4,7 @@
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/logout', '/favicon.ico']);
 const DASHBOARD_PUBLIC_PREFIXES = ['/_next', '/assets', '/api/auth'];
-const DASHBOARD_PATHS = ['/admin', '/dashboard', '/dashboard-user', '/modules', '/report-center', '/api/services', '/api/reports', '/ifess-control', '/api/ifess', '/api/query-gateway'];
+const DASHBOARD_PATHS = ['/admin', '/dashboard', '/dashboard-user', '/modules', '/report-center', '/api/services', '/api/reports', '/ifess-control', '/api/ifess', '/api/query-gateway', '/api/file', '/config-path'];
 const PROTECTED_PATHS = ['/config-path', ...DASHBOARD_PATHS];
 
 export function isProtectedPath(pathname) {
