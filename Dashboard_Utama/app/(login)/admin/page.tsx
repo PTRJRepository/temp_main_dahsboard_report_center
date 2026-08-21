@@ -9,6 +9,7 @@ import { serviceRepository } from '@/utils/service-repository'
 import { roleRepository } from '@/utils/role-repository'
 import { verifyToken } from '@/utils/jwt'
 import Link from 'next/link'
+import { Route } from 'lucide-react'
 
 // Force Node.js runtime for mssql compatibility
 export const runtime = 'nodejs'
@@ -92,36 +93,44 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-[var(--color-ink)] tracking-tight">Panel Admin</h1>
-                    <p className="text-sm text-[var(--color-ink-muted)]">Selamat datang, {user.name}</p>
-                </div>
-                <div className="flex gap-2">
+            {/* Header band */}
+            <div className="relative overflow-hidden rounded-[var(--radius-xl)] bg-gradient-to-br from-[#0c231a] via-[#123526] to-[#1b4a33] text-white p-7 md:p-9 shadow-xl">
+                <span aria-hidden className="pointer-events-none absolute -top-20 -right-20 h-64 w-64 rounded-full border border-white/10 animate-[spin_50s_linear_infinite] border-dashed" />
+                <span aria-hidden className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-emerald-400/10 blur-3xl animate-[drift_18s_var(--ease-in-out)_infinite_alternate]" />
+                <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
+                    <div>
+                        <p className="text-emerald-200/70 text-xs uppercase tracking-wider mb-1.5">Control Center</p>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight font-display">Panel Admin</h1>
+                        <p className="text-sm text-white/60 mt-1.5">Kelola pengguna, layanan, peran, dan hak akses sistem</p>
+                    </div>
                     <Link
                         href="/config-path"
-                        className="px-4 py-2 bg-[var(--color-ink)] text-white rounded-lg hover:bg-[var(--color-accent-hover)] transition-colors text-sm font-medium shadow-[var(--shadow-sm)]"
+                        className="group inline-flex w-fit items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 backdrop-blur-sm ring-1 ring-white/25 text-white rounded-xl transition-all text-sm font-semibold hover:-translate-y-0.5 duration-300"
                     >
                         Konfigurasi Route
+                        <Route className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                     </Link>
                 </div>
             </div>
 
-            <div className="border-b border-[var(--color-border)]">
-                <nav className="-mb-px flex space-x-2">
-                    <Link
-                        href="/admin?tab=users"
-                        className={`px-4 py-2.5 rounded-t-lg font-medium text-sm transition-colors ${tab === 'users' ? 'bg-white text-[var(--color-accent)] border border-[var(--color-border)] border-b-white -mb-px font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'}`}
-                    >
-                        Pengguna
-                    </Link>
-                    <Link
-                        href="/admin?tab=services"
-                        className={`px-4 py-2.5 rounded-t-lg font-medium text-sm transition-colors ${tab === 'services' ? 'bg-white text-[var(--color-accent)] border border-[var(--color-border)] border-b-white -mb-px font-semibold' : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'}`}
-                    >
-                        Layanan & Hak Akses
-                    </Link>
-                </nav>
+            {/* Segmented tab pills */}
+            <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-[var(--shadow-neu-sm)] w-fit">
+                <Link
+                    href="/admin?tab=users"
+                    className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${tab === 'users'
+                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-md'
+                        : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-paper-muted)]'}`}
+                >
+                    Pengguna
+                </Link>
+                <Link
+                    href="/admin?tab=services"
+                    className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${tab === 'services'
+                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-md'
+                        : 'text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-paper-muted)]'}`}
+                >
+                    Layanan & Hak Akses
+                </Link>
             </div>
 
             {tab === 'users' ? (
