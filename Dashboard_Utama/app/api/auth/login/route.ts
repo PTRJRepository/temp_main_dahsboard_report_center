@@ -9,10 +9,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const { email, password } = body
 
-        console.log('🔐 Login attempt:', { email, passwordLength: password?.length })
-
         if (!email || !password) {
-            console.log('❌ Login failed: Missing email or password')
             return NextResponse.json(
                 { error: 'Email dan password harus diisi' },
                 { status: 400 }
@@ -20,10 +17,9 @@ export async function POST(request: NextRequest) {
         }
 
         const result = await authenticateUser(email, password)
-        console.log('🔐 Auth result:', { success: result.success, error: result.error, userId: result.user?.id })
 
         if (!result.success) {
-            console.log('❌ Login failed for:', email, '- Reason:', result.error)
+            console.warn('Login failed:', result.error)
             return NextResponse.json(
                 { error: result.error },
                 { status: 401 }
@@ -40,7 +36,6 @@ export async function POST(request: NextRequest) {
         // Set cookie - FOR LOCALHOST ALWAYS USE HTTP
         // Don't set explicit domain - let browser set it automatically
         // This ensures maximum compatibility across different environments
-        console.log('🍪 Setting auth-token cookie, token length:', result.token?.length)
         response.cookies.set('auth-token', result.token!, {
             httpOnly: false, // Allow client-side access for localStorage sync
             secure: false, // MUST be false for HTTP localhost

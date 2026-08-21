@@ -61,12 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return
         }
 
-        console.log('🔄 AuthProvider mount sync:', {
-            pathname,
-            hasLocalStorageToken: !!lsToken,
-            hasCookieToken: !!cookieToken
-        })
-
         fetch('/api/auth/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -75,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .then(res => res.json())
             .then(data => {
                 if (data.valid) {
-                    console.log('✅ Token verified')
                     verifiedThisSession.current = true
                     setToken(tokenToVerify)
                     setUser(data.user)
@@ -87,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         router.push('/dashboard-user')
                     }
                 } else {
-                    console.log('❌ Token invalid, clearing session')
                     localStorage.removeItem('auth-token')
                     localStorage.removeItem('user')
                     document.cookie = 'auth-token=; path=/; max-age=0'

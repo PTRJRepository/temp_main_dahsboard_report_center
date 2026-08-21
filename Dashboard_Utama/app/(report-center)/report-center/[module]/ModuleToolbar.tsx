@@ -15,7 +15,6 @@ interface ModuleToolbarProps {
 
 function handleExport(format: ExportFormat) {
   // TODO: wire up real export logic (API call / file download)
-  console.log('Export requested in format:', format);
 }
 
 export default function ModuleToolbar({ totalRows }: ModuleToolbarProps) {
