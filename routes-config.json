@@ -175,5 +175,14 @@
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": true
+  },
+  {
+    "id": "rjfm",
+    "path": "/rjfm",
+    "target": "http://localhost:8011",
+    "description": "Rebinmas Jaya File Management — task dispatch, file ingestion, mandatory revision loop",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false
   }
 ]

@@ -57,7 +57,9 @@ const DASHBOARD_HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
 const DASHBOARD_TARGET = process.env.DASHBOARD_TARGET || `http://127.0.0.1:${DASHBOARD_PORT}`;
 const FIREBIRD_QUERY_TARGET = process.env.FIREBIRD_QUERY_TARGET || 'http://localhost:8004';
 const START_DASHBOARD = process.env.START_DASHBOARD !== 'false';
-const START_MODULE_SERVICES = process.env.START_MODULE_SERVICES !== 'false';
+// Module services are NEVER auto-started by the gateway — they run externally
+// (own process/port). This flag only gates a stub; kept for clarity.
+const START_MODULE_SERVICES = process.env.START_MODULE_SERVICES === 'true';
 const NETWORK_MONITOR_DIR = `${ROOT_DIR}/Module Services/Wifi_LAN_Monitor/reference-design`;
 const IFESS_CONTROL_DIR = `${ROOT_DIR}/Module Services/ifess-control`;
 const CACHE_MAX_SIZE = 50;
@@ -1009,8 +1011,9 @@ async function startDashboardIfNeeded() {
 }
 
 async function startModuleServicesIfNeeded() {
-    // Phase 4: removed child-process spawning — module services must be started externally
-    console.log('[Phase 4] startModuleServicesIfNeeded() stubbed — services managed externally');
+    // Module services run externally (own process/port). The gateway never
+    // spawns them — it only proxies to their ports via routes-config.json.
+    console.log('[startup] Module services are external — not started by gateway');
     return;
 }
 async function proxyDashboard(req, reqPath, search) {
