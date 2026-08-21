@@ -46,38 +46,46 @@ export default async function AdminLayout({
     }
 
     return (
-        <div className="flex h-screen bg-gray-50">
-            {/* Sidebar - Reused Concept */}
-            <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200">
-                <div className="flex items-center h-16 px-6 border-b border-gray-200 bg-gray-900">
-                    <span className="text-xl font-bold text-white">REBINMAS ADMIN</span>
+        <div className="flex h-screen bg-[var(--color-paper-soft)]">
+            {/* Sidebar */}
+            <aside className="hidden md:flex flex-col w-64 bg-[var(--color-paper)] border-r border-[var(--color-border)]">
+                <div className="flex items-center gap-2.5 h-16 px-5 border-b border-[var(--color-border)]">
+                    <div className="w-9 h-9 rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-hover)] flex items-center justify-center text-white font-bold text-sm shadow-[var(--shadow-sm)]">
+                        R
+                    </div>
+                    <div>
+                        <span className="text-sm font-bold text-[var(--color-ink)] tracking-tight leading-none block">REBINMAS ADMIN</span>
+                        <span className="text-[10px] text-[var(--color-ink-muted)] uppercase tracking-wider">Control Center</span>
+                    </div>
                 </div>
-                <nav className="flex-1 p-4 space-y-1">
-                    <Link href="/config-path" className="flex items-center px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                        <LayoutDashboard className="w-5 h-5 mr-3 text-gray-400" />
+                <nav className="flex-1 p-3 space-y-1">
+                    <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider">Navigasi</p>
+                    <Link href="/config-path" className="flex items-center px-3 py-2.5 text-sm font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)] rounded-lg transition-colors">
+                        <LayoutDashboard className="w-4 h-4 mr-3 text-[var(--color-ink-muted)] group-hover:text-[var(--color-accent)]" />
                         Konfigurasi Route
                     </Link>
-                    <Link href="/admin" className="flex items-center px-4 py-2.5 text-sm font-medium text-white bg-gray-900 rounded-lg group transition-colors">
-                        <Settings className="w-5 h-5 mr-3 text-white" />
+                    <Link href="/admin" className="flex items-center px-3 py-2.5 text-sm font-medium text-white bg-[var(--color-accent)] rounded-lg shadow-[var(--shadow-sm)]">
+                        <Settings className="w-4 h-4 mr-3 text-white" />
                         Manajemen Pengguna
                     </Link>
-                    {/* Add Service Management Link later */}
                 </nav>
-                <div className="p-4 border-t border-gray-200">
-                    <div className="flex items-center px-4 py-3 bg-gray-50 rounded-lg">
+                <div className="p-4 border-t border-[var(--color-border)]">
+                    <div className="flex items-center px-3 py-3 bg-[var(--color-paper-soft)] rounded-lg border border-[var(--color-border)]">
                         {user?.image ? (
                             <Image src={user.image} alt="User" width={32} height={32} className="rounded-full" />
                         ) : (
-                            <div className="w-8 h-8 rounded-full bg-palm-green/20 flex items-center justify-center text-palm-green">
+                            <div className="w-8 h-8 rounded-full bg-[var(--color-accent-soft)] flex items-center justify-center text-[var(--color-accent)]">
                                 <User className="w-4 h-4" />
                             </div>
                         )}
-                        <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">{user?.name || 'Pengguna'}</p>
-                            <p className="text-xs text-gray-500 uppercase">{user?.role || 'Staf'}</p>
+                        <div className="ml-3 min-w-0">
+                            <p className="text-sm font-medium text-[var(--color-ink)] truncate">{user?.name || 'Pengguna'}</p>
+                            <p className="text-xs text-[var(--color-ink-muted)] uppercase">{user?.role || 'Staf'}</p>
                         </div>
                     </div>
-                    <LogoutButton />
+                    <div className="mt-2">
+                        <LogoutButton />
+                    </div>
                 </div>
             </aside>
 

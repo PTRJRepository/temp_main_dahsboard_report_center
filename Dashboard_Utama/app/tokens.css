@@ -1,0 +1,132 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: Palm (custom) · enrichment: none · nav: N1b */
+/* Pre-emit critique: P5 H4 E5 S4 R5 V4 */
+
+/* ─── Tokens ────────────────────────────────────────────────────── */
+:root {
+  /* Paper */
+  --color-paper: #ffffff;
+  --color-paper-soft: #f8faf8;
+  --color-paper-raised: #ffffff;
+  --color-paper-muted: #f1f5f1;
+
+  /* Ink */
+  --color-ink: #0f1a0f;
+  --color-ink-soft: #3a4a3a;
+  --color-ink-muted: #7a8a7a;
+
+  /* Brand */
+  --color-accent: #3A7D44;
+  --color-accent-hover: #2d6135;
+  --color-accent-soft: rgba(58, 125, 68, 0.08);
+  --color-accent-glow: rgba(58, 125, 68, 0.15);
+  --color-accent-ring: rgba(58, 125, 68, 0.4);
+
+  /* Earth */
+  --color-earth: #5C4033;
+  --color-earth-soft: rgba(92, 64, 51, 0.08);
+
+  /* Semantic */
+  --color-border: rgba(15, 26, 15, 0.08);
+  --color-border-strong: rgba(15, 26, 15, 0.12);
+  --color-success: #3A7D44;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-focus: var(--color-accent-ring);
+
+  /* Typography — resolve via next/font variables in app/layout.tsx */
+  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-data), ui-monospace, monospace;
+
+  /* Type scale */
+  --text-hero: clamp(1.75rem, 3vw + 0.5rem, 2.5rem);
+  --text-h1: clamp(1.4rem, 2vw + 0.25rem, 1.75rem);
+  --text-h2: clamp(1.15rem, 1.5vw + 0.25rem, 1.35rem);
+  --text-h3: 1.1rem;
+  --text-body: 0.9375rem;
+  --text-small: 0.8125rem;
+  --text-xs: 0.75rem;
+  --text-mono: 0.8125rem;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 26, 15, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 26, 15, 0.06);
+  --shadow-lg: 0 8px 30px rgba(15, 26, 15, 0.08);
+  --shadow-xl: 0 12px 40px rgba(15, 26, 15, 0.1);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 400ms;
+  --dur-reveal: 600ms;
+}
+
+/* ─── Base ──────────────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+html, body {
+  overflow-x: clip;
+}
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--color-ink);
+  background: var(--color-paper-soft);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Animations ────────────────────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-accent-glow); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

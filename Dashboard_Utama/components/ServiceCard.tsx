@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import * as LucideIcons from 'lucide-react'
 
 interface ServiceCardProps {
@@ -9,54 +8,57 @@ interface ServiceCardProps {
     imagePath?: string | null
 }
 
+// Map common service names to an icon for the tile.
+function resolveIcon(name: string, icon: string | null) {
+    if (icon && LucideIcons[icon as keyof typeof LucideIcons]) {
+        return LucideIcons[icon as keyof typeof LucideIcons] as typeof LucideIcons.LayoutDashboard
+    }
+    const n = name.toLowerCase()
+    if (/absen|attendance|hadir/.test(n)) return LucideIcons.CalendarCheck2
+    if (/upah|payroll|gaji|tunjangan/.test(n)) return LucideIcons.Wallet
+    if (/produksi|panen|basis/.test(n)) return LucideIcons.Wheat
+    if (/server|monitor|network|jaringan/.test(n)) return LucideIcons.ServerCog
+    if (/query|sql|database|data/.test(n)) return LucideIcons.Database
+    if (/file|drive|rjfm|dokumen/.test(n)) return LucideIcons.FolderKanban
+    if (/report|laporan/.test(n)) return LucideIcons.BarChart3
+    return LucideIcons.LayoutDashboard
+}
+
 export default function ServiceCard({ name, description, icon, routeUrl, imagePath }: ServiceCardProps) {
-    // Dynamic Icon Lookup
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const IconComponent = (icon && LucideIcons[icon as keyof typeof LucideIcons] ? LucideIcons[icon as keyof typeof LucideIcons] : LucideIcons.HelpCircle) as any
+    const Icon = resolveIcon(name, icon)
 
     return (
-        <a href={routeUrl} className="group block h-full">
-            <div className="h-full bg-white rounded-xl shadow-sm hover:shadow-xl border border-gray-100/50 hover:border-palm-green/20 overflow-hidden transition-all duration-300 relative">
-                {/* Banner Image Area */}
-                <div className="h-40 relative w-full bg-gray-50 overflow-hidden">
-                    {imagePath ? (
-                        <Image
-                            src={imagePath}
-                            alt={name}
-                            fill
-                            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
-                            className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-300">
-                            <LucideIcons.Image className="h-12 w-12 opacity-50" />
+        <a href={routeUrl} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-[var(--radius-lg)]">
+            <div className="h-full bg-[var(--color-paper)] rounded-[var(--radius-lg)] border border-[var(--color-border)] hover:border-[var(--color-border-strong)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] overflow-hidden transition-all duration-300 hover:-translate-y-1 flex flex-col">
+                {/* Icon tile + arrow */}
+                <div className="p-5 pb-3">
+                    <div className="flex items-start justify-between">
+                        <div className="relative">
+                            <div className="w-12 h-12 rounded-[var(--radius-md)] bg-[var(--color-accent-soft)] flex items-center justify-center text-[var(--color-accent)] transition-all duration-300 group-hover:bg-[var(--color-accent)] group-hover:text-white">
+                                <Icon className="w-6 h-6" />
+                            </div>
+                            {imagePath && (
+                                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[var(--color-accent)] ring-2 ring-white" />
+                            )}
                         </div>
-                    )}
-                    {/* Overlay Gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
-
-                    {/* Icon floating */}
-                    <div className="absolute bottom-3 left-4">
-                        <div className="p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm text-palm-green">
-                            <IconComponent className="h-5 w-5" />
-                        </div>
+                        <LucideIcons.ArrowUpRight className="h-5 w-5 text-[var(--color-ink-muted)] group-hover:text-[var(--color-accent)] transition-all duration-300 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0" />
                     </div>
                 </div>
 
-                <div className="p-5">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-bold text-gray-800 group-hover:text-palm-green transition-colors">
-                            {name}
-                        </h3>
-                        <LucideIcons.ArrowUpRight className="h-5 w-5 text-gray-300 group-hover:text-palm-green transition-colors opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 duration-300" />
-                    </div>
-
+                {/* Content */}
+                <div className="px-5 pb-5 flex-1 flex flex-col">
+                    <h3 className="text-base font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-accent)] transition-colors leading-snug">
+                        {name}
+                    </h3>
                     {description && (
-                        <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+                        <p className="mt-1 text-sm text-[var(--color-ink-muted)] line-clamp-2 leading-relaxed flex-1">
                             {description}
                         </p>
                     )}
                 </div>
+
+                {/* Bottom accent line */}
+                <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-transparent to-transparent group-hover:from-[var(--color-accent)] group-hover:via-[var(--color-accent-soft)] group-hover:to-transparent transition-all duration-500" />
             </div>
         </a>
     )
