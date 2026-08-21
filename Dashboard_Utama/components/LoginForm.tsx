@@ -1,11 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { KeyRound, User, ArrowRight, Loader2 } from 'lucide-react'
 
 export default function LoginForm() {
-    const router = useRouter()
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
@@ -49,41 +47,45 @@ export default function LoginForm() {
         }
     }
 
+    const fieldCls = 'w-full rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-paper-soft)] pl-11 pr-4 py-3 text-[var(--color-ink)] text-sm outline-none transition-all duration-200 placeholder:text-[var(--color-ink-muted)] focus:bg-white focus:border-[var(--color-accent)] focus:ring-4 focus:ring-[var(--color-accent-glow)]'
+
     return (
-        <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-800" htmlFor="username">
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+                <label className="block text-sm font-semibold text-[var(--color-ink-soft)]" htmlFor="username">
                     Username
                 </label>
-                <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-palm-green" />
+                <div className="relative group">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-ink-muted)] group-focus-within:text-[var(--color-accent)] transition-colors" />
                     <input
-                        className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 pl-12 pr-4 py-3.5 text-gray-900 text-sm focus:border-palm-green focus:bg-white focus:ring-2 focus:ring-palm-green/20 outline-none transition-all placeholder:text-gray-400"
+                        className={fieldCls}
                         id="username"
                         type="text"
                         name="username"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="Masukkan username"
+                        autoComplete="username"
                         required
                     />
                 </div>
             </div>
 
-            <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-800" htmlFor="password">
+            <div className="space-y-1.5">
+                <label className="block text-sm font-semibold text-[var(--color-ink-soft)]" htmlFor="password">
                     Kata Sandi
                 </label>
-                <div className="relative">
-                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-palm-green" />
+                <div className="relative group">
+                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-ink-muted)] group-focus-within:text-[var(--color-accent)] transition-colors" />
                     <input
-                        className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 pl-12 pr-4 py-3.5 text-gray-900 text-sm focus:border-palm-green focus:bg-white focus:ring-2 focus:ring-palm-green/20 outline-none transition-all placeholder:text-gray-400"
+                        className={fieldCls}
                         id="password"
                         type="password"
                         name="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Masukkan kata sandi"
+                        autoComplete="current-password"
                         required
                         minLength={6}
                     />
@@ -91,30 +93,30 @@ export default function LoginForm() {
             </div>
 
             {error && (
-                <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-semibold">
-                    ⚠️ {error}
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-[var(--radius-md)] text-sm font-medium animate-[fade-up_0.25s_var(--ease-out)_both]" role="alert">
+                    {error}
                 </div>
             )}
 
-            <div className="pt-3">
-                <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-palm-green to-emerald-600 px-6 py-4 text-base font-semibold text-white shadow-lg hover:shadow-xl hover:from-palm-green-hover hover:to-emerald-700 focus:outline-none focus:ring-4 focus:ring-palm-green/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                >
-                    {isLoading ? (
-                        <>
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                            Sedang Masuk...
-                        </>
-                    ) : (
-                        <>
-                            Masuk
-                            <ArrowRight className="h-5 w-5" />
-                        </>
-                    )}
-                </button>
-            </div>
+            <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-ink)] px-6 py-3.5 text-sm font-semibold text-white shadow-[var(--shadow-md)] hover:bg-[var(--color-accent-hover)] hover:shadow-[var(--shadow-lg)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.99] overflow-hidden"
+            >
+                {/* Shine sweep on hover */}
+                <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                {isLoading ? (
+                    <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Sedang masuk…
+                    </>
+                ) : (
+                    <>
+                        Masuk ke Portal
+                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                    </>
+                )}
+            </button>
         </form>
     )
 }
