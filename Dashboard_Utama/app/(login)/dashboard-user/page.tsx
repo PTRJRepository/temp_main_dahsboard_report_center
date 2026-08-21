@@ -220,10 +220,29 @@ export default async function DashboardUserPage() {
             )}
 
             {/* ── Services ──────────────────────────────────────────── */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-20 -mt-6 relative z-10">
+            <main className="relative z-10 max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 py-12 pb-24 -mt-6">
+                {/* Motif backdrop — topographic contour lines */}
+                <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-[0.55]">
+                    <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <pattern id="topo" width="280" height="280" patternUnits="userSpaceOnUse">
+                                <path d="M0 70 Q70 40 140 70 T280 70" fill="none" stroke="rgba(58,125,68,0.09)" strokeWidth="1.2" />
+                                <path d="M0 120 Q70 85 140 120 T280 120" fill="none" stroke="rgba(58,125,68,0.07)" strokeWidth="1.2" />
+                                <path d="M0 170 Q70 130 140 170 T280 170" fill="none" stroke="rgba(58,125,68,0.09)" strokeWidth="1.2" />
+                                <path d="M0 220 Q70 180 140 220 T280 220" fill="none" stroke="rgba(58,125,68,0.06)" strokeWidth="1.2" />
+                                <circle cx="60" cy="60" r="22" fill="none" stroke="rgba(58,125,68,0.08)" strokeWidth="1.2" />
+                                <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(58,125,68,0.05)" strokeWidth="1.2" />
+                                <circle cx="215" cy="200" r="28" fill="none" stroke="rgba(92,64,51,0.08)" strokeWidth="1.2" />
+                                <circle cx="215" cy="200" r="46" fill="none" stroke="rgba(92,64,51,0.05)" strokeWidth="1.2" />
+                            </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#topo)" />
+                    </svg>
+                </div>
+
                 {services.length === 0 ? (
                     /* Empty state */
-                    <div className="text-center py-20 bg-white rounded-[var(--radius-xl)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] animate-[scale-in_0.4s_var(--ease-out)_both]">
+                    <div className="text-center py-20 bg-white/80 backdrop-blur-sm rounded-[var(--radius-xl)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] animate-[scale-in_0.4s_var(--ease-out)_both]">
                         <div className="w-20 h-20 bg-[var(--color-paper-muted)] rounded-full flex items-center justify-center mx-auto mb-4">
                             <HardDrive className="w-9 h-9 text-[var(--color-ink-muted)]" />
                         </div>
@@ -241,7 +260,7 @@ export default async function DashboardUserPage() {
                         )}
                     </div>
                 ) : (
-                    <div className="space-y-12">
+                    <div className="space-y-14">
                         {groups.map((group, gi) => (
                             <section
                                 key={group.key}
@@ -249,21 +268,22 @@ export default async function DashboardUserPage() {
                                 style={{ animationDelay: `${gi * 90}ms` }}
                             >
                                 {/* Group header */}
-                                <div className="flex items-center gap-3 mb-5">
-                                    <div className="w-10 h-10 rounded-xl bg-[var(--color-accent-soft)] flex items-center justify-center shrink-0">
-                                        <group.icon className="w-5 h-5 text-[var(--color-accent)]" />
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-md flex items-center justify-center shrink-0 text-white">
+                                        <group.icon className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
-                                        <h2 className="text-lg font-bold text-[var(--color-ink)] tracking-tight leading-tight">{group.label}</h2>
+                                        <h2 className="text-xl font-bold text-[var(--color-ink)] tracking-tight leading-tight">{group.label}</h2>
                                         <p className="text-xs text-[var(--color-ink-muted)]">{group.hint}</p>
                                     </div>
-                                    <span className="ml-auto shrink-0 px-2.5 py-1 rounded-full bg-white text-[var(--color-ink-muted)] text-xs font-semibold border border-[var(--color-border)]">
-                                        {group.items.length}
+                                    <span className="ml-auto shrink-0 h-px flex-1 max-w-[80px] bg-gradient-to-r from-[var(--color-border-strong)] to-transparent" />
+                                    <span className="shrink-0 px-3 py-1 rounded-full bg-white text-[var(--color-ink-soft)] text-xs font-bold shadow-[var(--shadow-neu-sm)]">
+                                        {group.items.length} layanan
                                     </span>
                                 </div>
 
                                 {/* Cards */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                                     {group.items.map((service, si) => (
                                         <div
                                             key={service.serviceId}
