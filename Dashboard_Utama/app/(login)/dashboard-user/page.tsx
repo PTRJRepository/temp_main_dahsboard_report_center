@@ -3,7 +3,10 @@ import { verifyToken } from '@/utils/jwt'
 import { getGatewayFallbackServices, serviceRepository, Service } from '@/utils/service-repository'
 import { userRepository } from '@/utils/user-repository'
 import Link from 'next/link'
-import { Shield, Settings, Grid3X3, TrendingUp, Database, LayoutDashboard, HardDrive } from 'lucide-react'
+import {
+    Shield, Settings, Grid3X3, TrendingUp, Database, LayoutDashboard,
+    HardDrive, ArrowRight, Sparkles,
+} from 'lucide-react'
 import LogoutButton from '@/components/LogoutButton'
 import ChangePasswordButton from '@/components/ChangePasswordButton'
 import ServiceCard from '@/components/ServiceCard'
@@ -31,14 +34,44 @@ async function getAccessibleServices(user: { id: number; role: string }): Promis
 }
 
 // Group services into functional clusters.
-const SERVICE_GROUPS: { key: string; label: string; hint: string; icon: typeof Database; filter: (s: Service) => boolean }[] = [
-    { key: 'operasi', label: 'Operasional Kebun', hint: 'Absensi, produksi, monitoring lapangan', icon: Grid3X3, filter: s => /absen|absensi|produksi|basis-panen|monitoring|panen/i.test(s.serviceId + s.name) },
-    { key: 'keuangan', label: 'Keuangan & Payroll', hint: 'Penggajian, tunjangan, pajak, upah', icon: TrendingUp, filter: s => /payroll|upah|tunjangan|tax|pajak|spreadsheet|gaji/i.test(s.serviceId + s.name) },
-    { key: 'sistem', label: 'Sistem & Monitoring', hint: 'Server, jaringan, query gateway', icon: Database, filter: s => /server|network|monitor|query|file|rjfm|ifess/i.test(s.serviceId + s.name) },
-    { key: 'lainnya', label: 'Layanan Lainnya', hint: 'Modul dan layanan tambahan', icon: LayoutDashboard, filter: () => true },
+interface ServiceGroup {
+    key: string
+    label: string
+    hint: string
+    icon: typeof Grid3X3
+    filter?: (s: Service) => boolean
+}
+
+const SERVICE_GROUPS: ServiceGroup[] = [
+    {
+        key: 'operasi',
+        label: 'Operasional Kebun',
+        hint: 'Absensi, produksi, monitoring lapangan',
+        icon: Grid3X3,
+        filter: (s: Service) => /absen|absensi|produksi|basis-panen|monitoring|panen/i.test(s.serviceId + ' ' + s.name),
+    },
+    {
+        key: 'keuangan',
+        label: 'Keuangan & Payroll',
+        hint: 'Penggajian, tunjangan, pajak, upah',
+        icon: TrendingUp,
+        filter: (s: Service) => /payroll|upah|tunjangan|tax|pajak|spreadsheet|gaji/i.test(s.serviceId + ' ' + s.name),
+    },
+    {
+        key: 'sistem',
+        label: 'Sistem & Monitoring',
+        hint: 'Server, jaringan, query gateway',
+        icon: Database,
+        filter: (s: Service) => /server|network|monitor|query|file|rjfm|ifess/i.test(s.serviceId + ' ' + s.name),
+    },
 ]
 
-const UNGROUPED = (s: Service) => true
+const FALLBACK_GROUP: Omit<ServiceGroup, 'filter'> = {
+    key: 'lainnya',
+    label: 'Layanan Lainnya',
+    hint: 'Modul dan layanan tambahan',
+    icon: LayoutDashboard,
+}
 
 export default async function DashboardUserPage() {
     const cookieStore = await cookies()
@@ -79,54 +112,82 @@ export default async function DashboardUserPage() {
         ? getGatewayFallbackServices(user.role)
         : await getAccessibleServices(user)
 
-    // Build groups, skip empty ones.
+    // Assign services to groups; leftovers go to fallback group.
+    const groupedIds = new Set<string>()
     const groups = SERVICE_GROUPS
-        .map(g => ({
-            ...g,
-            items: services.filter(g.filter),
-        }))
+        .map(g => {
+            const match = g.filter ?? (() => false)
+            const items = services.filter(s => {
+                if (groupedIds.has(s.serviceId)) return false
+                if (match(s)) {
+                    groupedIds.add(s.serviceId)
+                    return true
+                }
+                return false
+            })
+            return { ...g, items }
+        })
         .filter(g => g.items.length > 0)
 
-    const ungrouped = groups.length === 0 ? services : []
-    const now = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-    const hour = new Date().getHours()
-    const greeting = hour < 12 ? 'Selamat pagi' : hour < 18 ? 'Selamat siang' : 'Selamat malam'
+    const rest = services.filter(s => !groupedIds.has(s.serviceId))
+    if (rest.length > 0) groups.push({ ...FALLBACK_GROUP, items: rest })
+
+    const now = new Date()
+    const hour = now.getHours()
+    const greeting = hour < 11 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 19 ? 'Selamat sore' : 'Selamat malam'
+    const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    const initials = user.name?.charAt(0).toUpperCase() || 'U'
 
     return (
-        <div className="min-h-screen bg-[var(--color-paper-soft)] relative">
-            {/* Ambient accent wash */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] overflow-hidden">
-                <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[700px] h-[420px] rounded-full bg-[var(--color-accent-soft)] blur-[120px]" />
+        <div className="min-h-screen relative bg-[var(--color-paper-soft)]">
+            {/* ── Ambient visual background (non-flat) ────────────────── */}
+            <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+                <span className="absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-emerald-200/25 blur-[130px] animate-[drift_20s_var(--ease-in-out)_infinite_alternate]" />
+                <span className="absolute top-1/3 -right-48 h-[520px] w-[520px] rounded-full bg-amber-200/20 blur-[140px] animate-[drift_26s_var(--ease-in-out)_infinite_alternate-reverse]" />
+                <span className="absolute bottom-0 left-1/4 h-[380px] w-[380px] rounded-full bg-emerald-100/30 blur-[120px] animate-[drift_22s_var(--ease-in-out)_infinite_alternate]" />
+                {/* Dot grid texture */}
+                <div
+                    className="absolute inset-0 opacity-[0.35]"
+                    style={{
+                        backgroundImage: 'radial-gradient(rgba(58,125,68,0.10) 1px, transparent 1px)',
+                        backgroundSize: '26px 26px',
+                    }}
+                />
             </div>
+            {/* ── Hero welcome band ─────────────────────────────────── */}
+            <section className="relative z-10 overflow-hidden bg-gradient-to-br from-[#0c231a] via-[#123526] to-[#1b4a33] text-white">
+                {/* Decorative rings + constant-motion orbs */}
+                <span aria-hidden className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full border border-white/10 animate-[spin_60s_linear_infinite] border-dashed" />
+                <span aria-hidden className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full border border-white/15" />
+                <span aria-hidden className="pointer-events-none absolute -bottom-32 -left-20 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-[drift_14s_var(--ease-in-out)_infinite_alternate]" />
+                <span aria-hidden className="pointer-events-none absolute top-10 right-1/3 h-40 w-40 rounded-full bg-amber-300/10 blur-3xl animate-[drift_18s_var(--ease-in-out)_infinite_alternate-reverse]" />
 
-            {/* Header */}
-            <header className="relative border-b border-[var(--color-border)] bg-[var(--color-paper)]/80 backdrop-blur-xl sticky top-0 z-20">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <div className="relative">
-                                <div className="w-11 h-11 rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-hover)] flex items-center justify-center text-white font-bold text-lg shadow-[var(--shadow-md)]">
-                                    {user.name?.charAt(0).toUpperCase() || 'U'}
-                                </div>
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--color-success)] ring-2 ring-white" />
-                            </div>
-                            <div>
-                                <p className="text-xs text-[var(--color-ink-muted)]">{greeting} · {now}</p>
-                                <h1 className="text-lg font-bold text-[var(--color-ink)] tracking-tight leading-tight">
-                                    {user.name}
-                                </h1>
+                <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+                        <div className="animate-[fade-up_0.6s_var(--ease-out)_both]">
+                            <p className="text-emerald-200/70 text-sm mb-2">{greeting},</p>
+                            <h1 className="text-3xl lg:text-5xl font-bold tracking-tight font-display leading-tight">
+                                {user.name}
+                            </h1>
+                            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 px-3.5 py-1.5 text-xs font-semibold ring-1 ring-white/10">
+                                    <Shield className="w-3.5 h-3.5 text-emerald-300" />
+                                    {user.role}
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                                    Portal layanan internal PT Rebinmas Jaya
+                                </span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2.5">
-                            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-paper-soft)] text-[var(--color-ink-soft)] rounded-full text-xs font-medium border border-[var(--color-border)]">
-                                <Shield className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-                                {user.role}
-                            </div>
+
+                        {/* Quick actions */}
+                        <div className="flex flex-wrap items-center gap-2.5 animate-[fade-up_0.6s_var(--ease-out)_0.15s_both]">
                             <ChangePasswordButton userId={Number(user.id)} />
                             {user.role === 'ADMIN' && (
                                 <Link
                                     href="/admin"
-                                    className="flex items-center gap-2 px-3.5 py-2 bg-[var(--color-ink)] text-white rounded-lg hover:bg-[var(--color-accent-hover)] transition-colors text-sm font-medium shadow-[var(--shadow-sm)]"
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-white text-[#123526] rounded-xl hover:bg-emerald-50 transition-colors text-sm font-semibold shadow-lg"
                                 >
                                     <Settings className="w-4 h-4" />
                                     Admin Panel
@@ -136,47 +197,78 @@ export default async function DashboardUserPage() {
                         </div>
                     </div>
                 </div>
-            </header>
+            </section>
 
-            {/* Main Content */}
-            <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-16">
-                {/* Section header */}
-                <div className="mb-8 animate-[fade-up_0.5s_var(--ease-out)_both]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-accent-soft)] flex items-center justify-center">
-                            <HardDrive className="w-4 h-4 text-[var(--color-accent)]" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-[var(--color-ink)] tracking-tight font-display">Layanan Anda</h2>
-                            <p className="text-sm text-[var(--color-ink-muted)]">Daftar layanan yang dapat Anda akses</p>
+            {/* ── Constant-motion marquee ticker ────────────────────── */}
+            {services.length > 0 && (
+                <div className="relative z-20 -mt-5 mb-2 overflow-hidden">
+                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                        <div className="relative overflow-hidden rounded-full border border-[var(--color-border)] bg-white shadow-[var(--shadow-md)]">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-white to-transparent z-10" />
+                            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white to-transparent z-10" />
+                            <div className="flex w-max animate-[marquee_28s_linear_infinite] py-2.5">
+                                {[...services, ...services].map((s, i) => (
+                                    <span key={`${s.serviceId}-${i}`} className="mx-5 inline-flex items-center gap-2 text-xs font-medium text-[var(--color-ink-soft)] whitespace-nowrap">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" />
+                                        {s.name}
+                                    </span>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
+            )}
 
-                {services.length > 0 ? (
-                    <div className="space-y-10">
+            {/* ── Services ──────────────────────────────────────────── */}
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-20 -mt-6 relative z-10">
+                {services.length === 0 ? (
+                    /* Empty state */
+                    <div className="text-center py-20 bg-white rounded-[var(--radius-xl)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] animate-[scale-in_0.4s_var(--ease-out)_both]">
+                        <div className="w-20 h-20 bg-[var(--color-paper-muted)] rounded-full flex items-center justify-center mx-auto mb-4">
+                            <HardDrive className="w-9 h-9 text-[var(--color-ink-muted)]" />
+                        </div>
+                        <h3 className="text-xl font-semibold text-[var(--color-ink)]">Belum Ada Layanan</h3>
+                        <p className="mt-2 text-[var(--color-ink-muted)] max-w-md mx-auto">
+                            Anda belum memiliki akses ke layanan apapun. Hubungi administrator untuk mendapatkan akses.
+                        </p>
+                        {user.role === 'ADMIN' && (
+                            <Link
+                                href="/admin"
+                                className="mt-6 inline-block px-6 py-3 bg-[var(--color-accent)] text-white rounded-lg hover:bg-[var(--color-accent-hover)] transition-colors font-medium shadow-sm"
+                            >
+                                Kelola Layanan
+                            </Link>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-12">
                         {groups.map((group, gi) => (
                             <section
                                 key={group.key}
-                                className="animate-[fade-up_0.5s_var(--ease-out)_both]"
-                                style={{ animationDelay: `${gi * 80}ms` }}
+                                className="animate-[fade-up_0.55s_var(--ease-out)_both]"
+                                style={{ animationDelay: `${gi * 90}ms` }}
                             >
-                                <div className="flex items-center gap-2.5 mb-4">
-                                    <div className="w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--color-accent-soft)] flex items-center justify-center">
-                                        <group.icon className="w-4 h-4 text-[var(--color-accent)]" />
+                                {/* Group header */}
+                                <div className="flex items-center gap-3 mb-5">
+                                    <div className="w-10 h-10 rounded-xl bg-[var(--color-accent-soft)] flex items-center justify-center shrink-0">
+                                        <group.icon className="w-5 h-5 text-[var(--color-accent)]" />
                                     </div>
-                                    <h3 className="text-base font-semibold text-[var(--color-ink)]">{group.label}</h3>
-                                    <span className="text-xs text-[var(--color-ink-muted)]">{group.hint}</span>
-                                    <span className="ml-auto px-2 py-0.5 rounded-full bg-[var(--color-paper-muted)] text-[var(--color-ink-muted)] text-[11px] font-medium border border-[var(--color-border)]">
+                                    <div className="min-w-0">
+                                        <h2 className="text-lg font-bold text-[var(--color-ink)] tracking-tight leading-tight">{group.label}</h2>
+                                        <p className="text-xs text-[var(--color-ink-muted)]">{group.hint}</p>
+                                    </div>
+                                    <span className="ml-auto shrink-0 px-2.5 py-1 rounded-full bg-white text-[var(--color-ink-muted)] text-xs font-semibold border border-[var(--color-border)]">
                                         {group.items.length}
                                     </span>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+
+                                {/* Cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7">
                                     {group.items.map((service, si) => (
                                         <div
                                             key={service.serviceId}
                                             className="animate-[fade-up_0.5s_var(--ease-out)_both]"
-                                            style={{ animationDelay: `${gi * 80 + si * 50}ms` }}
+                                            style={{ animationDelay: `${gi * 90 + si * 60}ms` }}
                                         >
                                             <ServiceCard
                                                 name={service.name}
@@ -190,48 +282,17 @@ export default async function DashboardUserPage() {
                                 </div>
                             </section>
                         ))}
-
-                        {ungrouped.length > 0 && (
-                            <section className="animate-[fade-up_0.5s_var(--ease-out)_both]">
-                                <div className="flex items-center gap-2.5 mb-4">
-                                    <LayoutDashboard className="w-4 h-4 text-[var(--color-accent)]" />
-                                    <h3 className="text-base font-semibold text-[var(--color-ink)]">Layanan</h3>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                                    {ungrouped.map((service) => (
-                                        <ServiceCard
-                                            key={service.serviceId}
-                                            name={service.name}
-                                            description={service.description || ''}
-                                            icon={null}
-                                            routeUrl={service.path || `/${service.serviceId}`}
-                                            imagePath={service.imagePath}
-                                        />
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-                    </div>
-                ) : (
-                    <div className="text-center py-16 bg-white rounded-[var(--radius-xl)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] animate-[scale-in_0.4s_var(--ease-out)_both]">
-                        <div className="w-20 h-20 bg-[var(--color-paper-soft)] rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Database className="w-10 h-10 text-[var(--color-ink-muted)]" />
-                        </div>
-                        <h3 className="text-xl font-semibold text-[var(--color-ink)]">Belum Ada Layanan</h3>
-                        <p className="mt-2 text-[var(--color-ink-muted)] max-w-md mx-auto">
-                            Anda belum memiliki akses ke layanan apapun. Hubungi administrator untuk mendapatkan akses.
-                        </p>
-                        {user.role === 'ADMIN' && (
-                            <Link
-                                href="/admin"
-                                className="mt-6 inline-block px-6 py-3 bg-[var(--color-accent)] text-white rounded-lg hover:bg-[var(--color-accent-hover)] transition-colors font-medium shadow-[var(--shadow-sm)]"
-                            >
-                                Kelola Layanan
-                            </Link>
-                        )}
                     </div>
                 )}
             </main>
+
+            {/* ── Footer strip ──────────────────────────────────────── */}
+            <footer className="relative z-10 border-t border-[var(--color-border)] bg-white/60 backdrop-blur-sm">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[var(--color-ink-muted)]">
+                    <p>&copy; {new Date().getFullYear()} PT Rebinmas Jaya · Portal Layanan Internal</p>
+                    <p>{dateStr}</p>
+                </div>
+            </footer>
         </div>
     )
 }

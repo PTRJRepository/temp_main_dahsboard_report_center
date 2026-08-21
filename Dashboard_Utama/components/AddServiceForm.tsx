@@ -94,10 +94,12 @@ export default function AddServiceForm() {
                     <label className="block text-sm font-medium text-gray-700">Image URL</label>
                     <input
                         name="imagePath"
-                        placeholder="https://example.com/icon.png"
+                        placeholder="https://images.unsplash.com/photo-..."
                         className="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm font-mono"
                     />
-                    <p className="mt-1 text-xs text-gray-500">URL gambar/layanan (opsional)</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                        Gambar banner layanan — tempel URL dari internet (Unsplash, dsb). Kosongkan untuk gambar default otomatis.
+                    </p>
                 </div>
             </div>
 

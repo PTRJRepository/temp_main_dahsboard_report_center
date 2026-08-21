@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import * as LucideIcons from 'lucide-react'
 
 interface ServiceCardProps {
@@ -8,57 +9,96 @@ interface ServiceCardProps {
     imagePath?: string | null
 }
 
-// Map common service names to an icon for the tile.
-function resolveIcon(name: string, icon: string | null) {
-    if (icon && LucideIcons[icon as keyof typeof LucideIcons]) {
-        return LucideIcons[icon as keyof typeof LucideIcons] as typeof LucideIcons.LayoutDashboard
-    }
-    const n = name.toLowerCase()
-    if (/absen|attendance|hadir/.test(n)) return LucideIcons.CalendarCheck2
-    if (/upah|payroll|gaji|tunjangan/.test(n)) return LucideIcons.Wallet
-    if (/produksi|panen|basis/.test(n)) return LucideIcons.Wheat
-    if (/server|monitor|network|jaringan/.test(n)) return LucideIcons.ServerCog
-    if (/query|sql|database|data/.test(n)) return LucideIcons.Database
-    if (/file|drive|rjfm|dokumen/.test(n)) return LucideIcons.FolderKanban
-    if (/report|laporan/.test(n)) return LucideIcons.BarChart3
-    return LucideIcons.LayoutDashboard
+// Curated Unsplash imagery per service keyword — used when the service has no
+// custom imagePath set in the admin panel. All hosts already allowed in
+// next.config.js remotePatterns.
+const DEFAULT_IMAGES: { pattern: RegExp; url: string }[] = [
+    {
+        pattern: /absen|attendance|hadir/i,
+        url: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?q=80&w=1200&auto=format&fit=crop',
+    },
+    {
+        pattern: /upah|payroll|gaji|tunjangan/i,
+        url: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?q=80&w=1200&auto=format&fit=crop',
+    },
+    {
+        pattern: /produksi|panen|basis|sawit/i,
+        url: 'https://images.unsplash.com/photo-1535392432937-a27c36ec07b5?q=80&w=1200&auto=format&fit=crop',
+    },
+    {
+        pattern: /server|network|jaringan|monitor/i,
+        url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1200&auto=format&fit=crop',
+    },
+    {
+        pattern: /query|sql|database|data/i,
+        url: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?q=80&w=1200&auto=format&fit=crop',
+    },
+    {
+        pattern: /file|drive|rjfm|dokumen/i,
+        url: 'https://images.unsplash.com/photo-1568667256549-094345857637?q=80&w=1200&auto=format&fit=crop',
+    },
+    {
+        pattern: /report|laporan|center/i,
+        url: 'https://images.unsplash.com/photo-1543286386-713bdd548da4?q=80&w=1200&auto=format&fit=crop',
+    },
+]
+
+function resolveDefaultImage(name: string): string {
+    const hit = DEFAULT_IMAGES.find(d => d.pattern.test(name))
+    return (
+        hit?.url ??
+        'https://images.unsplash.com/photo-1535392432937-a27c36ec07b5?q=80&w=1200&auto=format&fit=crop'
+    )
 }
 
 export default function ServiceCard({ name, description, icon, routeUrl, imagePath }: ServiceCardProps) {
-    const Icon = resolveIcon(name, icon)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Icon = icon && LucideIcons[icon as keyof typeof LucideIcons]
+        ? LucideIcons[icon as keyof typeof LucideIcons] as any
+        : LucideIcons.LayoutDashboard
+
+    const imageSrc = imagePath || resolveDefaultImage(name)
 
     return (
-        <a href={routeUrl} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-[var(--radius-lg)]">
-            <div className="h-full bg-[var(--color-paper)] rounded-[var(--radius-lg)] border border-[var(--color-border)] hover:border-[var(--color-border-strong)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] overflow-hidden transition-all duration-300 hover:-translate-y-1 flex flex-col">
-                {/* Icon tile + arrow */}
-                <div className="p-5 pb-3">
-                    <div className="flex items-start justify-between">
-                        <div className="relative">
-                            <div className="w-12 h-12 rounded-[var(--radius-md)] bg-[var(--color-accent-soft)] flex items-center justify-center text-[var(--color-accent)] transition-all duration-300 group-hover:bg-[var(--color-accent)] group-hover:text-white">
-                                <Icon className="w-6 h-6" />
-                            </div>
-                            {imagePath && (
-                                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[var(--color-accent)] ring-2 ring-white" />
-                            )}
-                        </div>
-                        <LucideIcons.ArrowUpRight className="h-5 w-5 text-[var(--color-ink-muted)] group-hover:text-[var(--color-accent)] transition-all duration-300 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0" />
+        <a href={routeUrl} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-[var(--radius-xl)]">
+            <div className="h-full bg-gradient-to-br from-[#fdfefd] to-[#eef3ee] rounded-[var(--radius-xl)] border border-white/70 shadow-[var(--shadow-neu)] hover:shadow-[var(--shadow-neu-hover)] overflow-hidden transition-all duration-400 hover:-translate-y-2 flex flex-col">
+                {/* Banner image — always present, taller */}
+                <div className="relative h-44 overflow-hidden shrink-0">
+                    <Image
+                        src={imageSrc}
+                        alt={name}
+                        fill
+                        sizes="(min-width: 1280px) 33vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                        className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                    {/* Gradient scrim */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
+                    {/* Embossed floating icon chip */}
+                    <div className="absolute -bottom-5 left-5 w-14 h-14 rounded-2xl bg-gradient-to-br from-white to-[#e8efe8] shadow-[var(--shadow-neu-sm)] ring-1 ring-white/80 flex items-center justify-center text-[var(--color-accent)] transition-transform duration-400 group-hover:scale-110 group-hover:-rotate-6">
+                        <Icon style={{ width: 24, height: 24 }} />
+                    </div>
+                    {/* Hover arrow */}
+                    <div className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-white/25 backdrop-blur-md ring-1 ring-white/40 flex items-center justify-center opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                        <LucideIcons.ArrowUpRight className="w-4 h-4 text-white" />
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="px-5 pb-5 flex-1 flex flex-col">
-                    <h3 className="text-base font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-accent)] transition-colors leading-snug">
+                {/* Content — offset for the embossed icon chip */}
+                <div className="px-5 pt-8 pb-5 flex-1 flex flex-col">
+                    <h3 className="text-base font-bold text-[var(--color-ink)] tracking-tight group-hover:text-[var(--color-accent)] transition-colors leading-snug">
                         {name}
                     </h3>
                     {description && (
-                        <p className="mt-1 text-sm text-[var(--color-ink-muted)] line-clamp-2 leading-relaxed flex-1">
+                        <p className="mt-1.5 text-[13px] text-[var(--color-ink-muted)] line-clamp-2 leading-relaxed flex-1">
                             {description}
                         </p>
                     )}
+                    {/* Embossed "Buka" pill */}
+                    <div className="mt-4 inline-flex w-fit items-center gap-1.5 rounded-full bg-[#eef3ee] px-3.5 py-1.5 text-[11px] font-semibold text-[var(--color-ink-soft)] shadow-[var(--shadow-neu-inset)] transition-all duration-300 group-hover:text-[var(--color-accent)]">
+                        Buka Layanan
+                        <LucideIcons.ArrowRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    </div>
                 </div>
-
-                {/* Bottom accent line */}
-                <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-transparent to-transparent group-hover:from-[var(--color-accent)] group-hover:via-[var(--color-accent-soft)] group-hover:to-transparent transition-all duration-500" />
             </div>
         </a>
     )
