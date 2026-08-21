@@ -174,6 +174,7 @@ export async function addService(formData: FormData) {
     const serviceUrl = formData.get('serviceUrl') as string
     const path = formData.get('path') as string
     const imagePath = formData.get('imagePath') as string // Add imagePath support
+    const enabled = formData.get('enabled') === 'on'
 
     if (!serviceId || !name || !serviceUrl) {
         return { error: 'Service ID, Nama, dan URL harus diisi' }
@@ -186,7 +187,7 @@ export async function addService(formData: FormData) {
             description: description || '',
             serviceUrl,
             path: path || undefined,
-            enabled: true,
+            enabled,
             imagePath: imagePath || null
         })
 
@@ -231,37 +232,6 @@ export async function deleteService(serviceId: string) {
     }
 }
 
-// ROLE PERMISSION ACTIONS
-export async function assignServiceToRole(formData: FormData) {
-    const role = formData.get('role') as string
-    const serviceId = formData.get('serviceId') as string
-
-    if (!role || !serviceId) {
-        return { error: 'Role dan Service ID harus diisi' }
-    }
-
-    try {
-        await serviceRepository.assignToRole(role, serviceId)
-        revalidatePath('/admin')
-        return { message: 'Hak akses berhasil diberikan' }
-    } catch (e) {
-        return { error: 'Gagal memberikan hak akses' }
-    }
-}
-
-export async function removeServiceFromRole(formData: FormData) {
-    const role = formData.get('role') as string
-    const serviceId = formData.get('serviceId') as string
-
-    if (!role || !serviceId) {
-        return { error: 'Role dan Service ID harus diisi' }
-    }
-
-    try {
-        await serviceRepository.removeFromRole(role, serviceId)
-        revalidatePath('/admin')
-        return { message: 'Hak akses berhasil dicabut' }
-    } catch (e) {
-        return { error: 'Gagal mencabut hak akses' }
-    }
-}
+// ROLE PERMISSION ACTIONS — superseded by togglePermission in
+// @/app/actions/admin-permissions (PermissionsTable). Removed dead
+// assignServiceToRole / removeServiceFromRole.

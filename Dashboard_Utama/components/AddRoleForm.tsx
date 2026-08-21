@@ -1,8 +1,8 @@
 'use client'
 
-import { addRole, deleteRole } from '@/app/actions/role-actions'
+import { addRole, deleteRole, updateRole } from '@/app/actions/role-actions'
 import { useRef, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Loader2 } from 'lucide-react'
 
 interface Role {
     name: string
@@ -12,27 +12,55 @@ interface Role {
 export default function AddRoleForm({ roles }: { roles: Role[] }) {
     const formRef = useRef<HTMLFormElement>(null)
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+    const [pending, setPending] = useState(false)
+    const [editing, setEditing] = useState<string | null>(null)
+    const [editName, setEditName] = useState('')
 
-    const handleSubmit = async (formData: FormData) => {
-        const result = await addRole(formData)
-        if (result.error) {
-            setMessage({ type: 'error', text: result.error })
-        } else if (result.message) {
-            setMessage({ type: 'success', text: result.message })
-            formRef.current?.reset()
-        }
+    const show = (type: 'success' | 'error', text: string) => {
+        setMessage({ type, text })
         setTimeout(() => setMessage(null), 3000)
     }
 
-    const handleDelete = async (name: string) => {
-        if (!confirm(`Hapus peran ${name}?`)) return
-        const result = await deleteRole(name)
-        if (result.error) {
-            setMessage({ type: 'error', text: result.error })
-        } else if (result.message) {
-            setMessage({ type: 'success', text: result.message })
+    const handleSubmit = async (formData: FormData) => {
+        setPending(true)
+        const result = await addRole(formData)
+        setPending(false)
+        if (result.error) show('error', result.error)
+        else if (result.message) {
+            show('success', result.message)
+            formRef.current?.reset()
         }
-        setTimeout(() => setMessage(null), 3000)
+    }
+
+    const handleDelete = async (name: string) => {
+        if (!confirm(`Hapus peran ${name}? Semua hak akses terkait juga akan dihapus.`)) return
+        setPending(true)
+        const result = await deleteRole(name)
+        setPending(false)
+        if (result.error) show('error', result.error)
+        else if (result.message) show('success', result.message)
+    }
+
+    const startEdit = (name: string) => {
+        setEditing(name)
+        setEditName(name)
+    }
+
+    const cancelEdit = () => {
+        setEditing(null)
+        setEditName('')
+    }
+
+    const submitEdit = async (formData: FormData) => {
+        if (!editing) return
+        setPending(true)
+        const result = await updateRole(formData)
+        setPending(false)
+        if (result.error) show('error', result.error)
+        else if (result.message) {
+            show('success', result.message)
+            cancelEdit()
+        }
     }
 
     return (
@@ -76,9 +104,10 @@ export default function AddRoleForm({ roles }: { roles: Role[] }) {
 
                 <button
                     type="submit"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-palm-green text-white rounded-md text-sm hover:bg-palm-green-hover transition-colors"
+                    disabled={pending}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-palm-green text-white rounded-md text-sm hover:bg-palm-green-hover transition-colors disabled:opacity-50"
                 >
-                    <Plus className="w-4 h-4" /> Tambah Peran
+                    {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Tambah Peran
                 </button>
             </form>
 
@@ -94,16 +123,48 @@ export default function AddRoleForm({ roles }: { roles: Role[] }) {
                     <tbody className="divide-y divide-gray-100">
                         {roles.map(r => (
                             <tr key={r.name}>
-                                <td className="px-6 py-3 text-sm font-mono font-semibold text-gray-900">{r.name}</td>
+                                <td className="px-6 py-3 text-sm font-mono font-semibold text-gray-900">
+                                    {editing === r.name ? (
+                                        <form action={submitEdit} className="flex items-center gap-2">
+                                            <input type="hidden" name="oldName" value={editing} />
+                                            <input
+                                                name="newName"
+                                                value={editName}
+                                                onChange={e => setEditName(e.target.value.toUpperCase())}
+                                                required
+                                                className="rounded-md border border-gray-300 p-1.5 text-sm font-mono uppercase"
+                                            />
+                                            <button type="submit" disabled={pending} className="text-green-600 hover:text-green-900" title="Simpan">
+                                                <Check className="w-4 h-4" />
+                                            </button>
+                                            <button type="button" onClick={cancelEdit} className="text-gray-500 hover:text-gray-700" title="Batal">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        r.name
+                                    )}
+                                </td>
                                 <td className="px-6 py-3 text-sm text-gray-500">{r.description || '-'}</td>
-                                <td className="px-6 py-3 text-right">
-                                    <button
-                                        onClick={() => handleDelete(r.name)}
-                                        className="text-red-600 hover:text-red-900"
-                                        title="Hapus peran"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                <td className="px-6 py-3 text-right space-x-3">
+                                    {editing !== r.name && (
+                                        <>
+                                            <button
+                                                onClick={() => startEdit(r.name)}
+                                                className="text-indigo-600 hover:text-indigo-900"
+                                                title="Ubah nama peran"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(r.name)}
+                                                className="text-red-600 hover:text-red-900"
+                                                title="Hapus peran"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </>
+                                    )}
                                 </td>
                             </tr>
                         ))}

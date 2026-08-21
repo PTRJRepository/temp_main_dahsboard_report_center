@@ -2,19 +2,25 @@
 
 import { addService } from '@/app/(login)/admin/actions'
 import { useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 
 export default function AddServiceForm() {
     const formRef = useRef<HTMLFormElement>(null)
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+    const [pending, setPending] = useState(false)
+    const [enabled, setEnabled] = useState(true)
 
     const handleSubmit = async (formData: FormData) => {
+        setPending(true)
         const result = await addService(formData)
+        setPending(false)
 
         if (result.error) {
             setMessage({ type: 'error', text: result.error })
         } else if (result.message) {
             setMessage({ type: 'success', text: result.message })
             formRef.current?.reset()
+            setEnabled(true)
         }
 
         setTimeout(() => setMessage(null), 3000)
@@ -84,13 +90,37 @@ export default function AddServiceForm() {
                     />
                     <p className="mt-1 text-xs text-gray-500">Path untuk proxy (opsional)</p>
                 </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Image URL</label>
+                    <input
+                        name="imagePath"
+                        placeholder="https://example.com/icon.png"
+                        className="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm font-mono"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">URL gambar/layanan (opsional)</p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                        type="checkbox"
+                        name="enabled"
+                        checked={enabled}
+                        onChange={e => setEnabled(e.target.checked)}
+                        className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-palm-green"></div>
+                </label>
+                <span className="text-sm text-gray-700">Aktif</span>
             </div>
 
             <button
                 type="submit"
-                className="px-4 py-2 bg-palm-green text-white rounded-md text-sm hover:bg-palm-green-hover transition-colors"
+                disabled={pending}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-palm-green text-white rounded-md text-sm hover:bg-palm-green-hover transition-colors disabled:opacity-50"
             >
-                Tambah Layanan
+                {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Tambah Layanan
             </button>
         </form>
     )

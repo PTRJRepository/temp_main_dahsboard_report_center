@@ -13,7 +13,10 @@ interface PermissionsTableProps {
 
 export default function PermissionsTable({ services, permissions, roles }: PermissionsTableProps) {
     const [isPending, startTransition] = useTransition()
+    // Optimistic state: starts as server snapshot, mutated optimistically,
+    // reverted to initial on any server failure.
     const [optimisticPermissions, setOptimisticPermissions] = useState<RolePermission[]>(permissions)
+    const initialPermissions = permissions // freeze server snapshot for revert
 
     const ROLES = roles.map(r => r.name)
 
@@ -34,7 +37,8 @@ export default function PermissionsTable({ services, permissions, roles }: Permi
         startTransition(async () => {
             const result = await togglePermission(role, serviceId, currentlyHasAccess)
             if (!result.success) {
-                // Revert on failure (simple reload would be better but this is MVP)
+                // Revert on failure — restore server snapshot if the toggle failed
+                setOptimisticPermissions(initialPermissions)
                 alert('Gagal update permission')
             }
         })
