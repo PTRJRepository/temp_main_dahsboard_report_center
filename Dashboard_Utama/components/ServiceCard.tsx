@@ -71,8 +71,8 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
         : resolveStyle(name)
 
     return (
-        <a href={routeUrl} className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] rounded-[24px]">
-            <div className="relative h-full flex flex-col overflow-hidden rounded-[24px] border border-white/60 bg-gradient-to-br from-[#fdfefd] to-[#edf3ed] shadow-[var(--shadow-neu)] hover:shadow-[var(--shadow-neu-accent)] transition-all duration-500 hover:-translate-y-2.5">
+        <a href={routeUrl} className="group block h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-[24px]">
+            <div className="relative h-full flex flex-col overflow-hidden rounded-[24px] border border-white/10 bg-gradient-to-br from-white to-slate-100 shadow-[0_16px_40px_rgba(0,0,0,0.45)] hover:shadow-[0_24px_60px_rgba(0,0,0,0.55),0_0_0_1px_rgba(52,211,153,0.35)] transition-all duration-500 hover:-translate-y-2.5">
 
                 {/* ── Banner ─────────────────────────────────────── */}
                 <div className="relative h-60 overflow-hidden shrink-0">
@@ -96,7 +96,7 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
                     <div className="absolute -bottom-8 left-6">
                         <div className="relative">
                             <div className={`absolute inset-0 rounded-[22px] bg-gradient-to-br ${tint} blur-xl opacity-60 group-hover:opacity-90 transition-opacity`} />
-                            <div className="relative w-[72px] h-[72px] rounded-[22px] bg-gradient-to-br from-white to-[#e6efe6] shadow-[var(--shadow-neu-sm)] ring-1 ring-white/90 flex items-center justify-center text-[var(--color-accent)] transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6">
+                            <div className="relative w-[72px] h-[72px] rounded-[22px] bg-gradient-to-br from-white to-slate-100 shadow-lg ring-1 ring-white/80 flex items-center justify-center text-slate-700 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6">
                                 <Icon style={{ width: 32, height: 32 }} />
                             </div>
                         </div>
@@ -104,26 +104,26 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
                 </div>
 
                 {/* ── Body ───────────────────────────────────────── */}
-                <div className="flex-1 flex flex-col px-7 pt-13 pb-6" style={{ paddingTop: 46 }}>
-                    <h3 className="text-xl font-bold text-[var(--color-ink)] tracking-tight leading-snug group-hover:text-[var(--color-accent)] transition-colors">
+                <div className="flex-1 flex flex-col px-7 pb-6" style={{ paddingTop: 46 }}>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight leading-snug group-hover:text-emerald-400 transition-colors">
                         {name}
                     </h3>
                     {description && (
-                        <p className="mt-2.5 text-sm text-[var(--color-ink-muted)] leading-relaxed line-clamp-2 flex-1">
+                        <p className="mt-2.5 text-sm text-slate-500 leading-relaxed line-clamp-2 flex-1">
                             {description}
                         </p>
                     )}
 
                     {/* Footer row — status + CTA */}
-                    <div className="mt-6 pt-5 border-t border-[var(--color-border)] flex items-center justify-between">
-                        <span className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--color-ink-muted)] uppercase tracking-wider">
+                    <div className="mt-6 pt-5 border-t border-slate-200/70 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                             <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                             </span>
                             Aktif
                         </span>
-                        <span className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[13px] font-bold text-[var(--color-accent)] shadow-[var(--shadow-neu-inset)] transition-all duration-300 group-hover:shadow-none group-hover:text-white group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-emerald-700">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-5 py-2.5 text-[13px] font-bold text-slate-700 transition-all duration-300 group-hover:text-white group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-emerald-700">
                             Buka Layanan
                             <LucideIcons.ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" />
                         </span>

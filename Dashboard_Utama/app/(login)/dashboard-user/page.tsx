@@ -139,46 +139,51 @@ export default async function DashboardUserPage() {
     const initials = user.name?.charAt(0).toUpperCase() || 'U'
 
     return (
-        <div className="min-h-screen relative bg-[var(--color-paper-soft)]">
-            {/* ── Ambient visual background (non-flat) ────────────────── */}
+        <div className="min-h-screen relative bg-[#0a120e]">
+            {/* ── Ambient visual background (dark, non-flat) ─────────── */}
             <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-                <span className="absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-emerald-200/25 blur-[130px] animate-[drift_20s_var(--ease-in-out)_infinite_alternate]" />
-                <span className="absolute top-1/3 -right-48 h-[520px] w-[520px] rounded-full bg-amber-200/20 blur-[140px] animate-[drift_26s_var(--ease-in-out)_infinite_alternate-reverse]" />
-                <span className="absolute bottom-0 left-1/4 h-[380px] w-[380px] rounded-full bg-emerald-100/30 blur-[120px] animate-[drift_22s_var(--ease-in-out)_infinite_alternate]" />
-                {/* Dot grid texture */}
-                <div
-                    className="absolute inset-0 opacity-[0.35]"
-                    style={{
-                        backgroundImage: 'radial-gradient(rgba(58,125,68,0.10) 1px, transparent 1px)',
-                        backgroundSize: '26px 26px',
-                    }}
-                />
+                <span className="absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-emerald-900/40 blur-[130px] animate-[drift_20s_var(--ease-in-out)_infinite_alternate]" />
+                <span className="absolute top-1/3 -right-48 h-[520px] w-[520px] rounded-full bg-teal-800/30 blur-[140px] animate-[drift_26s_var(--ease-in-out)_infinite_alternate-reverse]" />
+                <span className="absolute bottom-0 left-1/4 h-[380px] w-[380px] rounded-full bg-emerald-950/60 blur-[120px] animate-[drift_22s_var(--ease-in-out)_infinite_alternate]" />
+                {/* Topographic contour motif (dark) */}
+                <svg className="absolute inset-0 w-full h-full opacity-[0.5]" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="topo-dark" width="280" height="280" patternUnits="userSpaceOnUse">
+                            <path d="M0 70 Q70 40 140 70 T280 70" fill="none" stroke="rgba(52,211,153,0.07)" strokeWidth="1.2" />
+                            <path d="M0 120 Q70 85 140 120 T280 120" fill="none" stroke="rgba(52,211,153,0.05)" strokeWidth="1.2" />
+                            <path d="M0 170 Q70 130 140 170 T280 170" fill="none" stroke="rgba(52,211,153,0.07)" strokeWidth="1.2" />
+                            <path d="M0 220 Q70 180 140 220 T280 220" fill="none" stroke="rgba(52,211,153,0.04)" strokeWidth="1.2" />
+                            <circle cx="60" cy="60" r="22" fill="none" stroke="rgba(52,211,153,0.06)" strokeWidth="1.2" />
+                            <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(52,211,153,0.04)" strokeWidth="1.2" />
+                            <circle cx="215" cy="200" r="28" fill="none" stroke="rgba(245,158,11,0.05)" strokeWidth="1.2" />
+                            <circle cx="215" cy="200" r="46" fill="none" stroke="rgba(245,158,11,0.03)" strokeWidth="1.2" />
+                        </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#topo-dark)" />
+                </svg>
             </div>
-            {/* ── Hero welcome band ─────────────────────────────────── */}
-            <section className="relative z-10 overflow-hidden bg-gradient-to-br from-[#0c231a] via-[#123526] to-[#1b4a33] text-white">
+            {/* ── Hero welcome band (compact — minimizes scroll) ────── */}
+            <section className="relative z-10 overflow-hidden bg-gradient-to-br from-[#081411] via-[#0c231a] to-[#123526] text-white">
                 {/* Decorative rings + constant-motion orbs */}
                 <span aria-hidden className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full border border-white/10 animate-[spin_60s_linear_infinite] border-dashed" />
-                <span aria-hidden className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full border border-white/15" />
                 <span aria-hidden className="pointer-events-none absolute -bottom-32 -left-20 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-[drift_14s_var(--ease-in-out)_infinite_alternate]" />
-                <span aria-hidden className="pointer-events-none absolute top-10 right-1/3 h-40 w-40 rounded-full bg-amber-300/10 blur-3xl animate-[drift_18s_var(--ease-in-out)_infinite_alternate-reverse]" />
 
-                <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
-                        <div className="animate-[fade-up_0.6s_var(--ease-out)_both]">
-                            <p className="text-emerald-200/70 text-sm mb-2">{greeting},</p>
-                            <h1 className="text-3xl lg:text-5xl font-bold tracking-tight font-display leading-tight">
-                                {user.name}
-                            </h1>
-                            <div className="mt-4 flex flex-wrap items-center gap-2.5">
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 px-3.5 py-1.5 text-xs font-semibold ring-1 ring-white/10">
-                                    <Shield className="w-3.5 h-3.5 text-emerald-300" />
-                                    {user.role}
-                                </span>
-                                <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
-                                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                                    Portal layanan internal PT Rebinmas Jaya
-                                </span>
+                <div className="relative max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-9">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+                        <div className="flex items-center gap-4 animate-[fade-up_0.6s_var(--ease-out)_both]">
+                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white font-bold text-xl shadow-lg ring-2 ring-emerald-300/30 shrink-0">
+                                {initials}
                             </div>
+                            <div>
+                                <p className="text-emerald-200/60 text-xs mb-0.5">{greeting} · Portal Layanan Internal</p>
+                                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight font-display leading-tight">
+                                    {user.name}
+                                </h1>
+                            </div>
+                            <span className="hidden sm:inline-flex ml-2 items-center gap-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/10">
+                                <Shield className="w-3.5 h-3.5 text-emerald-300" />
+                                {user.role}
+                            </span>
                         </div>
 
                         {/* Quick actions */}
@@ -187,7 +192,7 @@ export default async function DashboardUserPage() {
                             {user.role === 'ADMIN' && (
                                 <Link
                                     href="/admin"
-                                    className="flex items-center gap-2 px-4 py-2.5 bg-white text-[#123526] rounded-xl hover:bg-emerald-50 transition-colors text-sm font-semibold shadow-lg"
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-white text-[#0c231a] rounded-xl hover:bg-emerald-50 transition-colors text-sm font-semibold shadow-lg"
                                 >
                                     <Settings className="w-4 h-4" />
                                     Admin Panel
@@ -199,17 +204,17 @@ export default async function DashboardUserPage() {
                 </div>
             </section>
 
-            {/* ── Constant-motion marquee ticker ────────────────────── */}
+            {/* ── Constant-motion marquee ticker (compact) ──────────── */}
             {services.length > 0 && (
-                <div className="relative z-20 -mt-5 mb-2 overflow-hidden">
-                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                        <div className="relative overflow-hidden rounded-full border border-[var(--color-border)] bg-white shadow-[var(--shadow-md)]">
-                            <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-white to-transparent z-10" />
-                            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white to-transparent z-10" />
-                            <div className="flex w-max animate-[marquee_28s_linear_infinite] py-2.5">
+                <div className="relative z-20 -mt-4 mb-1 overflow-hidden">
+                    <div className="mx-auto max-w-[1600px] px-4 sm:px-8 lg:px-12">
+                        <div className="relative overflow-hidden rounded-full border border-slate-700/50 bg-[#101c17]/90 backdrop-blur-md shadow-xl">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#101c17] to-transparent z-10" />
+                            <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#101c17] to-transparent z-10" />
+                            <div className="flex w-max animate-[marquee_28s_linear_infinite] py-2">
                                 {[...services, ...services].map((s, i) => (
-                                    <span key={`${s.serviceId}-${i}`} className="mx-5 inline-flex items-center gap-2 text-xs font-medium text-[var(--color-ink-soft)] whitespace-nowrap">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" />
+                                    <span key={`${s.serviceId}-${i}`} className="mx-5 inline-flex items-center gap-2 text-xs font-medium text-emerald-100/70 whitespace-nowrap">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                                         {s.name}
                                     </span>
                                 ))}
@@ -220,40 +225,22 @@ export default async function DashboardUserPage() {
             )}
 
             {/* ── Services ──────────────────────────────────────────── */}
-            <main className="relative z-10 max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 py-12 pb-24 -mt-6">
-                {/* Motif backdrop — topographic contour lines */}
-                <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-[0.55]">
-                    <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                            <pattern id="topo" width="280" height="280" patternUnits="userSpaceOnUse">
-                                <path d="M0 70 Q70 40 140 70 T280 70" fill="none" stroke="rgba(58,125,68,0.09)" strokeWidth="1.2" />
-                                <path d="M0 120 Q70 85 140 120 T280 120" fill="none" stroke="rgba(58,125,68,0.07)" strokeWidth="1.2" />
-                                <path d="M0 170 Q70 130 140 170 T280 170" fill="none" stroke="rgba(58,125,68,0.09)" strokeWidth="1.2" />
-                                <path d="M0 220 Q70 180 140 220 T280 220" fill="none" stroke="rgba(58,125,68,0.06)" strokeWidth="1.2" />
-                                <circle cx="60" cy="60" r="22" fill="none" stroke="rgba(58,125,68,0.08)" strokeWidth="1.2" />
-                                <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(58,125,68,0.05)" strokeWidth="1.2" />
-                                <circle cx="215" cy="200" r="28" fill="none" stroke="rgba(92,64,51,0.08)" strokeWidth="1.2" />
-                                <circle cx="215" cy="200" r="46" fill="none" stroke="rgba(92,64,51,0.05)" strokeWidth="1.2" />
-                            </pattern>
-                        </defs>
-                        <rect width="100%" height="100%" fill="url(#topo)" />
-                    </svg>
-                </div>
+            <main className="relative z-10 max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 py-10 pb-20 -mt-4">
 
                 {services.length === 0 ? (
                     /* Empty state */
-                    <div className="text-center py-20 bg-white/80 backdrop-blur-sm rounded-[var(--radius-xl)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] animate-[scale-in_0.4s_var(--ease-out)_both]">
-                        <div className="w-20 h-20 bg-[var(--color-paper-muted)] rounded-full flex items-center justify-center mx-auto mb-4">
-                            <HardDrive className="w-9 h-9 text-[var(--color-ink-muted)]" />
+                    <div className="text-center py-20 bg-white/[0.04] backdrop-blur-sm rounded-[var(--radius-xl)] border border-white/10 animate-[scale-in_0.4s_var(--ease-out)_both]">
+                        <div className="w-20 h-20 bg-white/[0.06] rounded-full flex items-center justify-center mx-auto mb-4">
+                            <HardDrive className="w-9 h-9 text-slate-500" />
                         </div>
-                        <h3 className="text-xl font-semibold text-[var(--color-ink)]">Belum Ada Layanan</h3>
-                        <p className="mt-2 text-[var(--color-ink-muted)] max-w-md mx-auto">
+                        <h3 className="text-xl font-semibold text-white">Belum Ada Layanan</h3>
+                        <p className="mt-2 text-slate-400 max-w-md mx-auto">
                             Anda belum memiliki akses ke layanan apapun. Hubungi administrator untuk mendapatkan akses.
                         </p>
                         {user.role === 'ADMIN' && (
                             <Link
                                 href="/admin"
-                                className="mt-6 inline-block px-6 py-3 bg-[var(--color-accent)] text-white rounded-lg hover:bg-[var(--color-accent-hover)] transition-colors font-medium shadow-sm"
+                                className="mt-6 inline-block px-6 py-3 bg-gradient-to-br from-emerald-500 to-emerald-700 text-white rounded-lg hover:from-emerald-400 hover:to-emerald-600 transition-colors font-medium shadow-lg"
                             >
                                 Kelola Layanan
                             </Link>
@@ -269,15 +256,15 @@ export default async function DashboardUserPage() {
                             >
                                 {/* Group header */}
                                 <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-md flex items-center justify-center shrink-0 text-white">
+                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-lg shadow-emerald-900/40 flex items-center justify-center shrink-0 text-white ring-1 ring-emerald-400/30">
                                         <group.icon className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
-                                        <h2 className="text-xl font-bold text-[var(--color-ink)] tracking-tight leading-tight">{group.label}</h2>
-                                        <p className="text-xs text-[var(--color-ink-muted)]">{group.hint}</p>
+                                        <h2 className="text-xl font-bold text-white tracking-tight leading-tight">{group.label}</h2>
+                                        <p className="text-xs text-slate-400">{group.hint}</p>
                                     </div>
-                                    <span className="ml-auto shrink-0 h-px flex-1 max-w-[80px] bg-gradient-to-r from-[var(--color-border-strong)] to-transparent" />
-                                    <span className="shrink-0 px-3 py-1 rounded-full bg-white text-[var(--color-ink-soft)] text-xs font-bold shadow-[var(--shadow-neu-sm)]">
+                                    <span className="ml-auto shrink-0 h-px flex-1 max-w-[80px] bg-gradient-to-r from-white/15 to-transparent" />
+                                    <span className="shrink-0 px-3 py-1 rounded-full bg-white/[0.07] text-emerald-200 text-xs font-bold ring-1 ring-white/10 backdrop-blur-sm">
                                         {group.items.length} layanan
                                     </span>
                                 </div>
@@ -307,8 +294,8 @@ export default async function DashboardUserPage() {
             </main>
 
             {/* ── Footer strip ──────────────────────────────────────── */}
-            <footer className="relative z-10 border-t border-[var(--color-border)] bg-white/60 backdrop-blur-sm">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[var(--color-ink-muted)]">
+            <footer className="relative z-10 border-t border-white/10 bg-[#081411]/80 backdrop-blur-md">
+                <div className="max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
                     <p>&copy; {new Date().getFullYear()} PT Rebinmas Jaya · Portal Layanan Internal</p>
                     <p>{dateStr}</p>
                 </div>
