@@ -1,0 +1,31 @@
+/* Page-specific additions. Prefer reusable classes from theme.css first. */
+.dashboard-layout { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1fr) minmax(340px, 1.05fr); gap: 18px; }
+.dashboard-layout .panel { min-height: 350px; }
+.system-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(330px, .9fr); gap: 18px; }
+.client-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.filter-row { display: grid; grid-template-columns: minmax(220px, 1.2fr) minmax(160px, .6fr) minmax(160px, .6fr) minmax(230px, .8fr) auto; gap: 12px; }
+.object-meta { display: grid; grid-template-columns: repeat(5, max-content); overflow: auto hidden; }
+.object-meta__item { min-width: 110px; padding: 9px 16px; border-right: 1px solid var(--line); }
+.object-meta__item:last-child { border-right: 0; }
+.object-meta__label { color: var(--text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.object-meta__value { margin-top: 2px; color: var(--text); font-weight: 800; }
+.attendance-quick-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.payroll-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .8fr); gap: 18px; }
+.module-name { display: flex; align-items: center; gap: 8px; }
+.module-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 7px; color: #85f6b5; background: rgba(32, 196, 112, .12); font-size: 11px; font-weight: 850; }
+.module-pill::before { content:""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.table-scroll { max-width: 100%; }
+
+@media (max-width: 1240px) {
+ .dashboard-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ .dashboard-layout .panel:last-child { grid-column: span 2; }
+ .client-card-grid { grid-template-columns: 1fr; }
+ .attendance-quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+ .filter-row { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 860px) {
+ .dashboard-layout, .system-grid, .payroll-layout { grid-template-columns: 1fr; }
+ .dashboard-layout .panel:last-child { grid-column: auto; }
+ .attendance-quick-grid { grid-template-columns: 1fr; }
+ .filter-row { grid-template-columns: 1fr; }
+}

@@ -43,6 +43,12 @@ try {
 } catch { /* dotenv optional */ }
 
 const ROOT_DIR = import.meta.dir;
+// Verbose per-request logging — off by default (synchronous console.log on every
+// request blocks the event loop under load). Set LOG_VERBOSE=1 to enable.
+const LOG_VERBOSE = process.env.LOG_VERBOSE === '1';
+// Static standalone UI HTML — read once, cached for the process lifetime.
+let ifessAppHtml = null;
+let ifessSimpleHtml = null;
 const PORT = parseInt(process.env.PORT || '3001');
 const HOST = process.env.HOST || '0.0.0.0';
 const DASHBOARD_DIR = `${ROOT_DIR}/Dashboard_Utama`;
@@ -53,6 +59,7 @@ const FIREBIRD_QUERY_TARGET = process.env.FIREBIRD_QUERY_TARGET || 'http://local
 const START_DASHBOARD = process.env.START_DASHBOARD !== 'false';
 const START_MODULE_SERVICES = process.env.START_MODULE_SERVICES !== 'false';
 const NETWORK_MONITOR_DIR = `${ROOT_DIR}/Module Services/Wifi_LAN_Monitor/reference-design`;
+const IFESS_CONTROL_DIR = `${ROOT_DIR}/Module Services/ifess-control`;
 const CACHE_MAX_SIZE = 50;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const GATEWAY_IDLE_TIMEOUT_SECONDS = parseInt(process.env.GATEWAY_IDLE_TIMEOUT_SECONDS || '120');
@@ -503,7 +510,7 @@ function handleIFESSApi(req, reqPath) {
 function handleQueryGateway(req, reqPath) {
     // Normalize path: strip /api/ifess or /api prefix
     const normalizedPath = reqPath.replace('/api/ifess', '').replace('/api', '');
-    console.log(`[QueryGateway] Handling: ${req.method} ${normalizedPath}`);
+    if (LOG_VERBOSE) console.log(`[QueryGateway] Handling: ${req.method} ${normalizedPath}`);
 
     if (req.method === 'GET' && (normalizedPath === '/query-gateway/templates' || normalizedPath === '/query-gateway/templates/')) {
         return new Response(JSON.stringify(ifessService.listQueryTemplates()), { headers: { 'Content-Type': 'application/json' } });
@@ -830,7 +837,7 @@ const STATIC_EXTENSIONS_RE = /\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|
 const VERSION_HASH_RE = /-[a-f0-9]{6,}\.[a-z]+$/;
 
 const DEFAULT_STATIC_ROOTS = [
-    { prefix: '/ifess-assets', dir: `${DASHBOARD_DIR}/public/ifess-assets`, immutable: false },
+    { prefix: '/ifess-assets', dir: `${IFESS_CONTROL_DIR}/assets`, immutable: false },
     { prefix: '/assets', dir: `${DASHBOARD_DIR}/public/assets`, immutable: false },
 ];
 
@@ -1211,12 +1218,11 @@ async function proxyRequest(req, route, reqPath) {
         const contentType = response.headers.get('content-type') || '';
         const cacheControl = getCacheControl(reqPath, contentType);
 
-        // Log all requests + slow requests warning
-        const logKey = `${req.method} ${route.path}${targetPath} → ${response.status} (${elapsed}ms)`;
+        // SLOW requests always logged; normal requests only when LOG_VERBOSE=1.
         if (elapsed > 500) {
-            console.log(`SLOW ${logKey}`);
-        } else {
-            console.log(logKey);
+            console.log(`SLOW ${req.method} ${route.path}${targetPath} → ${response.status} (${elapsed}ms)`);
+        } else if (LOG_VERBOSE) {
+            console.log(`${req.method} ${route.path}${targetPath} → ${response.status} (${elapsed}ms)`);
         }
 
         // ── Passthrough: streaming for non-rewrite routes ─────────────────────
@@ -1526,8 +1532,12 @@ server = Bun.serve({
         if (reqPath.startsWith('/query') && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
         if (reqPath.startsWith('/query') && hApiKey !== QUERY_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
 
-        if (reqPath.startsWith('/ifess') && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
-        if (reqPath.startsWith('/ifess') && hApiKey !== IFESS_CLIENT_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
+        // Phase 5: require X-API-Key for proxied /ifess client RPC paths.
+        // Exclude the standalone UI (/ifess-control) and its static assets
+        // (/ifess-assets) — those are served directly, not client RPCs.
+        const isIfessClientRpc = reqPath.startsWith('/ifess') && !reqPath.startsWith('/ifess-control') && !reqPath.startsWith('/ifess-assets');
+        if (isIfessClientRpc && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
+        if (isIfessClientRpc && hApiKey !== IFESS_CLIENT_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
 
         // ── Static file bypass (zero overhead — fastest path) ───────────────
         const staticFile = getStaticFilePath(reqPath);
@@ -1574,15 +1584,15 @@ server = Bun.serve({
         // ── IFESS API (Bun native handler) ─────────────────────────────────
         // Moved to early handlers above
 
-        // ── Standalone IFESS query UI (no Next.js dependency) ───────────────
-        // /ifess-control (bare) and /ifess-control/app both serve the same latest HTML UI.
+        // ── Standalone IFESS query UI (served from Module Services/ifess-control) ──
+        // /ifess-control (bare) and /ifess-control/app both serve the full UI.
         if (reqPath === '/ifess-control' || reqPath === '/ifess-control/' || reqPath === '/ifess-control/app' || reqPath === '/ifess-control/app/') {
-            const html = readFileSync(`${ROOT_DIR}/Dashboard_Utama/public/ifess-app.html`, 'utf-8');
-            return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+            if (ifessAppHtml == null) ifessAppHtml = readFileSync(`${IFESS_CONTROL_DIR}/app/index.html`, 'utf-8');
+            return new Response(ifessAppHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
         }
         if (reqPath === '/ifess-control/simple' || reqPath === '/ifess-control/simple/') {
-            const html = readFileSync(`${ROOT_DIR}/Dashboard_Utama/public/ifess-simple.html`, 'utf-8');
-            return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+            if (ifessSimpleHtml == null) ifessSimpleHtml = readFileSync(`${IFESS_CONTROL_DIR}/simple/index.html`, 'utf-8');
+            return new Response(ifessSimpleHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
         }
 
         // ── Dashboard paths first (before route matching) ─────────────────────

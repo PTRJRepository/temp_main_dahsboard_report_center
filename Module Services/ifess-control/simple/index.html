@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IFESS Query Console</title>
+<style>
+  :root {
+    --bg: #1e1e1e; --bg-2: #252526; --bg-3: #2d2d2d; --bg-4: #3c3c3c;
+    --border: #3c3c3c; --border-2: #4c4c4c;
+    --text: #d4d4d4; --text-dim: #888; --text-mut: #666;
+    --accent: #0c6da8; --accent-2: #0d7fc0;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --blue: #6cb6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .header { background: var(--bg-2); border-bottom: 1px solid var(--border); padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { font-size: 14px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 6px; }
+  .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-dim); }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  .conn-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .conn-dot.offline { background: var(--red); }
+
+  .container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: var(--bg-2); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; gap: 10px; align-items: end; flex-wrap: wrap; flex-shrink: 0; }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  select, input { background: var(--bg-4); border: 1px solid var(--border-2); color: var(--text); border-radius: 4px; padding: 6px 9px; font-size: 12px; outline: none; }
+  select:focus, input:focus { border-color: var(--accent); }
+  .editor-wrap { flex: 1; display: flex; flex-direction: column; padding: 12px 16px; overflow: hidden; min-height: 0; }
+  .editor-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
+  .editor-bar .left { display: flex; gap: 8px; align-items: center; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--bg-3); color: var(--text-dim); }
+  .btn { padding: 7px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: background 0.15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-2); }
+  .btn-primary:disabled { background: var(--bg-4); cursor: not-allowed; opacity: 0.6; }
+  .btn-sec { background: var(--bg-4); color: var(--text); }
+  .btn-sec:hover { background: var(--border-2); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  textarea#query { background: var(--bg); border: 1px solid var(--border); color: #e6e6e6; border-radius: 6px; padding: 12px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; width: 100%; resize: none; flex: 1; min-height: 120px; line-height: 1.5; }
+  textarea#query:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+  .status-bar { padding: 7px 12px; border-radius: 4px; font-size: 11px; margin: 8px 0; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .status-bar.info { background: rgba(12,109,168,0.15); color: var(--blue); border: 1px solid rgba(12,109,168,0.3); }
+  .status-bar.success { background: rgba(74,222,128,0.1); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
+  .status-bar.error { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .status-bar.warn { background: rgba(251,191,36,0.1); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+  .status-bar .spinner { width: 11px; height: 11px; }
+
+  .result-section { flex-shrink: 0; }
+  .result-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; padding: 0 2px; }
+  .result-meta .meta-left { display: flex; gap: 12px; }
+  .result-meta .meta-stat { display: flex; align-items: center; gap: 4px; }
+  .result-meta .meta-stat b { color: var(--text); }
+
+  .table-wrap { border: 1px solid var(--border); border-radius: 6px; overflow: auto; max-height: calc(100vh - 420px); min-height: 150px; background: var(--bg); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead { position: sticky; top: 0; z-index: 5; }
+  th { background: #37373d; color: #9cdcfe; text-align: left; padding: 8px 12px; border-right: 1px solid var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+  td { padding: 6px 12px; border-right: 1px solid #252526; border-bottom: 1px solid #252526; white-space: nowrap; max-width: 350px; overflow: hidden; text-overflow: ellipsis; font-family: 'Consolas', monospace; color: #ccc; }
+  td:hover { white-space: normal; max-width: none; }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
+  tbody tr:hover { background: rgba(12,109,168,0.12); }
+  tbody tr:hover td { color: #fff; }
+
+  .empty { padding: 50px; text-align: center; color: var(--text-mut); font-size: 12px; }
+  .empty .spinner-wrap { margin-bottom: 10px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--bg-4); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .client-block { border-bottom: 2px solid var(--border); }
+  .client-block:last-child { border-bottom: none; }
+  .client-head { background: var(--bg-2); padding: 6px 12px; font-size: 11px; color: var(--text-dim); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 4; }
+  .client-head .name { color: var(--blue); font-weight: 500; }
+  .client-head .count { background: var(--bg-4); padding: 2px 8px; border-radius: 10px; font-size: 10px; }
+  .truncated-tag { color: var(--yellow); font-size: 10px; margin-left: 8px; }
+
+  .kbd { font-size: 10px; background: var(--bg-4); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border-2); color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-left">
+    <div class="logo"><span class="dot"></span> IFESS Query Console</div>
+  </div>
+  <div class="header-right">
+    <span><span class="conn-dot" id="connDot"></span><span id="connText">checking</span></span>
+    <span>Firebird read-only</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="topbar">
+    <div class="field">
+      <label>Target Client</label>
+      <select id="clientSel" style="min-width:200px"><option value="">Loading...</option></select>
+    </div>
+    <div class="field">
+      <label>Template</label>
+      <select id="templateSel" style="min-width:220px"><option value="">— pick template —</option></select>
+    </div>
+    <div class="field">
+      <label>Max Rows</label>
+      <input type="number" id="maxRows" value="100" style="width:80px">
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="btn btn-sec btn-sm" id="refreshBtn">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="editor-wrap">
+    <div class="editor-bar">
+      <div class="left">
+        <span class="badge" id="queryBadge">SELECT</span>
+        <span style="font-size:11px;color:var(--text-dim)">SQL Editor — <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> to run</span>
+      </div>
+      <div>
+        <button class="btn btn-primary" id="execBtn">▶ Execute</button>
+      </div>
+    </div>
+    <textarea id="query" spellcheck="false" placeholder="SELECT ... FROM ...">SELECT RDB$RELATION_NAME AS TABLE_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG = 0 ORDER BY RDB$RELATION_NAME</textarea>
+  </div>
+
+  <div class="status-bar info" id="status">Ready — pick a client and run a query</div>
+
+  <div class="result-section" style="padding: 0 16px 16px; flex:1; display:flex; flex-direction:column; min-height:0;">
+    <div class="result-meta" id="resultMeta"></div>
+    <div class="table-wrap" id="resultWrap">
+      <div class="empty">Execute a query to see results here.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let pollTimer = null;
+
+async function api(path, opts={}) {
+  const r = await fetch(path, { headers: {'Content-Type':'application/json'}, ...opts });
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { return { error: t, status: r.status }; }
+}
+function clearNode(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+function setText(el, txt) { clearNode(el); el.appendChild(document.createTextNode(txt)); }
+
+function setConn(online) {
+  const dot = $('connDot'); dot.className = 'conn-dot ' + (online ? 'online' : 'offline');
+  setText($('connText'), online ? 'gateway online' : 'gateway offline');
+}
+
+async function checkConn() {
+  try { await api('/api/ifess/health'); setConn(true); loadClients(); }
+  catch { setConn(false); setTimeout(checkConn, 3000); }
+}
+
+async function loadClients() {
+  const d = await api('/api/ifess', { method:'POST', body: JSON.stringify({action:'listClients'}) });
+  const clients = Array.isArray(d) ? d : (d.clients || []);
+  const sel = $('clientSel'); clearNode(sel);
+  if (clients.length === 0) {
+    const o = document.createElement('option'); o.value=''; o.textContent='No clients (start sim)'; sel.appendChild(o);
+  } else {
+    clients.forEach(c => { const o=document.createElement('option'); o.value=c.clientId; o.textContent=`${c.clientName} · ${c.status}`; sel.appendChild(o); });
+  }
+}
+
+async function loadTemplates() {
+  const d = await api('/api/query-gateway/templates');
+  const arr = Array.isArray(d) ? d : [];
+  const sel = $('templateSel'); clearNode(sel);
+  const def = document.createElement('option'); def.value=''; def.textContent='— pick template —'; sel.appendChild(def);
+  arr.forEach(t => { const o=document.createElement('option'); o.value=t.templateCode; o.textContent=t.templateName; sel.appendChild(o); });
+}
+
+async function applyTemplate() {
+  const code = $('templateSel').value;
+  if (!code) return;
+  const d = await api('/api/query-gateway/templates');
+  const t = (Array.isArray(d)?d:[]).find(x => x.templateCode === code);
+  if (t) { $('query').value = t.queryText; $('maxRows').value = t.defaultMaxRows; updateBadge(); }
+}
+
+function updateBadge() {
+  const q = $('query').value.trim().toUpperCase();
+  const badge = $('queryBadge');
+  if (q.startsWith('SELECT')) { badge.textContent='SELECT'; badge.style.background='rgba(74,222,128,0.15)'; badge.style.color='var(--green)'; }
+  else if (q.startsWith('WITH')) { badge.textContent='WITH'; badge.style.background='rgba(108,182,255,0.15)'; badge.style.color='var(--blue)'; }
+  else { badge.textContent='SQL'; badge.style.background='var(--bg-3)'; badge.style.color='var(--text-dim)'; }
+}
+
+function setStatus(msg, type='info', spinner=false) {
+  $('status').className = 'status-bar ' + type;
+  clearNode($('status'));
+  if (spinner) { const s=document.createElement('span'); s.className='spinner'; $('status').appendChild(s); $('status').appendChild(document.createTextNode(' ')); }
+  $('status').appendChild(document.createTextNode(msg));
+}
+
+function showSpinner(msg) {
+  const wrap = $('resultWrap'); clearNode(wrap);
+  const div = document.createElement('div'); div.className='empty';
+  const sw = document.createElement('div'); sw.className='spinner-wrap';
+  const sp = document.createElement('span'); sp.className='spinner'; sw.appendChild(sp); div.appendChild(sw);
+  div.appendChild(document.createTextNode(msg));
+  wrap.appendChild(div);
+}
+
+function exportCSV(headers, rows) {
+  const esc = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; };
+  const lines = [headers.map(esc).join(',')];
+  rows.forEach(r => lines.push(headers.map((_, i) => esc(r[i])).join(',')));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'query_result.csv'; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function execute() {
+  if (pollTimer) clearInterval(pollTimer);
+  const query = $('query').value.trim();
+  const client = $('clientSel').value;
+  const maxRows = parseInt($('maxRows').value) || 100;
+  if (!query) { setStatus('Query is empty', 'error'); return; }
+  if (!client) { setStatus('No client selected — start the sim first', 'error'); return; }
+
+  $('execBtn').disabled = true;
+  clearNode($('resultMeta'));
+  setStatus('Validating query...', 'info', true);
+  showSpinner('Validating query syntax...');
+
+  const v = await api('/api/query-gateway/validate', { method:'POST', body: JSON.stringify({queryText: query}) });
+  if (!v.valid) {
+    setStatus('Invalid query: ' + (v.errors||[]).join(', '), 'error');
+    const wrap=$('resultWrap'); clearNode(wrap);
+    const d=document.createElement('div'); d.className='empty'; d.textContent='Query rejected — only SELECT / WITH ... SELECT allowed.'; wrap.appendChild(d);
+    $('execBtn').disabled=false; return;
+  }
+
+  setStatus(`Dispatching to ${client}...`, 'info', true);
+  showSpinner('Sending query to client...');
+  const disp = await api('/api/query-gateway/dispatch', { method:'POST', body: JSON.stringify({
+    queryName: 'Ad-hoc', queryText: query, targetMode: 'SingleClient',
+    targetClientIds: [client], maxRows, timeoutSeconds: 30
+  })});
+  if (!disp.success) { setStatus('Dispatch failed: ' + (disp.error||''), 'error'); $('execBtn').disabled=false; return; }
+
+  const batchId = disp.queryBatchId;
+  setStatus(`Executing on client (batch ${batchId.slice(0,18)}...)`, 'info', true);
+  showSpinner('Client executing query via isql...');
+
+  let attempts = 0;
+  pollTimer = setInterval(async () => {
+    attempts++;
+    const b = await api(`/api/query-gateway/batches/${batchId}`);
+    if (b.status === 'Completed' || b.status === 'Success' || b.status === 'Failed' || attempts > 40) {
+      clearInterval(pollTimer); pollTimer = null;
+      $('execBtn').disabled = false;
+      renderResults(b);
+    } else if (attempts % 4 === 0) {
+      setStatus(`Still executing... (${attempts}s)`, 'info', true);
+    }
+  }, 150);
+}
+
+function renderResults(batch) {
+  const results = batch.results || [];
+  const jobs = batch.jobs || [];
+  const wrap = $('resultWrap'); clearNode(wrap);
+
+  // meta bar
+  const meta = $('resultMeta'); clearNode(meta);
+  const ml = document.createElement('div'); ml.className='meta-left';
+  let totalRows = 0; results.forEach(r => totalRows += (r.rowCount||0));
+  const s1 = document.createElement('span'); s1.className='meta-stat'; s1.innerHTML=''; s1.appendChild(document.createTextNode('Status: ')); const b1=document.createElement('b'); b1.textContent=batch.status; b1.style.color = batch.status==='Completed'?'var(--green)':'var(--text)'; s1.appendChild(b1);
+  const s2 = document.createElement('span'); s2.className='meta-stat'; s2.appendChild(document.createTextNode('Rows: ')); const b2=document.createElement('b'); b2.textContent=totalRows; s2.appendChild(b2);
+  const s3 = document.createElement('span'); s3.className='meta-stat'; s3.appendChild(document.createTextNode('Clients: ')); const b3=document.createElement('b'); b3.textContent=results.length; s3.appendChild(b3);
+  ml.appendChild(s1); ml.appendChild(s2); ml.appendChild(s3);
+  meta.appendChild(ml);
+
+  if (results.length === 0) {
+    setStatus(`Done — ${batch.status}, but no results returned. ${jobs.length} job(s), ${batch.successCount} succeeded.`, 'warn');
+    const d = document.createElement('div'); d.className='empty';
+    d.textContent='No results. The client may not have executed — check the sim is running.';
+    wrap.appendChild(d);
+    return;
+  }
+  setStatus(`Done — ${batch.status}, ${results.length} client(s), ${totalRows} row(s)`, 'success');
+
+  results.forEach(r => {
+    const block = document.createElement('div'); block.className='client-block';
+    const head = document.createElement('div'); head.className='client-head';
+    const left = document.createElement('span'); left.className='name'; left.textContent = r.clientId;
+    head.appendChild(left);
+    if (r.isTruncated) { const t=document.createElement('span'); t.className='truncated-tag'; t.textContent='truncated'; head.appendChild(t); }
+    const cnt = document.createElement('span'); cnt.className='count'; cnt.textContent = `${r.rowCount} rows`; head.appendChild(cnt);
+    block.appendChild(head);
+
+    const headers = r.headers || [];
+    const rows = r.rows || [];
+    if (headers.length > 0 && rows.length > 0) {
+      // export button
+      const expBtn = document.createElement('button'); expBtn.className='btn btn-sec btn-sm'; expBtn.textContent='⬇ CSV'; expBtn.style.cssText='position:sticky;top:0;float:right;margin:4px 8px;z-index:6;';
+      expBtn.onclick = () => exportCSV(headers, rows);
+
+      const tbl = document.createElement('table');
+      const thead = document.createElement('thead');
+      const tr = document.createElement('tr');
+      headers.forEach(h => { const th=document.createElement('th'); th.textContent=h; tr.appendChild(th); });
+      thead.appendChild(tr); tbl.appendChild(thead);
+      const tb = document.createElement('tbody');
+      const visible = rows.slice(0, 500);
+      visible.forEach(row => {
+        const rtr = document.createElement('tr');
+        headers.forEach((_, i) => { const td=document.createElement('td'); td.textContent = row[i] != null ? String(row[i]) : ''; rtr.appendChild(td); });
+        tb.appendChild(rtr);
+      });
+      tbl.appendChild(tb);
+      const tw = document.createElement('div'); tw.style.cssText='overflow:auto;max-height:400px';
+      tw.appendChild(tbl);
+      block.appendChild(tw);
+      if (rows.length > 500) {
+        const note = document.createElement('div'); note.style.cssText='padding:6px 12px;font-size:10px;color:var(--text-mut);background:var(--bg-2)';
+        note.textContent = `Showing first 500 of ${rows.length} rows`; block.appendChild(note);
+      }
+      head.appendChild(expBtn);
+    } else {
+      const d = document.createElement('div'); d.className='empty'; d.textContent='Empty result set'; block.appendChild(d);
+    }
+    wrap.appendChild(block);
+  });
+}
+
+$('refreshBtn').addEventListener('click', () => { loadClients(); loadTemplates(); });
+$('templateSel').addEventListener('change', applyTemplate);
+$('execBtn').addEventListener('click', execute);
+$('query').addEventListener('input', updateBadge);
+document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') e.preventDefault(), execute(); });
+checkConn();
+loadTemplates();
+updateBadge();
+</script>
+</body>
+</html>
