@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import Navbar from '@/components/Navbar'
 import HeroSection from '@/components/HeroSection'
 import SatelliteMap from '@/components/SatelliteMapWrapper'
 import Image from 'next/image'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useInView } from 'framer-motion'
 import { MapPin, Phone, Mail, Building2, Factory, Leaf, Users, Award, TreePine, Heart, Globe, Shield, ExternalLink, PlayCircle, X, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react'
 
 const reveal = {
@@ -19,7 +19,12 @@ const revealSoft = {
   visible: { opacity: 1, y: 0 },
 }
 
-const revealTransition = { duration: 0.7, ease: 'easeOut' as const }
+const revealScale = {
+  hidden: { opacity: 0, scale: 0.94 },
+  visible: { opacity: 1, scale: 1 },
+}
+
+const revealTransition = { duration: 0.7, ease: [0.22, 1, 0.36, 1] as const }
 
 function RevealBlock({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   return (
@@ -48,6 +53,49 @@ function RevealItem({ children, className = '', delay = 0 }: { children: ReactNo
     >
       {children}
     </motion.div>
+  )
+}
+
+function RevealScale({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.2 }}
+      variants={revealScale}
+      transition={{ ...revealTransition, delay }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+// Animated number counter — counts up when scrolled into view.
+function CountUp({ value, suffix = '', className = '' }: { value: number; suffix?: string; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const inView = useInView(ref, { once: true, amount: 0.6 })
+  const [display, setDisplay] = useState(0)
+
+  useEffect(() => {
+    if (!inView) return
+    const duration = 1400
+    const start = performance.now()
+    let frame: number
+    const tick = (now: number) => {
+      const p = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setDisplay(Math.round(eased * value))
+      if (p < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [inView, value])
+
+  return (
+    <span ref={ref} className={className}>
+      {display}{suffix}
+    </span>
   )
 }
 
@@ -127,31 +175,46 @@ export default function Home() {
       <HeroSection />
 
       {/* Kilasan Perusahaan Section */}
-      <section id="kilasan" className="py-20 bg-white">
-        <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="kilasan" className="relative py-24 lg:py-32 bg-white overflow-hidden">
+        {/* Giant watermark */}
+        <span aria-hidden className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 text-[22vw] leading-none font-bold text-palm-green/[0.04] select-none whitespace-nowrap font-display">
+          REBINMAS
+        </span>
+        <RevealBlock className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl mb-6">Kilasan Perusahaan</h2>
-            <div className="h-1 w-24 bg-palm-green mx-auto rounded-full mb-8" />
-            <p className="text-xl text-gray-600 leading-relaxed italic">
-              &quot;Berbasis di jantung Kepulauan Bangka Belitung, PT Rebinmas Jaya adalah perusahaan perkebunan kelapa sawit yang memadukan efisiensi operasional dengan tanggung jawab sosial. Kami percaya bahwa pertumbuhan bisnis harus berjalan seiring dengan kesejahteraan masyarakat dan kelestarian lingkungan.&quot;
-            </p>
+            <motion.span
+              initial={{ scaleX: 0 }}
+              whileInView={{ scaleX: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              className="mx-auto mb-8 block h-px w-16 origin-center bg-palm-green"
+            />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green mb-6">Kilasan Perusahaan</h2>
+            <div className="relative">
+              <span aria-hidden className="absolute -top-8 -left-2 text-[120px] leading-none text-palm-green/10 font-display select-none">&ldquo;</span>
+              <p className="relative text-xl md:text-2xl lg:text-[1.75rem] text-gray-700 leading-relaxed font-light">
+                Berbasis di jantung Kepulauan Bangka Belitung, <strong className="font-semibold text-gray-900">PT Rebinmas Jaya</strong> adalah perusahaan perkebunan kelapa sawit yang memadukan efisiensi operasional dengan tanggung jawab sosial. Kami percaya bahwa pertumbuhan bisnis harus berjalan seiring dengan kesejahteraan masyarakat dan kelestarian lingkungan.
+              </p>
+            </div>
           </div>
         </RevealBlock>
       </section>
 
       {/* Tentang Kami Section */}
-      <section id="about" className="py-20 bg-gray-50">
+      <section id="about" className="py-24 bg-gradient-to-b from-[#f6f8f6] to-white">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Tentang Kami</h2>
-            <div className="mt-4 h-1 w-24 bg-palm-green mx-auto rounded-full" />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green mb-3">Tentang Kami</h2>
+            <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight">Berakar di Belitung, Tumbuh untuk Negeri</h3>
           </div>
 
           {/* Profil Perusahaan */}
-          <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
+          <div className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center mb-14">
             <div className="space-y-6">
               <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <Building2 className="h-8 w-8 text-palm-green" />
+                <span className="w-11 h-11 rounded-xl bg-palm-green/10 flex items-center justify-center">
+                  <Building2 className="h-6 w-6 text-palm-green" />
+                </span>
                 Profil Perusahaan
               </h3>
               <div className="text-lg text-gray-600 leading-relaxed space-y-4">
@@ -168,22 +231,47 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative h-64 md:h-80 rounded-2xl overflow-hidden shadow-xl">
-              <div
-                className="absolute inset-0 bg-cover bg-center"
-                style={{ backgroundImage: "url('/assets/kebun sawit.webp')" }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-palm-green/80 to-earth-brown/80" />
-              </div>
-              <div className="relative h-full flex items-center justify-center text-center text-white p-8">
-                <div>
-                  <TreePine className="h-16 w-16 mx-auto mb-4 opacity-90" />
-                  <p className="text-lg font-semibold">Perkebunan Kelapa Sawit</p>
-                  <p className="text-sm opacity-80">Belitung, Bangka Belitung</p>
+            <RevealScale className="relative">
+              <div className="relative h-72 md:h-[420px] rounded-3xl overflow-hidden shadow-2xl">
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-[2s] hover:scale-105"
+                  style={{ backgroundImage: "url('/assets/kebun sawit.webp')" }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-palm-green/75 to-earth-brown/80" />
                 </div>
+                <div className="relative h-full flex items-center justify-center text-center text-white p-8">
+                  <div>
+                    <TreePine className="h-16 w-16 mx-auto mb-4 opacity-90" />
+                    <p className="text-lg font-semibold">Perkebunan Kelapa Sawit</p>
+                    <p className="text-sm opacity-80">Belitung, Bangka Belitung</p>
+                  </div>
+                </div>
+                {/* Corner accent */}
+                <div className="absolute -top-3 -right-3 w-24 h-24 rounded-tr-[2rem] border-t-4 border-r-4 border-golden-yellow/70 pointer-events-none" />
               </div>
-            </div>
+            </RevealScale>
           </div>
+
+          {/* Stats strip — animated counters */}
+          <RevealItem className="mb-14">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 shadow-sm">
+              {[
+                { v: 3, suffix: '', label: 'Estate Utama', icon: MapPin },
+                { v: 10, suffix: '+', label: 'Divisi Kebun', icon: TreePine },
+                { v: 100, suffix: '%', label: 'Komitmen ISPO', icon: Shield },
+                { v: 5, suffix: '+', label: 'Desa Binaan', icon: Users },
+              ].map((s, i) => (
+                <div key={s.label} className="bg-white p-6 text-center hover:bg-[#f6f8f6] transition-colors">
+                  <s.icon className="h-5 w-5 text-palm-green mx-auto mb-3" />
+                  <p className="text-3xl md:text-4xl font-bold text-gray-900 font-display">
+                    <CountUp value={s.v} suffix={s.suffix} />
+                  </p>
+                  <p className="mt-1 text-xs md:text-sm text-gray-500">{s.label}</p>
+                  <span className="sr-only">{i}</span>
+                </div>
+              ))}
+            </div>
+          </RevealItem>
 
           {/* Visi & Misi */}
           <div className="grid md:grid-cols-2 gap-8">
@@ -229,115 +317,142 @@ export default function Home() {
       </section>
 
       {/* Operasional Section */}
-      <section id="operations" className="py-20 bg-white">
+      <section id="operations" className="py-24 bg-white">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Operasional</h2>
-            <div className="mt-4 h-1 w-24 bg-palm-green mx-auto rounded-full" />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green mb-3">Operasional</h2>
+            <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight">Tiga Estate, Satu Standar</h3>
           </div>
 
-          {/* Estates Grid */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {/* Parit Gunung Estate */}
-            <div className="bg-gradient-to-br from-palm-green to-emerald-700 text-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
-              <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center mb-4">
-                <MapPin className="h-7 w-7" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Parit Gunung Estate</h3>
-              <p className="text-white/80 text-sm mb-4">Kecamatan Badau, Belitung</p>
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">1A</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">1B</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">2A</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">2B</span>
-              </div>
-            </div>
+          {/* Estates Grid — tilt + shine on hover */}
+          <div className="grid md:grid-cols-3 gap-6 mb-14">
+            {[
+              {
+                name: 'Parit Gunung Estate', loc: 'Kecamatan Badau, Belitung', icon: MapPin,
+                grad: 'from-emerald-600 via-palm-green to-emerald-800',
+                areas: ['1A', '1B', '2A', '2B'],
+              },
+              {
+                name: 'Air Ruak Estate', loc: 'Kabupaten Belitung Timur', icon: TreePine,
+                grad: 'from-amber-700 via-earth-brown to-amber-900',
+                areas: ['ARE A', 'ARE B1', 'ARE B2', 'ARE C'],
+              },
+              {
+                name: 'Darul Makmur Estate', loc: 'Kabupaten Belitung', icon: Globe,
+                grad: 'from-teal-500 via-teal-600 to-teal-800',
+                areas: ['Air Raya', 'Kandis', 'Cendong'],
+              },
+            ].map((estate, i) => (
+              <RevealItem key={estate.name} delay={i * 0.12}>
+                <motion.div
+                  whileHover={{ y: -8 }}
+                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                  className={`group relative overflow-hidden rounded-3xl bg-gradient-to-br ${estate.grad} text-white p-7 shadow-lg hover:shadow-2xl transition-shadow`}
+                >
+                  {/* Shine sweep */}
+                  <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+                  {/* Decorative circle */}
+                  <span aria-hidden className="pointer-events-none absolute -bottom-16 -right-16 h-48 w-48 rounded-full border border-white/10" />
+                  <span aria-hidden className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full border border-white/10" />
 
-            {/* Air Ruak Estate */}
-            <div className="bg-gradient-to-br from-earth-brown to-amber-800 text-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
-              <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center mb-4">
-                <TreePine className="h-7 w-7" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Air Ruak Estate</h3>
-              <p className="text-white/80 text-sm mb-4">Kabupaten Belitung Timur</p>
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">ARE A</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">ARE B1</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">ARE B2</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">ARE C</span>
-              </div>
-            </div>
-
-            {/* Darul Makmur Estate */}
-            <div className="bg-gradient-to-br from-teal-600 to-teal-800 text-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
-              <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center mb-4">
-                <Globe className="h-7 w-7" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Darul Makmur Estate</h3>
-              <p className="text-white/80 text-sm mb-4">Kabupaten Belitung</p>
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">Air Raya</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">Kandis</span>
-                <span className="px-3 py-1 bg-white/20 rounded-full text-xs">Cendong</span>
-              </div>
-            </div>
+                  <div className="relative">
+                    <div className="w-13 h-13 md:w-14 md:h-14 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-5 ring-1 ring-white/25 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3">
+                      <estate.icon className="h-7 w-7" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-1.5 tracking-tight">{estate.name}</h3>
+                    <p className="text-white/75 text-sm mb-5">{estate.loc}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {estate.areas.map(a => (
+                        <span key={a} className="px-3 py-1 bg-white/15 backdrop-blur-sm rounded-full text-xs font-medium ring-1 ring-white/10 transition-colors group-hover:bg-white/25">{a}</span>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              </RevealItem>
+            ))}
           </div>
 
           {/* Satellite Map */}
-          <div className="mb-12">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-              <MapPin className="h-7 w-7 text-palm-green" />
+          <RevealScale className="mb-14">
+            <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3 tracking-tight">
+              <span className="w-10 h-10 rounded-xl bg-palm-green/10 flex items-center justify-center">
+                <MapPin className="h-5 w-5 text-palm-green" />
+              </span>
               Lokasi Operasional
             </h3>
             <SatelliteMap />
-          </div>
+          </RevealScale>
 
           {/* Standar Kualitas */}
-          <div className="bg-gray-50 p-8 rounded-2xl">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-              <Shield className="h-7 w-7 text-palm-green" />
-              Standar Kualitas
-            </h3>
-            <div className="text-gray-600 leading-relaxed space-y-4">
-              <p>
-                Kami menerapkan <em>Good Agricultural Practices</em> (GAP) mulai dari pembibitan, perawatan,
-                hingga panen untuk memastikan Tandan Buah Segar (TBS) yang diproduksi memiliki rendemen
-                minyak yang tinggi.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <span className="px-4 py-2 bg-palm-green/10 text-palm-green rounded-full text-sm font-medium">GAP Certified</span>
-                <span className="px-4 py-2 bg-golden-yellow/10 text-earth-brown rounded-full text-sm font-medium">High Yield TBS</span>
-                <span className="px-4 py-2 bg-palm-green/10 text-palm-green rounded-full text-sm font-medium">Quality CPO</span>
-                <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">ISPO Compliant</span>
+          <RevealItem>
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#f6f8f6] to-white p-8 md:p-10 border border-gray-200 shadow-sm">
+              <Shield className="absolute -right-6 -top-6 h-36 w-36 text-palm-green/[0.06]" />
+              <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3 tracking-tight">
+                <span className="w-10 h-10 rounded-xl bg-palm-green/10 flex items-center justify-center">
+                  <Shield className="h-5 w-5 text-palm-green" />
+                </span>
+                Standar Kualitas
+              </h3>
+              <div className="text-gray-600 leading-relaxed space-y-4 max-w-3xl">
+                <p>
+                  Kami menerapkan Good Agricultural Practices (GAP) mulai dari pembibitan, perawatan,
+                  hingga panen untuk memastikan Tandan Buah Segar (TBS) yang diproduksi memiliki rendemen
+                  minyak yang tinggi.
+                </p>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  {['GAP Certified', 'High Yield TBS', 'Quality CPO', 'ISPO Compliant'].map((badge, i) => (
+                    <motion.span
+                      key={badge}
+                      initial={{ opacity: 0, scale: 0.85 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.08, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      className={`px-4 py-2 rounded-full text-sm font-semibold ${i % 2 === 0 ? 'bg-palm-green/10 text-palm-green' : 'bg-earth-brown/10 text-earth-brown'}`}
+                    >
+                      {badge}
+                    </motion.span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          </RevealItem>
         </RevealBlock>
       </section>
 
       {/* Inovasi Teknologi Section */}
-      <section id="inovasi" className="py-20 bg-gray-50">
+      <section id="inovasi" className="py-24 bg-[#f6f8f6]">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1 relative rounded-3xl overflow-hidden shadow-2xl h-80 lg:h-[500px] group">
-              <Image
-                src="/assets/Foto_deteksi.webp"
-                alt="Sistem Deteksi"
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover transition-transform duration-700 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
-                <div className="flex items-center gap-3 text-white">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-sm font-semibold tracking-wider">SMART DETECTION SYSTEM ACTIVE</span>
-                </div>
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <RevealScale className="order-2 lg:order-1">
+              <div className="relative rounded-3xl overflow-hidden shadow-2xl h-80 lg:h-[500px] group">
+                <Image
+                  src="/assets/Foto_deteksi.webp"
+                  alt="Sistem Deteksi"
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className="object-cover transition-transform duration-[1.5s] group-hover:scale-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3, duration: 0.6 }}
+                  className="absolute bottom-4 left-4 right-4 bg-white/10 backdrop-blur-xl rounded-2xl p-4 border border-white/20"
+                >
+                  <div className="flex items-center gap-3 text-white">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+                    </span>
+                    <span className="text-sm font-semibold tracking-wider">SMART DETECTION SYSTEM ACTIVE</span>
+                  </div>
+                </motion.div>
               </div>
-            </div>
+            </RevealScale>
             <div className="order-1 lg:order-2 space-y-6">
-              <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Inovasi Teknologi & Pertanian Presisi</h2>
-              <div className="h-1 w-24 bg-palm-green rounded-full" />
+              <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green">Inovasi</h2>
+              <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight leading-tight">Teknologi & Pertanian Presisi</h3>
               <p className="text-lg text-gray-600 leading-relaxed">
                 Menerapkan teknologi komputasi visual terkini untuk inventarisasi tegakan kelapa sawit yang akurat, memastikan estimasi hasil panen dan pemantauan kesehatan blok yang optimal.
               </p>
@@ -347,47 +462,55 @@ export default function Home() {
       </section>
 
       {/* WebGIS Section */}
-      <section id="webgis" className="py-20 bg-white">
+      <section id="webgis" className="py-24 bg-white">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Pemetaan Spasial (WebGIS)</h2>
-              <div className="h-1 w-24 bg-palm-green rounded-full" />
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div className="space-y-6 order-1">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green">Pemetaan Spasial</h2>
+              <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight leading-tight">WebGIS Terintegrasi</h3>
               <p className="text-lg text-gray-600 leading-relaxed">
                 Manajemen lahan terintegrasi berbasis sistem informasi geografis. Mendukung pengambilan keputusan agronomis yang cepat dan presisi di seluruh area hak guna usaha.
               </p>
             </div>
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl h-80 lg:h-[500px] border-4 border-gray-100">
-              <Image
-                src="https://bookdown.org/einavg7/sp_technical_guide/images/lulcla.png"
-                alt="WebGIS Pemetaan Spasial"
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                unoptimized
-                className="object-cover"
-              />
-              <div className="absolute inset-0 bg-blue-900/20 mix-blend-overlay" />
-            </div>
+            <RevealScale className="order-2">
+              <div className="group relative rounded-3xl overflow-hidden shadow-2xl h-80 lg:h-[500px] ring-1 ring-gray-200">
+                <Image
+                  src="https://bookdown.org/einavg7/sp_technical_guide/images/lulcla.png"
+                  alt="WebGIS Pemetaan Spasial"
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  unoptimized
+                  className="object-cover transition-transform duration-[1.5s] group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-blue-900/15 mix-blend-overlay" />
+                <div className="absolute top-4 left-4 flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-md">
+                  <Globe className="h-3.5 w-3.5 text-palm-green" /> Live Layer
+                </div>
+              </div>
+            </RevealScale>
           </div>
         </RevealBlock>
       </section>
 
       {/* Tata Kelola SDM Section */}
-      <section id="hr" className="py-20 bg-gray-50">
+      <section id="hr" className="py-24 bg-[#f6f8f6]">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1 relative rounded-3xl overflow-hidden shadow-2xl h-80 lg:h-[500px]">
-              <Image
-                src="https://memory.co.ke/wp-content/uploads/2022/08/human-resource-management-software.jpg"
-                alt="Dashboard HR"
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover"
-              />
-            </div>
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <RevealScale className="order-2 lg:order-1">
+              <div className="group relative rounded-3xl overflow-hidden shadow-2xl h-80 lg:h-[500px]">
+                <Image
+                  src="https://memory.co.ke/wp-content/uploads/2022/08/human-resource-management-software.jpg"
+                  alt="Dashboard HR"
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className="object-cover transition-transform duration-[1.5s] group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+              </div>
+            </RevealScale>
             <div className="order-1 lg:order-2 space-y-6">
-              <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Tata Kelola SDM & Kesejahteraan Karyawan</h2>
-              <div className="h-1 w-24 bg-palm-green rounded-full" />
+              <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green">Tata Kelola SDM</h2>
+              <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight leading-tight">Kesejahteraan Karyawan</h3>
               <p className="text-lg text-gray-600 leading-relaxed">
                 Mengedepankan transparansi dan kesejahteraan tenaga kerja melalui sistem manajemen kompensasi yang adil, terstruktur, dan digerakkan oleh data terpusat.
               </p>
@@ -397,70 +520,89 @@ export default function Home() {
       </section>
 
       {/* Keberlanjutan & CSR Section */}
-      <section id="sustainability" className="py-20 bg-gradient-to-br from-palm-green to-earth-brown text-white">
-        <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="sustainability" className="relative py-24 overflow-hidden">
+        {/* Dark nature backdrop */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/assets/kelapa-sawit-pohon.webp"
+            alt=""
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0c231a]/95 via-[#123526]/92 to-earth-brown/90" />
+        </div>
+
+        <RevealBlock className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold sm:text-4xl">Keberlanjutan & CSR</h2>
-            <div className="mt-4 h-1 w-24 bg-golden-yellow mx-auto rounded-full" />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300 mb-3">Keberlanjutan</h2>
+            <h3 className="text-3xl font-bold text-white sm:text-4xl tracking-tight">Tumbuh Tanpa Merusak</h3>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-12">
+          <div className="grid md:grid-cols-2 gap-8">
             {/* Komitmen Lingkungan ISPO */}
-            <div className="bg-white/10 backdrop-blur-sm p-8 rounded-2xl border border-white/20">
-              <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
-                <Leaf className="h-7 w-7 text-golden-yellow" />
-                Komitmen Lingkungan (ISPO)
-              </h3>
-              <p className="text-white/90 leading-relaxed">
-                PT Rebinmas Jaya berkomitmen penuh terhadap tata kelola perkebunan yang ramah lingkungan.
-                Kami telah dan terus berupaya memenuhi standar <strong>Indonesian Sustainable Palm Oil (ISPO)</strong>,
-                memastikan bahwa produk kami dihasilkan tanpa merusak keseimbangan ekosistem. Predikat kelas
-                kebun yang baik menjadi bukti keseriusan kami dalam pengelolaan lahan.
-              </p>
-            </div>
+            <RevealItem>
+              <div className="group h-full bg-white/[0.07] backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-white/15 hover:border-amber-300/40 transition-colors shadow-2xl">
+                <div className="w-14 h-14 rounded-2xl bg-amber-300/15 flex items-center justify-center mb-6 ring-1 ring-amber-300/25 transition-transform duration-500 group-hover:scale-110">
+                  <Leaf className="h-7 w-7 text-amber-300" />
+                </div>
+                <h3 className="text-2xl font-bold mb-5 tracking-tight">Komitmen Lingkungan (ISPO)</h3>
+                <p className="text-white/80 leading-relaxed">
+                  PT Rebinmas Jaya berkomitmen penuh terhadap tata kelola perkebunan yang ramah lingkungan.
+                  Kami telah dan terus berupaya memenuhi standar <strong className="text-white">Indonesian Sustainable Palm Oil (ISPO)</strong>,
+                  memastikan bahwa produk kami dihasilkan tanpa merusak keseimbangan ekosistem. Predikat kelas
+                  kebun yang baik menjadi bukti keseriusan kami dalam pengelolaan lahan.
+                </p>
+              </div>
+            </RevealItem>
 
             {/* Pemberdayaan Masyarakat */}
-            <div className="bg-white/10 backdrop-blur-sm p-8 rounded-2xl border border-white/20">
-              <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
-                <Users className="h-7 w-7 text-golden-yellow" />
-                Pemberdayaan Masyarakat
-              </h3>
-              <p className="text-white/90 leading-relaxed mb-4">
-                Kami percaya bahwa perusahaan tidak bisa tumbuh sendirian. PT Rebinmas Jaya aktif menjalin
-                hubungan harmonis dengan masyarakat di sekitar wilayah operasional (Ring 1), termasuk desa-desa
-                di Kabupaten Belitung dan Belitung Timur.
-              </p>
-              <div className="flex items-center gap-2 text-golden-yellow font-semibold">
-                <Heart className="h-5 w-5" />
-                Program Plasma untuk ekonomi warga lokal
+            <RevealItem delay={0.12}>
+              <div className="group h-full bg-white/[0.07] backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-white/15 hover:border-amber-300/40 transition-colors shadow-2xl">
+                <div className="w-14 h-14 rounded-2xl bg-amber-300/15 flex items-center justify-center mb-6 ring-1 ring-amber-300/25 transition-transform duration-500 group-hover:scale-110">
+                  <Users className="h-7 w-7 text-amber-300" />
+                </div>
+                <h3 className="text-2xl font-bold mb-5 tracking-tight">Pemberdayaan Masyarakat</h3>
+                <p className="text-white/80 leading-relaxed mb-5">
+                  Kami percaya bahwa perusahaan tidak bisa tumbuh sendirian. PT Rebinmas Jaya aktif menjalin
+                  hubungan harmonis dengan masyarakat di sekitar wilayah operasional (Ring 1), termasuk desa-desa
+                  di Kabupaten Belitung dan Belitung Timur.
+                </p>
+                <div className="flex items-center gap-2.5 text-amber-300 font-semibold">
+                  <Heart className="h-5 w-5" />
+                  Program Plasma untuk ekonomi warga lokal
+                </div>
               </div>
-            </div>
+            </RevealItem>
           </div>
 
           {/* CSR & Bantuan Sosial */}
-          <div className="mt-12 bg-white/10 backdrop-blur-sm p-8 rounded-2xl border border-white/20">
-            <h3 className="text-2xl font-bold mb-6 text-center">CSR & Bantuan Sosial</h3>
-            <div className="grid sm:grid-cols-3 gap-6">
-              <div className="text-center p-4">
-                <div className="w-16 h-16 bg-golden-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Heart className="h-8 w-8 text-golden-yellow" />
-                </div>
-                <p className="text-sm text-white/90">Bantuan paket sembako pada hari besar keagamaan (Ramadan/Idul Fitri)</p>
-              </div>
-              <div className="text-center p-4">
-                <div className="w-16 h-16 bg-golden-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-8 w-8 text-golden-yellow" />
-                </div>
-                <p className="text-sm text-white/90">Penyaluran hewan kurban untuk masyarakat desa sekitar</p>
-              </div>
-              <div className="text-center p-4">
-                <div className="w-16 h-16 bg-golden-yellow/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Building2 className="h-8 w-8 text-golden-yellow" />
-                </div>
-                <p className="text-sm text-white/90">Bantuan infrastruktur untuk desa binaan (Air Batu Buding, Kacang Butor, Pelepak Pute)</p>
+          <RevealItem delay={0.1} className="mt-8">
+            <div className="bg-white/[0.07] backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-white/15 shadow-2xl">
+              <h3 className="text-xl font-bold mb-8 text-center tracking-tight">CSR & Bantuan Sosial</h3>
+              <div className="grid sm:grid-cols-3 gap-8">
+                {[
+                  { icon: Heart, text: 'Bantuan paket sembako pada hari besar keagamaan (Ramadan/Idul Fitri)' },
+                  { icon: Users, text: 'Penyaluran hewan kurban untuk masyarakat desa sekitar' },
+                  { icon: Building2, text: 'Bantuan infrastruktur untuk desa binaan (Air Batu Buding, Kacang Butor, Pelepak Pute)' },
+                ].map((item, i) => (
+                  <motion.div
+                    key={item.text}
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.12, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                    className="text-center p-4"
+                  >
+                    <div className="w-16 h-16 bg-amber-300/15 ring-1 ring-amber-300/25 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <item.icon className="h-7 w-7 text-amber-300" />
+                    </div>
+                    <p className="text-sm text-white/80 leading-relaxed">{item.text}</p>
+                  </motion.div>
+                ))}
               </div>
             </div>
-          </div>
+          </RevealItem>
         </RevealBlock>
       </section>
 
@@ -468,8 +610,8 @@ export default function Home() {
       <section id="csr-gallery" className="py-20 bg-white">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Galeri CSR & Komunitas</h2>
-            <div className="mt-4 h-1 w-24 bg-palm-green mx-auto rounded-full mb-6" />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green mb-3">Dokumentasi</h2>
+            <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight mb-5">Galeri CSR & Komunitas</h3>
             <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
               Tumbuh bersama masyarakat Belitung. Menyalurkan dukungan nyata secara berkelanjutan untuk pendidikan, kesehatan, dan ketahanan pangan desa di sekitar area operasional kami.
             </p>
@@ -544,8 +686,8 @@ export default function Home() {
       <section id="news" className="py-20 bg-gray-50">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Berita & CSR PT Rebinmas Jaya</h2>
-            <div className="mt-4 h-1 w-24 bg-palm-green mx-auto rounded-full" />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green mb-3">Berita</h2>
+            <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight">Kabar Terkini</h3>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -635,8 +777,8 @@ export default function Home() {
       <section id="contact" className="py-20 bg-gray-50">
         <RevealBlock className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Hubungi Kami</h2>
-            <div className="mt-4 h-1 w-24 bg-palm-green mx-auto rounded-full" />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.3em] text-palm-green mb-3">Kontak</h2>
+            <h3 className="text-3xl font-bold text-gray-900 sm:text-4xl tracking-tight">Hubungi Kami</h3>
           </div>
 
           <div className="grid md:grid-cols-2 gap-12">
@@ -750,53 +892,65 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-earth-brown text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8 mb-8">
+      <footer className="relative bg-[#0c231a] text-white py-14 overflow-hidden">
+        <span aria-hidden className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full border border-white/5" />
+        <span aria-hidden className="pointer-events-none absolute -bottom-16 -right-16 h-52 w-52 rounded-full border border-white/5" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-3 gap-10 mb-10">
             <div>
-              <div className="mb-4 flex items-center gap-3">
-                <div className="overflow-hidden rounded-full bg-white p-1">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="overflow-hidden rounded-full bg-white p-1 shadow-lg">
                   <Image src="/assets/logo.webp" alt="Logo" width={48} height={48} className="h-12 w-12 object-contain p-1" />
                 </div>
-                <h4 className="text-lg font-bold text-golden-yellow">PT Rebinmas Jaya</h4>
+                <h4 className="text-lg font-bold text-amber-200 tracking-tight">PT Rebinmas Jaya</h4>
               </div>
-              <p className="text-white/80 text-sm leading-relaxed">
+              <p className="text-white/60 text-sm leading-relaxed max-w-xs">
                 Perusahaan perkebunan kelapa sawit yang berkomitmen pada keberlanjutan dan pemberdayaan masyarakat.
               </p>
             </div>
             <div>
-              <h4 className="text-lg font-bold mb-4 text-golden-yellow">Navigasi</h4>
-              <ul className="text-white/80 text-sm space-y-2">
-                <li><a href="#kilasan" className="hover:text-white transition-colors">Kilasan Perusahaan</a></li>
-                <li><a href="#about" className="hover:text-white transition-colors">Tentang Kami</a></li>
-                <li><a href="#operations" className="hover:text-white transition-colors">Operasional</a></li>
-                <li><a href="#sustainability" className="hover:text-white transition-colors">Keberlanjutan & CSR</a></li>
-                <li><a href="#news" className="hover:text-white transition-colors">Berita & CSR PT Rebinmas Jaya</a></li>
-                <li><a href="#contact" className="hover:text-white transition-colors">Hubungi Kami</a></li>
+              <h4 className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-300/80 mb-4">Navigasi</h4>
+              <ul className="text-white/70 text-sm space-y-2.5">
+                {[
+                  ['#kilasan', 'Kilasan Perusahaan'],
+                  ['#about', 'Tentang Kami'],
+                  ['#operations', 'Operasional'],
+                  ['#sustainability', 'Keberlanjutan & CSR'],
+                  ['#news', 'Berita & CSR'],
+                  ['#contact', 'Hubungi Kami'],
+                ].map(([href, label]) => (
+                  <li key={href}>
+                    <a href={href} className="group inline-flex items-center gap-1.5 hover:text-white transition-colors">
+                      <span className="h-px w-0 bg-amber-300 transition-all duration-300 group-hover:w-3" />
+                      {label}
+                    </a>
+                  </li>
+                ))}
               </ul>
             </div>
             <div>
-              <h4 className="text-lg font-bold mb-4 text-golden-yellow">Kontak</h4>
-              <div className="text-white/80 text-sm space-y-2">
-                <p className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
+              <h4 className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-300/80 mb-4">Kontak</h4>
+              <div className="text-white/70 text-sm space-y-2.5">
+                <p className="flex items-center gap-2.5">
+                  <Phone className="h-4 w-4 text-amber-300/80" />
                   (021) 51401888
                 </p>
-                <p className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
+                <p className="flex items-center gap-2.5">
+                  <Mail className="h-4 w-4 text-amber-300/80" />
                   info@rebinmasjaya.co.id
                 </p>
-                <p className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-0.5" />
+                <p className="flex items-start gap-2.5">
+                  <MapPin className="h-4 w-4 mt-0.5 text-amber-300/80" />
                   Belitung, Bangka Belitung
                 </p>
               </div>
             </div>
           </div>
-          <div className="border-t border-white/20 pt-8 text-center">
-            <p className="text-white/60 text-sm">
+          <div className="border-t border-white/10 pt-8 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <p className="text-white/50 text-sm">
               &copy; {new Date().getFullYear()} PT Rebinmas Jaya. Hak Cipta Dilindungi.
             </p>
+            <p className="text-white/35 text-xs tracking-wide">Sawit Berkelanjutan · Belitung</p>
           </div>
         </div>
       </footer>
