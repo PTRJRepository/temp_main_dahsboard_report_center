@@ -6,5 +6,9 @@ export const metadata: Metadata = {
 }
 
 export default function FileGroupLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return (
+    <html lang="id">
+      <body className="min-h-screen antialiased">{children}</body>
+    </html>
+  )
 }

@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import * as LucideIcons from 'lucide-react'
 
 interface ServiceCardProps {
@@ -7,6 +8,8 @@ interface ServiceCardProps {
     icon: string | null
     routeUrl: string
     imagePath?: string | null
+    /** undefined = probe pending; true/false = gateway health result */
+    up?: boolean
 }
 
 // Curated Unsplash imagery per service keyword — used when the service has no
@@ -59,7 +62,7 @@ function resolveStyle(name: string) {
     return DEFAULT_IMAGES.find(d => d.pattern.test(name)) ?? FALLBACK_IMAGE
 }
 
-export default function ServiceCard({ name, description, icon, routeUrl, imagePath }: ServiceCardProps) {
+export default function ServiceCard({ name, description, icon, routeUrl, imagePath, up }: ServiceCardProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Icon = icon && LucideIcons[icon as keyof typeof LucideIcons]
         ? LucideIcons[icon as keyof typeof LucideIcons] as any
@@ -70,8 +73,20 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
         ? { url: imagePath as string, tint: 'from-emerald-500/75 to-emerald-800/75' }
         : resolveStyle(name)
 
+    const statusLabel = up === undefined ? 'Memuat' : up ? 'Aktif' : 'Offline'
+    const statusDot = up === undefined
+        ? <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-slate-400 animate-pulse" />
+        : up
+            ? (
+                <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                </span>
+            )
+            : <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500" />
+
     return (
-        <a href={routeUrl} className="group block h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-[20px]">
+        <Link href={routeUrl} className="group block h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-[20px]">
             <div className="relative h-full flex flex-col overflow-hidden rounded-[20px] border border-white/10 bg-gradient-to-br from-white to-slate-100 shadow-[0_12px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_18px_44px_rgba(0,0,0,0.5),0_0_0_1px_rgba(52,211,153,0.35)] transition-all duration-400 hover:-translate-y-1.5">
 
                 {/* ── Banner (compact) ───────────────────────────── */}
@@ -116,12 +131,9 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
 
                     {/* Footer row — status + CTA */}
                     <div className="mt-3 pt-3 border-t border-slate-200/70 flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                            <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-                            </span>
-                            Aktif
+                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider ${up === false ? 'text-red-500' : 'text-slate-400'}`}>
+                            {statusDot}
+                            {statusLabel}
                         </span>
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3.5 py-1.5 text-xs font-bold text-slate-700 transition-all duration-300 group-hover:text-white group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-emerald-700">
                             Buka
@@ -130,6 +142,6 @@ export default function ServiceCard({ name, description, icon, routeUrl, imagePa
                     </div>
                 </div>
             </div>
-        </a>
+        </Link>
     )
 }

@@ -19,17 +19,8 @@ async function getUsers() {
 }
 
 async function getUserServiceMap(): Promise<Map<number, string[]>> {
-    const map = new Map<number, string[]>()
-    try {
-        const users = await userRepository.findAll()
-        for (const u of users) {
-            const svcs = await userRepository.getUserServices(u.id)
-            map.set(u.id, svcs)
-        }
-    } catch (e) {
-        console.error('Failed to load user services:', e)
-    }
-    return map
+    // Single AccessControl scan instead of one query per user (N+1).
+    return userRepository.getAllUserServices()
 }
 
 async function getServices() {

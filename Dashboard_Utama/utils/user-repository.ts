@@ -178,6 +178,27 @@ export class UserRepository {
     }
 
     /**
+     * All user→services assignments in ONE query (avoids per-user N+1 on the
+     * admin page). Returns Map<numeric userId, serviceId[]>.
+     */
+    async getAllUserServices(): Promise<Map<number, string[]>> {
+        const map = new Map<number, string[]>()
+        try {
+            const rows = await db.query<{ userId: string; serviceId: string }>(
+                'SELECT userId, serviceId FROM AccessControl'
+            )
+            for (const r of rows) {
+                const id = Number(r.userId)
+                if (!map.has(id)) map.set(id, [])
+                map.get(id)!.push(r.serviceId)
+            }
+        } catch (e) {
+            console.error('Failed to load all user services:', e)
+        }
+        return map
+    }
+
+    /**
      * Assign services to user
      */
     async assignServices(userId: number, serviceIds: string[]): Promise<void> {

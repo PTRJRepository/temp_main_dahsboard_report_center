@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ServiceCard from '@/components/ServiceCard'
 import { LayoutGrid } from 'lucide-react'
 
@@ -19,8 +19,28 @@ export interface ServiceGroupData {
     items: ServiceItem[]
 }
 
+/** Live up/down per service path, from the gateway health probe. */
+function useServiceStatus(): Map<string, boolean> | null {
+    const [map, setMap] = useState<Map<string, boolean> | null>(null)
+    useEffect(() => {
+        let alive = true
+        fetch('/api/services/status', { cache: 'no-store' })
+            .then(r => (r.ok ? r.json() : null))
+            .then(j => {
+                if (!alive || !j?.services) return
+                const m = new Map<string, boolean>()
+                for (const s of j.services) m.set(s.path, Boolean(s.up))
+                setMap(m)
+            })
+            .catch(() => {})
+        return () => { alive = false }
+    }, [])
+    return map
+}
+
 export default function ServiceGrid({ groups }: { groups: ServiceGroupData[] }) {
     const [active, setActive] = useState<string>('semua')
+    const statusMap = useServiceStatus()
 
     const visible = active === 'semua'
         ? groups.flatMap(g => g.items)
@@ -65,6 +85,7 @@ export default function ServiceGrid({ groups }: { groups: ServiceGroupData[] }) 
                         icon={null}
                         routeUrl={service.path || `/${service.serviceId}`}
                         imagePath={service.imagePath}
+                        up={statusMap ? statusMap.get(service.path || `/${service.serviceId}`) : undefined}
                     />
                 ))}
             </div>

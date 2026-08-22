@@ -1,5 +1,1 @@
-import { redirect } from 'next/navigation'
-
-export default function InventoryModulePage() {
-  redirect('/report-center/inventory')
-}
+export { default } from '@modules/report-center/app/modules/inventory/page'

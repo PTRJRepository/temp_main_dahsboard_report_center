@@ -1,5 +1,1 @@
-import ReportCenterPage from '@modules/report-center/components/ReportCenterPage'
-
-export default function Page() {
-  return <ReportCenterPage />
-}
+export { default } from '@modules/report-center/app/(report-center)/report-center/page'

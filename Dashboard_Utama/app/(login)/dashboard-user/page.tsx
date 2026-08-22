@@ -1,4 +1,6 @@
 import { cookies } from 'next/headers'
+import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
 import { verifyToken } from '@/utils/jwt'
 import { getGatewayFallbackServices, serviceRepository, Service } from '@/utils/service-repository'
 import { userRepository } from '@/utils/user-repository'
@@ -14,13 +16,14 @@ import ServiceGrid from '@/components/ServiceGrid'
 // Force Node.js runtime
 export const runtime = 'nodejs'
 
-/**
- * Services a user may actually access.
- * = role-based services ∩ per-user AccessControl assignment.
- */
-async function getAccessibleServices(user: { id: number; role: string }): Promise<Service[]> {
+// Role→services lookup is identical for every user with the same role — cache
+// across requests (60s). Per-user AccessControl intersection stays uncached.
+const findRoleServicesCached = (role: string) =>
+    unstable_cache(() => serviceRepository.findByRole(role), ['role-services', role], { revalidate: 60 })()
+
+const getAccessibleServicesImpl = async (user: { id: number; role: string }): Promise<Service[]> => {
     try {
-        const roleServices = await serviceRepository.findByRole(user.role)
+        const roleServices = await findRoleServicesCached(user.role)
         const assigned = await userRepository.getUserServices(user.id)
         if (assigned.length === 0) {
             return roleServices
@@ -32,6 +35,8 @@ async function getAccessibleServices(user: { id: number; role: string }): Promis
         return []
     }
 }
+// Dedup concurrent calls within one render pass.
+const getAccessibleServices = cache(getAccessibleServicesImpl)
 
 // Group services into functional clusters.
 interface ServiceGroup {
