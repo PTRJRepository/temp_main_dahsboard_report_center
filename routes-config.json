@@ -190,8 +190,8 @@
   {
     "id": "file",
     "path": "/file",
-    "target": "http://127.0.0.1:3103",
-    "description": "File Management LMS — Kerani=siswa (Next dashboard UI)",
+    "target": "http://127.0.0.1:8011",
+    "description": "RJ Drive — file management UI served by the rjfm module (ui-app build)",
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": false
@@ -199,12 +199,11 @@
   {
     "id": "api-file",
     "path": "/api/file",
-    "target": "http://127.0.0.1:3103",
-    "description": "File Management API → Module Services/file-manager",
+    "target": "http://127.0.0.1:8011",
+    "description": "File management API → rjfm module (:8011 internal rewrite to /api/v1)",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": false,
-    "public": false
+    "rewritePath": false
   },
   {
     "id": "rjfm",

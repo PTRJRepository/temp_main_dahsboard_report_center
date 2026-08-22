@@ -42,9 +42,8 @@ Current module services (full rulebook + registry: **`docs/MONOREPO.md`**):
 |--------|------|-----------|---------------|
 | `Module Services/report-center` | 3101 | `bun start` | `/report-center` (+ `/api/reports`) |
 | `Module Services/rebinmas-jaya-server` | 3102 | `npm run dev` (Vite) | `/server-monitor` |
-| `Module Services/file-manager` | 3103 | Next.js standalone | `/file` |
 | `Module Services/ifess-control` | — | static UI | `/ifess-control` |
-| `Module Services/rjfm` | 8011 | external process | `/rjfm` |
+| `Module Services/rjfm` | 8011 | `npx tsx src/server.ts` | `/rjfm` + `/file` (RJ Drive UI = ui-app build, internal :8012) |
 | `Module Services/Wifi_LAN_Monitor` | — | static | `/network-monitor` |
 
 Registered EXTERNAL services (source outside this repo — do not move):
@@ -73,9 +72,8 @@ Main Dashboard/
 ├── Module Services/             # Isolated, independent module services (monorepo)
 │   ├── report-center/           #   Standalone Next.js app (port 3101) — bun start
 │   ├── rebinmas-jaya-server/    #   Server-monitor Vite SPA (port 3102) → /server-monitor
-│   ├── file-manager/            #   Standalone Next.js app (port 3103) → /file
 │   ├── ifess-control/           #   iFESS standalone UI
-│   ├── rjfm/                    #   RJFM API (port 8011)
+│   ├── rjfm/                    #   RJFM API + ui-app Next build (port 8011, internal UI :8012)
 │   └── Wifi_LAN_Monitor/        #   static site
 ├── Services/
 │   ├── ifess-control-server/  # iFESS Control Server (JS)

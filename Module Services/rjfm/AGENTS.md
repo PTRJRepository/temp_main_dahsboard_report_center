@@ -30,7 +30,7 @@ Rules that follow:
 
 ## This module
 
-- Port **8011** · Express TS API · route id `rjfm`
+- Port **8011** · Express TS API + Next UI (ui-app, RJ Drive `/file`) · route ids `rjfm`, `file`
 - Start: `npm run dev` / `npm start` (see package.json)
 - Health: page `/rjfm` returns 200 with a valid session; API under
   `/api/reports/*` returns 401 without.

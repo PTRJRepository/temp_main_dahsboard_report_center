@@ -25,8 +25,7 @@ const MODULES = {
   'dashboard': { dir: 'Dashboard_Utama', cmd: ['npx', ['next', 'dev', '--hostname', '0.0.0.0', '-p', '3100']], port: '3100' },
   'report-center': { dir: 'Module Services/report-center', cmd: ['bun', ['run', 'dev']], route: 'report-center' },
   'server-monitor': { dir: 'Module Services/rebinmas-jaya-server', cmd: ['npm', ['run', 'dev']], route: 'server-monitor' },
-  'file-manager': { dir: 'Module Services/file-manager', cmd: ['npx', ['next', 'dev', '--hostname', '0.0.0.0', '-p', '3103']], route: 'file' },
-  'rjfm': { dir: 'Module Services/rjfm', cmd: ['npm', ['run', 'dev']], route: 'rjfm' },
+  'rjfm': { dir: 'Module Services/rjfm', cmd: ['npx', ['tsx', 'src/server.ts']], route: 'rjfm' },
 };
 
 function portFor(name) {

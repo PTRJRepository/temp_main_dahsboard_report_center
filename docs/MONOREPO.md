@@ -16,11 +16,11 @@ Single source of truth for how services are organized, run, routed, and authenti
                         └───────────┬────────────────┘
               verified RS256 cookie │ X-User-* headers injected
         ┌───────────────┬───────────┼────────────────┬─────────────┐
-        ▼               ▼           ▼                ▼             ▼
-  Dashboard_Utama  report-center rjfm        file-manager   external services
-  :3100 (portal,   :3101         :8011       :3103          upah :8002 · absen :5176
-  admin, landing,  (Next)        (Express)   (Next)         monitoring-beras :5177
-  file stubs)                                              basis-panen :3002 · query :8001
+        ▼               ▼           ▼                           ▼
+  Dashboard_Utama  report-center rjfm                      external services
+  :3100 (portal,   :3101         :8011 (API + RJ Drive     upah :8002 · absen :5176
+  admin, landing)  (Next)        UI via internal :8012)    monitoring-beras :5177
+                                                           basis-panen :3002 · query :8001
 ```
 
 - **Gateway = front door.** Everything is reached through `:3001/<path>`.
@@ -77,8 +77,7 @@ cd "Module Services" && node -e "require('fs').symlinkSync('../Dashboard_Utama/n
 | Dashboard_Utama | `/dashboard-user` `/admin` `/login` `/config-path` + landing | 3100 | Next.js 16 | spawned by gateway or `cd Dashboard_Utama && npm run dev` |
 | report-center | `/report-center` + `/api/reports` | 3101 | Next.js 16 | `cd "Module Services/report-center" && bun start` |
 | rebinmas-jaya-server | `/server-monitor` | 3102 | Vite React SPA | `cd "Module Services/rebinmas-jaya-server" && npm run dev` |
-| file-manager | `/file` | 3103 | Next.js 16 | `cd "Module Services/file-manager" && bun start` |
-| rjfm | `/rjfm` | 8011 | Express TS API | `cd "Module Services/rjfm" && npm start` |
+| rjfm | `/rjfm` + `/file` | 8011 | Express TS API + Next UI (ui-app) | `cd "Module Services/rjfm" && npm start` |
 | Wifi_LAN_Monitor | `/network-monitor` | — | static site | served by gateway (`staticSiteDir`) |
 | ifess-control UI | `/ifess-control` | — | static HTML | served by gateway from `Module Services/ifess-control/` |
 | IFESS control server | `/api/ifess/*` | embedded | JS lib | `require()`d into gateway process (`Services/ifess-control-server/service.js`) |

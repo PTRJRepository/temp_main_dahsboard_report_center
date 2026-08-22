@@ -1,4 +1,5 @@
-// Serve UI RJFM (Next standalone build) + proxy /api/file/* ke API internal — satu port 8011.
+// Serve UI RJFM (Next standalone build dari ui-app/ milik modul ini)
+// + rewrite /api/file/* → /api/v1/* — semua dalam satu port 8011.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,10 +8,12 @@ import { env } from '../config/env.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Lokasi build: <repo>/Dashboard_Utama/.next/standalone/Dashboard_Utama
+// Isolasi modul: build UI berada DI DALAM folder modul ini.
+// Turbopack root = repo root, jadi output standalone menempel path relatif
+// dari repo root: .next/standalone/Module Services/rjfm/ui-app
 const STANDALONE = process.env.RJFM_UI_STANDALONE
-  || path.resolve(__dirname, '../../../../Dashboard_Utama/.next/standalone/Dashboard_Utama')
-const STATIC_ASSETS = path.resolve(STANDALONE, '../../Dashboard_Utama/.next/static')
+  || path.resolve(__dirname, '../../ui-app/.next/standalone/Module Services/rjfm/ui-app')
+const STATIC_ASSETS = path.resolve(__dirname, '../../ui-app/.next/static')
 const PUBLIC_DIR = path.join(STANDALONE, 'public')
 
 export function mountUi(app: express.Express): Promise<void> {
@@ -20,15 +23,15 @@ export function mountUi(app: express.Express): Promise<void> {
   }
   // (mounting continues below; always returns a promise)
 
-  // Proxy API untuk UI: /api/file/* → /api/v1/* (rewrite URL, TANPA router
-  // terpisah — router terpisah + inner.handle menyebabkan body terbaca dua
-  // kali sehingga POST menggantung). Dipasang SEBELUM express.json global
-  // supaya rewrite terjadi sebelum body parser; urutan mount di server.ts
-  // sudah begitu (mountUi dipanggil sebelum parser? TIDAK — parser global
-  // jalan duluan). Karena itu rewrite di sini cukup: parser global sudah
-  // selesai dan stream tidak disentuh dua kali.
-  app.use('/api/file', (req: any, _res: any, next: any) => {
-    req.url = req.url.replace(/^\/api\/file/, '/api/v1')
+  // Proxy API untuk UI: /api/file/* → /api/v1/*.
+  // WAJIB app-level (bukan router ter-scope): req.url di dalam middleware
+  // ter-scope '/api/file' hanya berisi SUFFIX ('/login'), dan mengubah itu
+  // tidak mengubah path matching layer berikutnya. Rewrite di level app
+  // memodifikasi full URL sehingga Express match /api/v1/* dengan benar.
+  app.use((req: any, res: any, next: any) => {
+    if (req.url === '/api/file' || req.url.startsWith('/api/file/')) {
+      req.url = '/api/v1' + req.url.slice('/api/file'.length)
+    }
     next()
   })
 
@@ -43,6 +46,9 @@ export function mountUi(app: express.Express): Promise<void> {
   const uiPort = parseInt(process.env.RJFM_UI_PORT || '8012', 10)
   process.env.PORT = String(uiPort)
   process.env.HOSTNAME = '127.0.0.1'
+  // UI routes call back into the express API — pin the API base explicitly
+  // (default derives from PORT, which here is the private UI port, not :8011).
+  process.env.RJFM_API_PORT = String(env.port)
   const serverPath = path.join(STANDALONE, 'server.js').replace(/\\/g, '/')
   const url = 'file:///' + encodeURI(serverPath).replace(/^\/+/, '')
 

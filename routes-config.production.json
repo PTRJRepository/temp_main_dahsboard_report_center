@@ -141,15 +141,6 @@
     "public": true
   },
   {
-    "id": "api-file",
-    "path": "/api/file",
-    "target": "http://127.0.0.1:3103",
-    "description": "File Management API → Module Services/file-manager",
-    "enabled": true,
-    "rewriteContent": false,
-    "rewritePath": false
-  },
-  {
     "id": "query",
     "path": "/query",
     "target": "http://localhost:8001",
@@ -162,11 +153,20 @@
   {
     "id": "file",
     "path": "/file",
-    "target": "http://127.0.0.1:3103",
-    "description": "File Management LMS (Module Services/file-manager)",
+    "target": "http://127.0.0.1:8011",
+    "description": "RJ Drive file UI — served by rjfm module (ui-app build)",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": true
+    "rewritePath": false
+  },
+  {
+    "id": "api-file",
+    "path": "/api/file",
+    "target": "http://127.0.0.1:8011",
+    "description": "File management API → rjfm module (:8011 internal rewrite to /api/v1)",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false
   },
   {
     "id": "ifess",

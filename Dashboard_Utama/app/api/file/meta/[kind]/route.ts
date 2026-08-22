@@ -1,1 +1,0 @@
-export * from '@modules/file-manager/app/api/file/meta/[kind]/route';
