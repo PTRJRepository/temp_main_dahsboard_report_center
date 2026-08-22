@@ -35,9 +35,13 @@ export function mountUi(app: express.Express): Promise<void> {
     next()
   })
 
-  // Static assets Next (_next/static) + public/
-  if (fs.existsSync(STATIC_ASSETS)) app.use('/_next/static', express.static(STATIC_ASSETS, { maxAge: '365d', immutable: true }))
-  if (fs.existsSync(PUBLIC_DIR)) app.use(express.static(PUBLIC_DIR))
+  // Static assets Next. assetPrefix UI = '/file', jadi browser minta
+  // /file/_next/static/* — sedang file fisik ada di ui-app/.next/static/*.
+  if (fs.existsSync(STATIC_ASSETS)) {
+    app.use('/file/_next/static', express.static(STATIC_ASSETS, { maxAge: '365d', immutable: true }))
+    app.use('/_next/static', express.static(STATIC_ASSETS, { maxAge: '365d', immutable: true }))
+  }
+  if (fs.existsSync(PUBLIC_DIR)) app.use('/file', express.static(PUBLIC_DIR))
 
   // Semua halaman lain → server Next standalone.
   // Next 16 standalone's server.js LISTENS ITSELF (ignores later PORT mutation),

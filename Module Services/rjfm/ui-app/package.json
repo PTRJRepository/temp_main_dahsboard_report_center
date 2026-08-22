@@ -23,10 +23,12 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/leaflet": "^1.9.20",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5"
   }
 }
