@@ -18,6 +18,7 @@ export function mountUi(app: express.Express): Promise<void> {
     console.log('[rjfm-ui] standalone build tidak ditemukan — UI dimatikan (jalankan: cd Dashboard_Utama && npx next build)')
     return Promise.resolve()
   }
+  // (mounting continues below; always returns a promise)
 
   // Proxy API untuk UI: /api/file/* → route internal yang sama dengan prefix ''
   const api = express.Router()
@@ -44,7 +45,8 @@ export function mountUi(app: express.Express): Promise<void> {
   process.env.HOSTNAME = '127.0.0.1'
   const serverPath = path.join(STANDALONE, 'server.js').replace(/\\/g, '/')
   const url = 'file:///' + encodeURI(serverPath).replace(/^\/+/, '')
-  import(/* webpackIgnore: true */ url)
+
+  return import(/* webpackIgnore: true */ url)
     .then(async (mod: any) => {
       // Wait for the standalone server to accept connections on uiPort…
       for (let i = 0; i < 40; i++) {
@@ -64,6 +66,4 @@ export function mountUi(app: express.Express): Promise<void> {
     .catch((e) => {
       console.error('[rjfm-ui] gagal memuat next server:', e.message)
     })
-
-  return true
 }
