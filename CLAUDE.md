@@ -10,27 +10,87 @@ Dual-mode deployment architecture:
 
 The Bun gateway is a single process serving three concerns: (1) reverse proxy (routes from `routes-config.json`), (2) IFESS client management API (`/api/ifess/*`), (3) Firebird Query Gateway (`/api/query-gateway/*`) that runs `isql.exe` against the local Firebird 1.5 DB and serves a standalone analytics HTML UI.
 
+## Monorepo Architecture (memory utama — read before touching module services)
+
+This repo is a **monorepo with isolated, independent module services**. Each
+module lives under `Module Services/` and is its own runnable app — no shared
+source code with Dashboard_Utama except through the `@modules/*` import alias
+used for shared components/lib.
+
+- **Isolation**: each module owns its `app/`, `components/`, `lib/`, `store/`,
+  `utils/` (auth, jwt, db), and its own port. Modules never import from
+  Dashboard_Utama internals; Dashboard_Utama imports modules via `@modules/*`.
+- **Independence**: `bun start` inside a module dir runs that service alone
+  (e.g. `cd "Module Services/report-center" && bun start` → port 3101). Works
+  without the gateway or Dashboard_Utama running.
+- **Reachability**: each service is reachable BOTH directly (its local port)
+  AND through the gateway proxy (route in `routes-config.json`).
+- **Single source of truth**: module pages/API handlers live in the module;
+  Dashboard_Utama's `app/(report-center)/**` and `app/api/reports/**` are thin
+  re-export stubs (`export { default } from '@modules/report-center/...'`).
+  GOTCHA: Next.js route segment config (`dynamic`, `runtime`, `dynamicParams`,
+  `generateStaticParams`) must NOT be re-exported — Turbopack build fails with
+  "can't recognize the exported field in route. It mustn't be reexported."
+  Stubs re-export handlers/default only; each stub file declares its own
+  `export const dynamic = 'force-dynamic'` (and `runtime`) inline when needed.
+- **Access key**: one shared key file at repo root `keys/report-center-access.key`
+  (gitignored, rotate by editing). Login with any username + key as password →
+  ADMIN session without DB lookup. All module services read the SAME file.
+
+Current module services (full rulebook + registry: **`docs/MONOREPO.md`**):
+| Module | Port | Standalone | Gateway route |
+|--------|------|-----------|---------------|
+| `Module Services/report-center` | 3101 | `bun start` | `/report-center` (+ `/api/reports`) |
+| `Module Services/rebinmas-jaya-server` | 3102 | `npm run dev` (Vite) | `/server-monitor` |
+| `Module Services/file-manager` | 3103 | Next.js standalone | `/file` |
+| `Module Services/ifess-control` | — | static UI | `/ifess-control` |
+| `Module Services/rjfm` | 8011 | external process | `/rjfm` |
+| `Module Services/Wifi_LAN_Monitor` | — | static | `/network-monitor` |
+
+Registered EXTERNAL services (source outside this repo — do not move):
+`/upah` :8002 · `/absen` :5176 · `/monitoring-beras` :5177 · `/basis-panen` :3002 ·
+`/query` :8001 · `/file-legacy` :5178.
+
+Gateway routes for module services live in `routes-config.json` (hot-reload).
+`shared/auth/paths.js` `DASHBOARD_PATHS` must NOT include a module's path —
+otherwise the gateway proxies it to DASHBOARD_TARGET instead of the route table.
+
+**Auth center = gateway.** One RS256 JWT cookie (`auth-token`, keys in `keys/`)
+issued by Dashboard_Utama `/api/auth/login` against MSSQL `extend_db_ptrj`.
+Gateway verifies once, strips inbound `X-User-*` headers, injects verified
+`X-User-Id/Name/Email/Role` into proxied requests. Modules verify the same
+cookie themselves for direct-port access. Machine-to-machine keeps env API keys.
+Service health: `GET /api/services/status`.
+
 ## Project Structure
 
 ```
 Main Dashboard/
 ├── server.js                    # Express gateway (standalone mode, port 3001)
 ├── routes-config.json           # Proxy route definitions (hot-reload)
-├── keys/                        # JWT RSA keypairs
+├── keys/                        # JWT RSA keypairs + report-center-access.key (shared access key)
 ├── docs/                         # Canonical documentation (indexed)
+├── Module Services/             # Isolated, independent module services (monorepo)
+│   ├── report-center/           #   Standalone Next.js app (port 3101) — bun start
+│   ├── rebinmas-jaya-server/    #   Server-monitor Vite SPA (port 3102) → /server-monitor
+│   ├── file-manager/            #   Standalone Next.js app (port 3103) → /file
+│   ├── ifess-control/           #   iFESS standalone UI
+│   ├── rjfm/                    #   RJFM API (port 8011)
+│   └── Wifi_LAN_Monitor/        #   static site
 ├── Services/
 │   ├── ifess-control-server/  # iFESS Control Server (JS)
 │   └── query/                  # SQL Gateway
 ├── data/ifess/                 # iFESS JSON data storage
-└── Dashboard_Utama/            # Next.js 16 App
+└── Dashboard_Utama/            # Next.js 16 App (central hub)
     ├── Dockerfile              # Container build
     ├── docker-compose.yml     # Docker orchestration
     └── app/
         ├── api/               # Route Handlers
         │   ├── auth/         # NextAuth.js + credentials
-        │   ├── reports/      # Report SQL handlers
+        │   ├── reports/      # Re-export stubs → Module Services/report-center/app/api/reports
         │   ├── ifess/        # iFESS proxy route
         │   └── services/     # Service config
+        ├── (report-center)/  # Re-export stubs → Module Services/report-center/app/(report-center)
         ├── ifess-control/    # iFESS admin dashboard
         ├── report-center/     # Report viewer pages
         └── lib/reports/      # SQL builders, filters
@@ -73,7 +133,21 @@ npx tsc --noEmit # TypeScript validation
 ```bash
 # Standalone test
 cd Dashboard_Utama && npx tsx lib/reports/accounting-period.test.ts
+# Module tests
+cd "Module Services/report-center" && npx tsx lib/reports/sql-gateway-config.test.ts
 ```
+
+### Report Center standalone (module service)
+
+```bash
+cd "Module Services/report-center"
+bun start     # production, port 3101 (bun run start)
+bun run dev   # dev server, port 3101
+```
+
+- Direct: `http://localhost:3101` — login pakai access key (`keys/report-center-access.key`, password field).
+- Via gateway proxy: `http://localhost:3001/report-center` (gateway route → 3101).
+- Root helpers: `npm run start:report-center` / `npm run dev:report-center`.
 
 ### Bun Gateway + IFESS (the active dev layer)
 
