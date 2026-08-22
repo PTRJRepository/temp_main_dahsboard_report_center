@@ -51,10 +51,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'MODUL UTAMA',
     items: [
-      { label: 'Procurement', subtitle: 'Inventory live', href: '/report-center?module=procurement#modules', icon: <Package size={18} /> },
-      { label: 'Financial', subtitle: 'Produktivitas & efisiensi', href: '/report-center?module=financial#modules', icon: <Wallet size={18} /> },
-      { label: 'Human Resources', subtitle: 'Payroll, upah, premi, lembur', href: '/report-center?module=human-resources#modules', icon: <UserCheck size={18} /> },
-      { label: 'Budget', subtitle: 'Budget, realisasi, variance', href: '/report-center?module=budget#modules', icon: <BarChart3 size={18} /> },
+      { label: 'Procurement', subtitle: 'Inventory live', href: '/report-center/procurement', icon: <Package size={18} /> },
+      { label: 'Financial', subtitle: 'Produktivitas & efisiensi', href: '/report-center/financial', icon: <Wallet size={18} /> },
+      { label: 'Human Resources', subtitle: 'Absensi, premi, lembur, workforce', href: '/report-center/human-resources', icon: <UserCheck size={18} /> },
+      { label: 'Budget', subtitle: 'Budget, realisasi, variance', href: '/report-center/budget', icon: <BarChart3 size={18} /> },
     ],
   },
   {
@@ -69,7 +69,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'PENGELOLAAN',
     items: [
       { label: 'Integrasi Data', subtitle: 'Status & sinkronisasi data', href: '/report-center#integration', icon: <Database size={18} /> },
-      { label: 'Pengaturan', subtitle: 'Pengaturan laporan & akses', href: '/report-center#settings', icon: <Settings size={18} /> },
+      { label: 'Control Room', subtitle: 'Kontrol & status sistem', href: '/report-center/control', icon: <Settings size={18} /> },
     ],
   },
 ]
@@ -120,10 +120,10 @@ export default function Sidebar() {
   }
 
   const navContent = (
-    <div className="flex h-full flex-col bg-gradient-to-b from-[#0b1018] via-[#090d14] to-[#06080d] text-white">
+    <div className="flex h-full flex-col bg-gradient-to-b from-[#08130d] via-[#06100b] to-[#040a07] text-white">
       <div className="flex min-h-[78px] items-center gap-3 border-b border-white/10 px-4">
         <div className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl bg-white/10 ring-1 ring-white/15">
-          <FileText size={19} className="text-amber-300" />
+          <FileText size={19} className="text-[var(--rc-forest-accent)]" />
         </div>
         {!sidebarCollapsed && (
           <div className="min-w-0">
@@ -162,7 +162,7 @@ export default function Sidebar() {
                       className={[
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition',
                         active
-                          ? 'bg-amber-500/10 text-white shadow-none ring-1 ring-amber-400/25 before:absolute before:left-0 before:top-2 before:h-[calc(100%-16px)] before:w-1 before:rounded-r before:bg-amber-400'
+                          ? 'bg-[rgba(24,185,107,.12)] text-white shadow-none ring-1 ring-[rgba(155,226,61,.28)] before:absolute before:left-0 before:top-2 before:h-[calc(100%-16px)] before:w-1 before:rounded-r before:bg-[var(--rc-forest-accent)]'
                           : 'text-slate-300 hover:bg-white/10 hover:text-white',
                         sidebarCollapsed ? 'justify-center' : '',
                       ].join(' ')}
@@ -185,15 +185,15 @@ export default function Sidebar() {
 
       <div className="space-y-3 border-t border-white/10 px-3 py-4">
         {!sidebarCollapsed && (
-          <div className="rounded-[14px] bg-gradient-to-br from-amber-500/20 to-white/5 p-4 ring-1 ring-amber-300/15">
+          <div className="rounded-[14px] bg-gradient-to-br from-[rgba(24,185,107,.16)] to-white/5 p-4 ring-1 ring-[rgba(155,226,61,.2)]">
             <div className="flex items-center justify-between gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/10">
                 <HelpCircle size={18} />
               </div>
-              <ChevronRight size={18} className="text-amber-100" />
+              <ChevronRight size={18} className="text-[var(--rc-forest-accent)]" />
             </div>
             <p className="mt-3 text-sm font-semibold">Butuh bantuan?</p>
-            <p className="mt-1 text-xs leading-5 text-amber-100/75">Lihat panduan atau hubungi tim</p>
+            <p className="mt-1 text-xs leading-5 text-emerald-100/75">Lihat panduan atau hubungi tim</p>
           </div>
         )}
 
@@ -222,7 +222,7 @@ export default function Sidebar() {
       <motion.aside
         animate={{ width: sidebarCollapsed ? 84 : 250 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
-        className="hidden h-screen shrink-0 border-r border-[var(--rc-border)] bg-[#0b1018] lg:block"
+        className="hidden h-screen shrink-0 border-r border-[var(--rc-border)] bg-[#08130d] lg:block"
       >
         {navContent}
       </motion.aside>

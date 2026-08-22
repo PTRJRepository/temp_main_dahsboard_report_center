@@ -1,5 +1,5 @@
 import { validateReadOnlySql } from '../report-filtering'
-import { resolveSqlGatewayApiKey, resolveSqlGatewayBase, sqlGatewayQueryUrl } from '../sql-gateway-config'
+import { resolveSqlGatewayApiKey, resolveSqlGatewayCandidates, sqlGatewayQueryUrl } from '../sql-gateway-config'
 
 export type InventoryReportSource = 'estate' | 'pabrik'
 
@@ -93,7 +93,7 @@ export async function executeInventoryReadQuery(
   }
 
   const env = options.env ?? process.env
-  const gatewayUrl = resolveSqlGatewayBase({ env, override: options.gatewayOverride })
+  const gatewayBases = resolveSqlGatewayCandidates({ env, override: options.gatewayOverride })
   const apiKey = resolveSqlGatewayApiKey(env) || cleanText(env.SQL_GATEWAY_API_KEY)
   if (!apiKey) {
     return {
@@ -119,38 +119,49 @@ export async function executeInventoryReadQuery(
   const abort = () => controller.abort(options.signal?.reason)
   options.signal?.addEventListener('abort', abort, { once: true })
 
+  let lastError: string | null = null
   try {
-    const response = await (options.fetchFn ?? fetch)(sqlGatewayQueryUrl(gatewayUrl), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-      body: JSON.stringify({ sql, server: ctx.server, database: ctx.database }),
-      cache: 'no-store',
-      signal: controller.signal,
-    })
+    for (const gatewayUrl of gatewayBases) {
+      try {
+        const response = await (options.fetchFn ?? fetch)(sqlGatewayQueryUrl(gatewayUrl), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
+          body: JSON.stringify({ sql, server: ctx.server, database: ctx.database }),
+          cache: 'no-store',
+          signal: controller.signal,
+        })
 
-    const result = (await response.json().catch(() => ({}))) as InventoryGatewayResult
-    if (!response.ok || result.success === false) {
-      return {
-        success: false,
-        error: response.status === 408 || response.status === 504
-          ? 'Query inventory melewati batas waktu aman.'
-          : 'Query inventory gagal diproses oleh gateway.',
-        execution_ms: result.execution_ms,
+        const result = (await response.json().catch(() => ({}))) as InventoryGatewayResult
+        if (!response.ok || result.success === false) {
+          lastError = response.status === 408 || response.status === 504
+            ? 'Query inventory melewati batas waktu aman.'
+            : 'Query inventory gagal diproses oleh gateway.'
+          // Non-OK on the first candidate: try the next base.
+          if (gatewayBases.length > 1) continue
+          return {
+            success: false,
+            error: lastError,
+            execution_ms: result.execution_ms,
+          }
+        }
+
+        return {
+          success: true,
+          data: result.data,
+          execution_ms: result.execution_ms,
+        }
+      } catch (error) {
+        lastError = timedOut ? 'Query inventory melewati batas waktu aman.' : sanitizeInventoryQueryError(error)
+        // Connection failure — try the fallback gateway base.
+        if (gatewayBases.length > 1) continue
       }
     }
-
-    return {
-      success: true,
-      data: result.data,
-      execution_ms: result.execution_ms,
-    }
-  } catch (error) {
     return {
       success: false,
-      error: timedOut ? 'Query inventory melewati batas waktu aman.' : sanitizeInventoryQueryError(error),
+      error: lastError ?? 'Query inventory gagal diproses.',
     }
   } finally {
     clearTimeout(timeout)

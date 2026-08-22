@@ -132,6 +132,15 @@ const servicesToSeed = [
         path: '/query',
         enabled: true,
         imagePath: null
+    },
+    {
+        serviceId: 'file',
+        name: 'File Management',
+        description: 'Manajemen Berkas — atasan menugaskan kerani mengumpulkan file, review & revisi',
+        serviceUrl: 'http://localhost:3001/file',
+        path: '/file',
+        enabled: true,
+        imagePath: '/assets/file_management_banner.webp'
     }
 ];
 

@@ -22,11 +22,17 @@ function formatCheckedAt(value?: string) {
   return date.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+function currentPeriodLabel() {
+  return new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date())
+}
+
 export default function SystemInfoPanel() {
   const [status, setStatus] = useState<SystemStatus | null>(null)
+  const [periodLabel, setPeriodLabel] = useState('')
 
   useEffect(() => {
     let active = true
+    setPeriodLabel(currentPeriodLabel())
     fetch('/api/reports/system-status', { cache: 'no-store' })
       .then((response) => response.json())
       .then((data: SystemStatus) => {
@@ -43,41 +49,56 @@ export default function SystemInfoPanel() {
   const healthy = Boolean(status?.gatewayOnline && status.activeConnected && status.activeHealthy)
   const rows = useMemo(
     () => [
-      { label: 'Periode Aktif', value: 'Mei 2026', icon: CheckCircle2, color: 'text-emerald-700 bg-emerald-50' },
-    { label: 'Scope Report', value: 'Estate / Kebun - Full Access', icon: Shield, color: 'text-blue-700 bg-blue-50' },
-      { label: 'Database', value: status?.activeDatabase ?? 'db_ptrj_mill', icon: Database, color: 'text-emerald-700 bg-emerald-50' },
+      { label: 'Periode Aktif', value: periodLabel || 'Memuat…', icon: CheckCircle2, color: 'text-emerald-200 bg-emerald-400/10 border border-emerald-300/25' },
+      { label: 'Scope Report', value: 'Estate / Kebun · Full Access', icon: Shield, color: 'text-sky-200 bg-sky-400/10 border border-sky-300/25' },
+      { label: 'Database', value: status?.activeDatabase ?? 'db_ptrj_mill', icon: Database, color: 'text-[var(--rc-forest-accent)] bg-[rgba(155,226,61,.1)] border border-[rgba(155,226,61,.22)]' },
       {
         label: 'Integrasi Sistem',
         value: healthy ? 'SQL Gateway Terhubung' : status?.error ?? 'Menunggu status gateway',
         icon: Wifi,
-        color: healthy ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50',
+        color: healthy
+          ? 'text-emerald-200 bg-emerald-400/10 border border-emerald-300/25'
+          : 'text-amber-200 bg-amber-400/10 border border-amber-300/25',
       },
       {
         label: 'Server Aktif',
-        value: `${status?.activeServer ?? 'SERVER_PROFILE_3'}${healthy ? ' - sehat' : ' - perlu cek'}`,
+        value: `${status?.activeServer ?? 'SERVER_PROFILE_3'}${healthy ? ' · sehat' : ' · perlu cek'}`,
         icon: Server,
-        color: healthy ? 'text-slate-700 bg-slate-100' : 'text-red-700 bg-red-50',
+        color: healthy
+          ? 'text-[var(--rc-text-muted)] bg-white/5 border border-[var(--rc-forest-border)]'
+          : 'text-rose-200 bg-rose-400/10 border border-rose-300/25',
       },
     ],
-    [healthy, status?.activeDatabase, status?.activeServer, status?.error],
+    [healthy, periodLabel, status?.activeDatabase, status?.activeServer, status?.error],
   )
 
   return (
-    <section className="flex h-full min-h-[300px] flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-slate-950">Informasi Sistem</h2>
-        <p className="mt-1 text-xs text-slate-500">Terakhir cek gateway: {formatCheckedAt(status?.checkedAt)}</p>
+    <section
+      id="integration"
+      className="flex h-full min-h-[300px] scroll-mt-24 flex-col rounded-[24px] border border-[var(--rc-forest-border)] bg-[rgba(7,26,20,.72)] p-5"
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-black tracking-[-0.02em] text-[var(--rc-text)]">Informasi Sistem</h2>
+          <p className="mt-0.5 text-xs font-semibold text-[var(--rc-text-faint)]">Cek gateway: {formatCheckedAt(status?.checkedAt)}</p>
+        </div>
+        <span
+          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+            status === null ? 'bg-slate-500' : healthy ? 'bg-emerald-400' : 'bg-rose-400'
+          }`}
+          aria-hidden="true"
+        />
       </div>
 
       <div className="space-y-2">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
-            <div className={`grid h-9 w-9 place-items-center rounded-xl ${row.color}`}>
+          <div key={row.label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+            <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${row.color}`}>
               <row.icon size={17} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-slate-500">{row.label}</p>
-              <p className="truncate text-sm font-semibold text-slate-950">{row.value}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--rc-text-faint)]">{row.label}</p>
+              <p className="truncate text-sm font-bold text-[var(--rc-text)]">{row.value}</p>
             </div>
           </div>
         ))}
@@ -85,9 +106,9 @@ export default function SystemInfoPanel() {
 
       <Link
         href="/report-center/inventory"
-        className="mt-auto inline-flex items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+        className="mt-auto inline-flex items-center justify-center rounded-2xl bg-[var(--rc-forest-primary)] px-4 py-3 text-sm font-black text-[#03130c] transition hover:bg-[var(--rc-forest-accent)]"
       >
-        Lihat Status Integrasi & Audit
+        Lihat Status Integrasi &amp; Audit
       </Link>
     </section>
   )

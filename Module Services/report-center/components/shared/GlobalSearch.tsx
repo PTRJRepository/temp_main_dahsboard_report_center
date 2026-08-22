@@ -358,7 +358,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
         {/* Keyboard shortcut hint */}
         {!query && !loading && (
           <kbd className="hidden sm:flex items-center gap-0.5 text-xs text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 font-mono shrink-0">
-            <span className="text-[10px]">⌘</span>K
+            <span className="text-[10px]">&times;</span>K
           </kbd>
         )}
       </div>

@@ -42,7 +42,7 @@ async function main() {
   assert.equal(missingConfig.success, false)
   assert.equal(missingConfig.error, 'Konfigurasi query inventory belum lengkap.')
 
-  // Missing SQL_GATEWAY_URL falls back to primary 10.0.0.110:8001 when key present
+  // Default gateway base = FALLBACK localhost:8001 (10.0.0.110 jadi kandidat kedua)
   let defaultBaseUrl = ''
   const withDefaultBase = await executeInventoryReadQuery(estate, 'SELECT 1', {
     env: {
@@ -54,7 +54,7 @@ async function main() {
     },
   })
   assert.equal(withDefaultBase.success, true)
-  assert.equal(defaultBaseUrl.startsWith('http://10.0.0.110:8001/'), true)
+  assert.equal(defaultBaseUrl.startsWith('http://localhost:8001/'), true)
 
   let requestedUrl = ''
   let requestedBody: Record<string, unknown> = {}

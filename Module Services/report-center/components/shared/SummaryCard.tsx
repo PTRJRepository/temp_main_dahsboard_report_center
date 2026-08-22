@@ -164,9 +164,11 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
     ${accentBorder}
   `;
 
-  const Inner: React.FC<React.HTMLAttributes<HTMLDivElement>> = (props) => (
-    <div id={id} className={`${cardBase} ${className}`} {...props} />
-  );
+  const innerProps = (extra?: React.HTMLAttributes<HTMLDivElement>): React.HTMLAttributes<HTMLDivElement> => ({
+    id,
+    className: `${cardBase} ${className}`,
+    ...extra,
+  });
 
   const body = (
     <div className="p-4 flex-1">
@@ -256,19 +258,18 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
 
   if (onClick) {
     return (
-      <Inner onClick={onClick} role="button" tabIndex={0}
-        onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && onClick()}>
+      <div {...innerProps({ onClick, role: 'button', tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => e.key === 'Enter' && onClick() })}>
         {body}
         {footerEl}
-      </Inner>
+      </div>
     );
   }
 
   return (
-    <Inner aria-label={`${label}: ${value}`}>
+    <div {...innerProps({ 'aria-label': `${label}: ${value}` })}>
       {body}
       {footerEl}
-    </Inner>
+    </div>
   );
 };
 

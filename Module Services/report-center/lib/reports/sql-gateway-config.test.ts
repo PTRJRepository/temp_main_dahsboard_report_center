@@ -6,6 +6,7 @@ import {
   isAllowedSqlGatewayBase,
   normalizeSqlGatewayBase,
   resolveSqlGatewayBase,
+  resolveSqlGatewayCandidates,
   sqlGatewayQueryUrl,
 } from './sql-gateway-config'
 
@@ -15,7 +16,8 @@ assert.equal(isAllowedSqlGatewayBase('http://evil.example'), false)
 assert.equal(isAllowedSqlGatewayBase(SQL_GATEWAY_PRIMARY), true)
 assert.equal(isAllowedSqlGatewayBase(SQL_GATEWAY_FALLBACK), true)
 
-assert.equal(resolveSqlGatewayBase({ env: {} }), SQL_GATEWAY_PRIMARY)
+assert.equal(resolveSqlGatewayBase({ env: {} }), SQL_GATEWAY_FALLBACK)
+assert.equal(resolveSqlGatewayBase({ env: { SQL_GATEWAY_URL: 'http://10.0.0.110:8001' } }), SQL_GATEWAY_PRIMARY)
 assert.equal(
   resolveSqlGatewayBase({ env: { SQL_GATEWAY_URL: 'http://localhost:8001/v1/query' } }),
   'http://localhost:8001',
@@ -32,7 +34,17 @@ assert.equal(
     env: {},
     override: 'http://evil.example',
   }),
-  SQL_GATEWAY_PRIMARY,
+  SQL_GATEWAY_FALLBACK,
+)
+
+// Failover candidates: default order = localhost first, LAN server second
+assert.deepEqual(
+  resolveSqlGatewayCandidates({ env: {} }),
+  [SQL_GATEWAY_FALLBACK, SQL_GATEWAY_PRIMARY],
+)
+assert.deepEqual(
+  resolveSqlGatewayCandidates({ env: { SQL_GATEWAY_URL: 'http://10.0.0.110:8001' } }),
+  [SQL_GATEWAY_PRIMARY, SQL_GATEWAY_FALLBACK],
 )
 
 assert.equal(sqlGatewayQueryUrl('http://10.0.0.110:8001/'), 'http://10.0.0.110:8001/v1/query')

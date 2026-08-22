@@ -71,6 +71,14 @@ export default function GlobalSearch() {
   }, [open])
 
   // ── Keyboard nav ───────────────────────────────────────────────────────────
+  const navigateTo = useCallback((report: ReportEntry) => {
+    const source = normalizeReportSource(window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY))
+    useReportStore.getState().addRecent(report.id)
+    router.push(`/report-center/inventory?source=${source}&report=${report.id}`)
+    setOpen(false)
+    setQuery('')
+  }, [router])
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -85,15 +93,7 @@ export default function GlobalSearch() {
     } else if (e.key === 'Escape') {
       setOpen(false)
     }
-  }, [results, cursor])
-
-  const navigateTo = (report: ReportEntry) => {
-    const source = normalizeReportSource(window.localStorage.getItem(REPORT_SOURCE_STORAGE_KEY))
-    useReportStore.getState().addRecent(report.id)
-    router.push(`/report-center/inventory?source=${source}&report=${report.id}`)
-    setOpen(false)
-    setQuery('')
-  }
+  }, [results, cursor, navigateTo])
 
   const toggleFav = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
@@ -219,7 +219,7 @@ export default function GlobalSearch() {
         {/* ── Footer hint ── */}
         <div className="flex items-center gap-4 border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
           <span className="flex items-center gap-1">
-            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono text-[10px]">↑↓</kbd>
+            <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono text-[10px]">&uarr;&darr;</kbd>
             navigate
           </span>
           <span className="flex items-center gap-1">

@@ -217,7 +217,7 @@ export default function Topbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-[78px] shrink-0 items-center gap-4 border-b border-[var(--rc-border)] bg-[#0b1018]/92 px-4 text-[var(--rc-text)] shadow-none backdrop-blur-xl lg:px-7">
+    <header className="sticky top-0 z-30 flex h-[78px] shrink-0 items-center gap-4 border-b border-[var(--rc-border)] bg-[#08130d]/92 px-4 text-[var(--rc-text)] shadow-none backdrop-blur-xl lg:px-7">
       <button
         type="button"
         onClick={openSidebar}
@@ -236,21 +236,21 @@ export default function Topbar() {
           <ChevronLeft size={18} />
         </button>
         <div className="min-w-0">
-          <h1 className="truncate text-[22px] font-bold leading-tight text-[#0F172A]">{title}</h1>
-          <p className="mt-0.5 truncate text-xs font-medium text-slate-500">{subtitle}</p>
+          <h1 className="truncate text-[22px] font-bold leading-tight text-[var(--rc-text)]">{title}</h1>
+          <p className="mt-0.5 truncate text-xs font-medium text-[var(--rc-text-faint)]">{subtitle}</p>
         </div>
       </div>
 
       <div className="hidden flex-1 justify-center md:flex">
         <div className="relative w-full max-w-[530px]">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--rc-text-faint)]" />
           <input
             ref={searchRef}
             type="search"
             placeholder="Cari laporan, kategori, atau kata kunci..."
             onFocus={openGlobalSearch}
             onClick={openGlobalSearch}
-            className="h-[42px] w-full rounded-xl border border-[var(--rc-border)] bg-[#0f172a]/90 pl-10 pr-20 text-sm font-medium text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-[var(--rc-accent)] focus:ring-4 focus:ring-amber-500/10"
+            className="h-[42px] w-full rounded-xl border border-[var(--rc-border)] bg-black/25 pl-10 pr-20 text-sm font-medium text-[var(--rc-text)] outline-none placeholder:text-[var(--rc-text-faint)] focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
           />
           <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
             Ctrl + K
@@ -285,11 +285,11 @@ export default function Topbar() {
               />
             </button>
             {gatewayOpen ? (
-              <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[280px] rounded-xl border border-[var(--rc-border)] bg-[#0f172a] p-2 shadow-xl">
-                <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[280px] rounded-xl border border-[var(--rc-forest-border)] bg-[#0b1a12] p-2 shadow-xl">
+                <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--rc-text-faint)]">
                   Koneksi SQL Gateway
                 </p>
-                <p className="px-2 pb-2 text-[11px] leading-4 text-slate-500">
+                <p className="px-2 pb-2 text-[11px] leading-4 text-[var(--rc-text-faint)]">
                   Default {SQL_GATEWAY_PRIMARY.replace('http://', '')}. Fallback {SQL_GATEWAY_FALLBACK.replace('http://', '')}.
                 </p>
                 {SQL_GATEWAY_PRESETS.map((preset) => (
@@ -300,7 +300,7 @@ export default function Topbar() {
                     className={[
                       'mb-1 flex w-full flex-col rounded-lg px-2.5 py-2 text-left transition',
                       gatewayBase === preset.baseUrl
-                        ? 'bg-[var(--rc-accent)]/20 text-[var(--rc-text)] ring-1 ring-[var(--rc-accent)]/40'
+                        ? 'bg-[rgba(24,185,107,.16)] text-[var(--rc-text)] ring-1 ring-[rgba(155,226,61,.35)]'
                         : 'text-[var(--rc-text-muted)] hover:bg-white/10 hover:text-[var(--rc-text)]',
                     ].join(' ')}
                   >
@@ -341,20 +341,20 @@ export default function Topbar() {
         </div>
         {pathname.startsWith('/report-center/procurement') && activePeriod ? (
           <div
-            className="hidden h-[42px] max-w-[230px] items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 text-xs font-black text-amber-100 lg:inline-flex"
+            className="hidden h-[42px] max-w-[230px] items-center gap-2 rounded-xl border border-[rgba(155,226,61,.3)] bg-[rgba(155,226,61,.1)] px-3 text-xs font-black text-[var(--rc-forest-accent)] lg:inline-flex"
             title={`Periode aktif procurement: ${activePeriod.label} (${activePeriod.period})`}
           >
             <CalendarDays size={14} />
-            <span className="text-amber-100/60">Periode</span>
-            <span className="truncate tabular-nums">{activePeriod.label}</span>
-            <span className="rounded-md bg-black/25 px-1.5 py-0.5 text-[10px] text-amber-100/70">{activePeriod.period}</span>
+            <span className="text-[var(--rc-text-muted)]">Periode</span>
+            <span className="truncate tabular-nums text-[var(--rc-text)]">{activePeriod.label}</span>
+            <span className="rounded-md bg-black/25 px-1.5 py-0.5 text-[10px] text-[var(--rc-forest-accent)]">{activePeriod.period}</span>
           </div>
         ) : null}
         <div className="flex h-[42px] items-center gap-3 rounded-xl border border-[var(--rc-border)] bg-white/5 px-2.5 pr-3 hover:bg-white/10">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--rc-accent)] text-xs font-bold text-slate-950">{initials(name)}</span>
           <span className="hidden text-left lg:block">
-            <span className="block text-sm font-bold leading-tight text-slate-900">{name}</span>
-            <span className="block text-[11px] font-medium text-slate-500">{role} · {sourceLabel(reportSource)}</span>
+            <span className="block text-sm font-bold leading-tight text-[var(--rc-text)]">{name}</span>
+            <span className="block text-[11px] font-medium text-[var(--rc-text-faint)]">{role} · {sourceLabel(reportSource)}</span>
           </span>
         </div>
       </div>

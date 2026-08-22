@@ -1,6 +1,6 @@
 /**
  * SQL Gateway base URL resolution for Report Center.
- * Default host: 10.0.0.110 — fallback: localhost.
+ * Default: localhost:8001 — fallback: 10.0.0.110:8001.
  * User override only accepted when allowlisted (header / query).
  */
 
@@ -53,8 +53,8 @@ export type ResolveSqlGatewayOptions = {
  * Resolve gateway base:
  * 1) allowlisted override
  * 2) SQL_GATEWAY_URL env
- * 3) primary 10.0.0.110:8001
- * (localhost is selectable fallback, not auto-picked unless env/override says so)
+ * 3) localhost:8001 (FALLBACK) — preferred for local dev
+ * 4) 10.0.0.110:8001 (PRIMARY) — LAN server fallback
  */
 export function resolveSqlGatewayBase(options: ResolveSqlGatewayOptions = {}): string {
   const env = options.env ?? process.env
@@ -64,12 +64,22 @@ export function resolveSqlGatewayBase(options: ResolveSqlGatewayOptions = {}): s
   const fromEnv = normalizeSqlGatewayBase(env.SQL_GATEWAY_URL)
   if (fromEnv) return fromEnv
 
-  return SQL_GATEWAY_PRIMARY
+  return SQL_GATEWAY_FALLBACK
 }
 
 export function resolveSqlGatewayApiKey(env: Partial<Record<string, string | undefined>> = process.env): string {
   const key = typeof env.SQL_GATEWAY_API_KEY === 'string' ? env.SQL_GATEWAY_API_KEY.trim() : ''
   return key
+}
+
+/**
+ * Ordered candidates for runtime failover. Primary preference first;
+ * caller tries each in order until one succeeds.
+ */
+export function resolveSqlGatewayCandidates(options: ResolveSqlGatewayOptions = {}): string[] {
+  const first = resolveSqlGatewayBase(options)
+  const second = first === SQL_GATEWAY_PRIMARY ? SQL_GATEWAY_FALLBACK : SQL_GATEWAY_PRIMARY
+  return [first, second]
 }
 
 /** Build absolute /v1/query URL from a gateway base */

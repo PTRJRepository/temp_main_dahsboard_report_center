@@ -314,16 +314,6 @@ const entries: InventoryColumnGlossaryEntry[] = [
     formula: 'OpeningQty * AverageCost (month-end)',
   },
   {
-    field: 'ReceivedQty',
-    label: 'Received Qty',
-    description: 'Qty receive non-purchasing pada periode (jika terisi di pipeline movement).',
-  },
-  {
-    field: 'ReceivedAmount',
-    label: 'Received Amount',
-    description: 'Nilai receive non-purchasing pada periode.',
-  },
-  {
     field: 'ReturnAdviceQty',
     label: 'Return Advice Qty',
     description: 'Qty return advice inventory pada periode.',

@@ -18,8 +18,6 @@ const nextConfig = {
     output: 'standalone',
     // Allow HMR / _next requests through LAN gateway hosts during development.
     allowedDevOrigins: LAN_DEV_ORIGINS,
-    // Keep mssql/tedious out of Next worker bundling.
-    serverExternalPackages: ['mssql'],
     // Turbopack root = repo root so `@modules/*` (Module Services/) resolves
     // outside Dashboard_Utama. Bare packages resolve via the Module Services/
     // node_modules symlink (see module README setup).
