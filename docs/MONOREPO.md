@@ -119,6 +119,20 @@ Rules:
 - **Machine-to-machine** calls use env-sourced API keys (`IFESS_API_KEY`, `QUERY_API_KEY`, `IFESS_CLIENT_API_KEY`) — unchanged by SSO.
 - **Never spoofable:** clients cannot set `X-User-*`; the gateway deletes inbound copies before injecting verified values.
 
+### Module auth kit (`shared/authkit/`)
+
+Ready-made functions for any module to consume the auth center — **copy the
+file into your module** (isolation rule: no cross-module imports), zero deps:
+
+| Function | Use |
+|---|---|
+| `verifyGatewayIdentity(headers)` | Trust gateway-injected `X-User-*` (proxy mode) |
+| `verifyPortalCookie(token)` | Verify RS256 portal JWT with repo `keys/public.pem` (direct-port mode); cached |
+| `resolveIdentity({ headers, cookie })` | Both modes in one call |
+| `requireAuth({ roles })` | Express middleware: 401/403 + `req.user` |
+
+See `shared/authkit/README.md` for trust rules.
+
 ## 5. Performance rules
 
 - Every user-facing page ships a `loading.tsx` skeleton (no blank screens).
