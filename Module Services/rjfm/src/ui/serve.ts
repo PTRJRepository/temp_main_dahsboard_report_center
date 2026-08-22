@@ -20,17 +20,17 @@ export function mountUi(app: express.Express): Promise<void> {
   }
   // (mounting continues below; always returns a promise)
 
-  // Proxy API untuk UI: /api/file/* → route internal yang sama dengan prefix ''
-  const api = express.Router()
-  api.use(express.json({ limit: '2mb' }))
-  api.use(express.urlencoded({ extended: true }))
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const inner: any = app._router || (app as any).router
-  api.use((req: any, res: any, next: any) => {
-    req.url = req.originalUrl.replace(/^\/api\/file/, '/api/v1')
-    return inner.handle(req, res, next)
+  // Proxy API untuk UI: /api/file/* → /api/v1/* (rewrite URL, TANPA router
+  // terpisah — router terpisah + inner.handle menyebabkan body terbaca dua
+  // kali sehingga POST menggantung). Dipasang SEBELUM express.json global
+  // supaya rewrite terjadi sebelum body parser; urutan mount di server.ts
+  // sudah begitu (mountUi dipanggil sebelum parser? TIDAK — parser global
+  // jalan duluan). Karena itu rewrite di sini cukup: parser global sudah
+  // selesai dan stream tidak disentuh dua kali.
+  app.use('/api/file', (req: any, _res: any, next: any) => {
+    req.url = req.url.replace(/^\/api\/file/, '/api/v1')
+    next()
   })
-  app.use('/api/file', api)
 
   // Static assets Next (_next/static) + public/
   if (fs.existsSync(STATIC_ASSETS)) app.use('/_next/static', express.static(STATIC_ASSETS, { maxAge: '365d', immutable: true }))
