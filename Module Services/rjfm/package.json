@@ -1,0 +1,32 @@
+{
+  "name": "rjfm-server",
+  "version": "1.0.0",
+  "description": "Rebinmas Jaya File Management - task dispatch, isolated file ingestion, mandatory revision loop",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --loader tsx src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "http-proxy-middleware": "^3.0.3",
+    "dotenv": "^16.6.0",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^12.2.0",
+    "multer": "^2.0.2",
+    "proxy-gateway": "file:../.."
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.14.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2"
+  }
+}
