@@ -190,11 +190,21 @@
   {
     "id": "file",
     "path": "/file",
-    "target": "http://127.0.0.1:3100",
+    "target": "http://127.0.0.1:3103",
     "description": "File Management LMS — Kerani=siswa (Next dashboard UI)",
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": false
+  },
+  {
+    "id": "api-file",
+    "path": "/api/file",
+    "target": "http://127.0.0.1:3103",
+    "description": "File Management API → Module Services/file-manager",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false,
+    "public": false
   },
   {
     "id": "rjfm",

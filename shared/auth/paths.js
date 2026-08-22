@@ -4,7 +4,11 @@
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/logout', '/favicon.ico']);
 const DASHBOARD_PUBLIC_PREFIXES = ['/_next', '/assets', '/api/auth'];
-const DASHBOARD_PATHS = ['/admin', '/dashboard', '/dashboard-user', '/modules', '/report-center', '/api/services', '/api/reports', '/ifess-control', '/api/ifess', '/api/query-gateway', '/api/file', '/config-path'];
+// /report-center, /api/reports, /file and /api/file are served by standalone
+// modules (Module Services/report-center :3101 and Module Services/file-manager
+// :3103) via routes-config.json — NOT by the Dashboard_Utama app. Keep them out
+// of DASHBOARD_PATHS so the gateway proxies them through the route table.
+const DASHBOARD_PATHS = ['/admin', '/dashboard', '/dashboard-user', '/modules', '/api/services', '/ifess-control', '/api/ifess', '/api/query-gateway', '/config-path'];
 const PROTECTED_PATHS = ['/config-path', ...DASHBOARD_PATHS];
 
 export function isProtectedPath(pathname) {
