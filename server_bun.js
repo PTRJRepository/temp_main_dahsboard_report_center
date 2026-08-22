@@ -18,7 +18,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { verifyJWT, extractToken } from './shared/auth/jwt.js';
+import { verifyJWTCached, extractToken } from './shared/auth/jwt.js';
 import {
     isProtectedPath, isDashboardPublicPath, isDashboardPath,
     redirectToLogin, wantsJson,
@@ -105,8 +105,9 @@ class LRUCache {
 const assetCache = new LRUCache(CACHE_MAX_SIZE * 2, 30 * 60 * 1000);
 
 // ─── Auth: JWT verification + path protection (extracted to shared/auth/) ──────
-// verifyJWT now takes ROOT_DIR — wrap it to preserve the no-arg call sites.
-const verifyJwtForRoot = (token) => verifyJWT(token, ROOT_DIR);
+// Cached RS256 verify — browsers resend the same cookie on every request, so
+// repeated verifies hit the in-memory payload cache instead of the CPU.
+const verifyJwtForRoot = (token) => verifyJWTCached(token, ROOT_DIR);
 
 // ─── IFESS Control Server Handler (Bun Native) ─────────────────────────────────
 // API keys are env-sourced only — no hardcoded fallback. Dev values live in
@@ -935,29 +936,27 @@ function getCacheControl(reqPath, contentType = '') {
     return 'no-cache';
 }
 
+const REWRITABLE_TEXT_RE = /text\/html|javascript|text\/css|application\/json|text\/plain/;
+
 async function serveLocalFile(filePath, reqPath, options = {}) {
     const file = Bun.file(filePath);
     if (!(await file.exists())) return null;
 
     const contentType = getMimeType(reqPath);
     const isVersioned = VERSION_HASH_RE.test(reqPath);
-    const isText = contentType.includes('text/html') ||
-        contentType.includes('javascript') ||
-        contentType.includes('text/css') ||
-        contentType.includes('application/json') ||
-        contentType.includes('text/plain');
     const textRewrites = Array.isArray(options.textRewrites) ? options.textRewrites : [];
-    let body;
 
-    if (isText && textRewrites.length > 0) {
+    // Stream the file object directly (zero-copy passthrough in Bun) unless
+    // text rewrites force a buffered read. Memory: no arrayBuffer copy for
+    // assets — large chunks never fully materialize on the JS heap.
+    let body = file;
+    if (textRewrites.length > 0 && REWRITABLE_TEXT_RE.test(contentType)) {
         let text = await file.text();
         for (const rewrite of textRewrites) {
             if (!rewrite?.from) continue;
             text = text.split(rewrite.from).join(rewrite.to || '');
         }
         body = new TextEncoder().encode(text);
-    } else {
-        body = await file.arrayBuffer();
     }
 
     const cacheControl = options.cacheControl || (isVersioned || options.immutable
@@ -968,7 +967,7 @@ async function serveLocalFile(filePath, reqPath, options = {}) {
         status: 200,
         headers: {
             'Content-Type': contentType,
-            'Content-Length': body.byteLength.toString(),
+            'Content-Length': String(body === file ? file.size : body.byteLength),
             'Cache-Control': cacheControl,
             'Server': 'Bun-Proxy',
             'X-Proxy-Path': options.proxyPath || 'static-bypass',
@@ -1068,7 +1067,10 @@ async function startModuleServicesIfNeeded() {
 }
 async function proxyDashboard(req, reqPath, search, user = null) {
     const targetUrl = `${DASHBOARD_TARGET}${reqPath}${search}`;
-    const headers = buildProxyHeaders(req, {}, user);
+    // Identity transfer end-to-end: Bun fetch auto-decompresses any encoded
+    // upstream body, so requesting gzip only buys a decompress pass at the
+    // gateway before streaming plain bytes to the client anyway.
+    const headers = buildProxyHeaders(req, { stripAcceptEncoding: true }, user);
 
     try {
         const response = await fetch(targetUrl, {
@@ -1124,14 +1126,16 @@ function hasRequestBody(method) {
 // ALWAYS stripped first — only the gateway (which verifies the RS256 cookie)
 // may set these, so upstream modules can trust them as authenticated identity.
 const USER_HEADER_NAMES = ['x-user-id', 'x-user-name', 'x-user-email', 'x-user-role'];
+const HOP_BY_HOP_HEADERS = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade']);
+const USER_HEADER_NAME_SET = new Set(USER_HEADER_NAMES);
 
 function buildProxyHeaders(req, options = {}, user = null) {
     const headers = new Headers();
     for (const [key, value] of req.headers.entries()) {
         const lower = key.toLowerCase();
-        if (['connection', 'keep-alive', 'transfer-encoding', 'upgrade'].includes(lower)) continue;
+        if (HOP_BY_HOP_HEADERS.has(lower)) continue;
         if (lower === 'host') continue;
-        if (USER_HEADER_NAMES.includes(lower)) continue; // anti-spoof: strip inbound
+        if (USER_HEADER_NAME_SET.has(lower)) continue; // anti-spoof: strip inbound
         if (options.stripAcceptEncoding && lower === 'accept-encoding') continue;
         headers.set(key, value);
     }
@@ -1147,10 +1151,12 @@ function buildProxyHeaders(req, options = {}, user = null) {
     return headers;
 }
 
+const RESPONSE_HEADERS_TO_STRIP = new Set(['content-length', 'transfer-encoding', 'connection', 'content-encoding']);
+
 function copyResponseHeaders(source) {
     const headers = new Headers();
     source.forEach((value, key) => {
-        if (['content-length', 'transfer-encoding', 'connection', 'content-encoding'].includes(key.toLowerCase())) return;
+        if (RESPONSE_HEADERS_TO_STRIP.has(key)) return;
         headers.set(key, value);
     });
     return headers;
@@ -1213,20 +1219,18 @@ async function prewarmConnections() {
 }
 
 // ─── Bun HTTP Server ─────────────────────────────────────────────────────────
-async function proxyRequest(req, route, reqPath, user = null) {
-    const url = new URL(req.url);
+async function proxyRequest(req, route, reqPath, search, user = null) {
     const targetPath = route.rewritePath === false
         ? reqPath
         : (reqPath.slice(route.path.length) || '/');
-    const targetUrl = `${route.target}${targetPath}${url.search}`;
-    const acceptEncoding = req.headers.get('accept-encoding') || '';
+    const targetUrl = `${route.target}${targetPath}${search}`;
     const shouldRewriteContent = route.rewriteContent === true || route.rewriteContent === 'html-only';
 
     // ── Static Extension Fast-Path ──────────────────────────────────────────
     // Skip buffering entirely — serve as streaming passthrough
     if (STATIC_EXTENSIONS_RE.test(reqPath) && route.path === '/upah') {
         const fetchOptions = {
-            headers: { 'Accept-Encoding': acceptEncoding },
+            headers: {},
             method: req.method,
             redirect: 'follow',
             signal: req.signal,
@@ -1250,11 +1254,12 @@ async function proxyRequest(req, route, reqPath, user = null) {
         } catch { /* fall through to normal proxy */ }
     }
 
-    const headers = buildProxyHeaders(req, { stripAcceptEncoding: shouldRewriteContent }, user);
+    const headers = buildProxyHeaders(req, { stripAcceptEncoding: true }, user);
 
     const startTime = Date.now();
-    // Cache key includes acceptEncoding so gzip/br responses aren't served to clients that didn't request compression
-    const cacheKey = `${req.method}:${reqPath}:${acceptEncoding}`;
+    // Upstream always receives stripped accept-encoding → identity bodies only,
+    // so client encoding needn't be part of the cache key.
+    const cacheKey = `${req.method}:${reqPath}`;
 
     // 304 Not Modified — ETag conditional check before hitting upstream
     const upstreamETag = req.headers.get('if-none-match');
@@ -1619,6 +1624,24 @@ server = Bun.serve({
             : null;
         const route = directRoute || refererRoute;
         const routeReqPath = directRoute ? reqPath : `${route?.path || ''}${reqPath}`;
+
+        // ── Static file bypass (zero overhead — fastest path) ───────────────
+        // Runs BEFORE auth on purpose: local files carry no identity headers,
+        // so asset requests skip cookie parsing + JWT verify entirely.
+        const staticFile = getStaticFilePath(reqPath);
+        if (staticFile) {
+            try {
+                const response = await serveLocalFile(staticFile.path, reqPath, {
+                    immutable: staticFile.root.immutable,
+                    textRewrites: staticFile.root.textRewrites,
+                    cacheControl: staticFile.root.immutable
+                        ? 'public, max-age=31536000, immutable'
+                        : undefined,
+                });
+                if (response) return response;
+            } catch { /* fall through to proxy */ }
+        }
+
         const token = extractToken(req.headers.get('cookie') || '');
         const user = token ? verifyJwtForRoot(token) : null;
 
@@ -1637,21 +1660,6 @@ server = Bun.serve({
         const isIfessClientRpc = reqPath.startsWith('/ifess') && !reqPath.startsWith('/ifess-control') && !reqPath.startsWith('/ifess-assets');
         if (isIfessClientRpc && !hApiKey) { return new Response(JSON.stringify({error:{code:'UNAUTHORIZED',message:'X-API-Key required'}}), { status: 401, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
         if (isIfessClientRpc && hApiKey !== IFESS_CLIENT_API_KEY) { return new Response(JSON.stringify({error:{code:'FORBIDDEN',message:'Invalid X-API-Key'}}), { status: 403, headers: { 'Content-Type': 'application/json', 'Server': 'Bun-Gateway' } }); }
-
-        // ── Static file bypass (zero overhead — fastest path) ───────────────
-        const staticFile = getStaticFilePath(reqPath);
-        if (staticFile) {
-            try {
-                const response = await serveLocalFile(staticFile.path, reqPath, {
-                    immutable: staticFile.root.immutable,
-                    textRewrites: staticFile.root.textRewrites,
-                    cacheControl: staticFile.root.immutable
-                        ? 'public, max-age=31536000, immutable'
-                        : undefined,
-                });
-                if (response) return response;
-            } catch { /* fall through to proxy */ }
-        }
 
         if (route && route.public !== true && !user) {
             return redirectToLogin(req, reqPath, url.search);
@@ -1701,7 +1709,7 @@ server = Bun.serve({
 
         // ── Proxy to upstream ───────────────────────────────────────────────
         if (route) {
-            return proxyRequest(req, route, routeReqPath, user);
+            return proxyRequest(req, route, routeReqPath, url.search, user);
         }
 
         if (isProtectedPath(reqPath) && !user) {

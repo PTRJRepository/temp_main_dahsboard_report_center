@@ -23,7 +23,8 @@
     "smoke:gateway": "bun scripts/gateway-smoke.js",
     "bench": "bun run test.ts",
     "dev:gateway": "cross-env NODE_ENV=development HOST=0.0.0.0 DASHBOARD_HOST=0.0.0.0 DASHBOARD_PORT=3100 START_DASHBOARD=false START_MODULE_SERVICES=false bun run server_bun.js",
-    "dev:report-center": "powershell -ExecutionPolicy Bypass -File scripts/start-report-center.ps1",
+    "dev:report-center": "bun --cwd \"Module Services/report-center\" run dev",
+    "start:report-center": "bun --cwd \"Module Services/report-center\" run start",
     "dev:ifess-services": "powershell -ExecutionPolicy Bypass -File scripts/start-ifess-services.ps1"
   },
   "dependencies": {

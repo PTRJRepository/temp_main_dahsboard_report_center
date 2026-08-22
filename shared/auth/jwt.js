@@ -60,3 +60,33 @@ export function extractToken(cookieHeader) {
     const match = cookieHeader.match(/(?:^|;\s*)(?:auth-token|payroll_auth_token)=([^;]+)/);
     return match ? decodeURIComponent(match[1]) : null;
 }
+
+// Verified-payload cache: RS256 verify costs ~1ms CPU per call and browsers
+// resend the SAME cookie on every request of a session, so cache verified
+// payloads keyed by raw token until exp−5s. Bounded map; oldest entry evicted
+// at cap, expired entries dropped on access. Key rotation takes effect once
+// cached tokens expire (same trust window as the JWT itself).
+const _verifiedCache = new Map();
+const VERIFIED_CACHE_MAX = 1000;
+
+/**
+ * verifyJWT with a per-process result cache. Same contract as verifyJWT —
+ * returns the payload on success, null otherwise, never throws.
+ */
+export function verifyJWTCached(token, rootDir) {
+    if (!token) return null;
+    const hit = _verifiedCache.get(token);
+    if (hit) {
+        if (Date.now() < hit.exp - 5000) return hit.payload;
+        _verifiedCache.delete(token);
+        return null;
+    }
+    const payload = verifyJWT(token, rootDir);
+    if (payload?.exp) {
+        if (_verifiedCache.size >= VERIFIED_CACHE_MAX) {
+            _verifiedCache.delete(_verifiedCache.keys().next().value);
+        }
+        _verifiedCache.set(token, { payload, exp: payload.exp * 1000 });
+    }
+    return payload;
+}

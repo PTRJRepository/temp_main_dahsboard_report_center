@@ -2,17 +2,20 @@
 
 ## Project Structure & Module Organization
 
-This workspace contains a Bun/Express proxy gateway at the root and the main Next.js dashboard in `Dashboard_Utama/`.
+Monorepo: root Bun/Express proxy gateway + main Next.js dashboard in `Dashboard_Utama/` + **isolated, independent module services** in `Module Services/`.
 
-- `server.js`: root proxy/API gateway entrypoint.
-- `Dashboard_Utama/app/`: Next.js App Router pages and API routes. Route groups: `(landing-page)` public site, `(login)` auth + user/admin dashboards, `(report-center)` thin auth-gated route pages.
-- `Dashboard_Utama/modules/report-center/`: **Report Center module** — self-contained components/store/lib with its own `package.json` stub, ready for micro-repo extraction. Landing page must not import from it.
-- `Dashboard_Utama/components/`: reusable React UI components (shared app chrome; report-center-specific components live in `modules/report-center/`).
-- `Dashboard_Utama/lib/`: shared utilities and generic helpers. Report logic lives in `modules/report-center/lib/reports/`.
-- `Dashboard_Utama/store/`, `context/`, `types/`, `utils/`: client state and shared app support.
-- `Dashboard_Utama/public/` and `assets/`: static assets.
-- `Dashboard_Utama/prisma/`: Prisma schema and database support files.
-- Local tests currently live beside modules, for example `modules/report-center/lib/reports/*.test.ts`.
+- `server.js` / `server_bun.js`: root proxy/API gateway entrypoints.
+- `Dashboard_Utama/app/`: Next.js App Router pages and API routes. Route groups: `(landing-page)` public site, `(login)` auth + user/admin dashboards, `(report-center)` thin re-export stubs.
+- `Module Services/report-center/`: **Report Center module** — standalone Next.js app (own port 3101, `bun start`). Owns `app/`, `components/`, `lib/`, `store/`, `utils/`. Pages + `/api/reports` handlers live here; Dashboard_Utama re-exports them. See its README.
+- `Module Services/*`: other module services (ifess-control, rjfm, Wifi_LAN_Monitor).
+- `keys/report-center-access.key`: shared access key for module login (gitignored, rotate by editing; all modules read the same file).
+- `Dashboard_Utama/components/`: reusable React UI components (shared app chrome; report-center components live in the module).
+- `Dashboard_Utama/lib/`: shared utilities and generic helpers.
+- Local tests live beside modules, for example `Module Services/report-center/lib/reports/*.test.ts`.
+
+Rules:
+- Module services must stay self-contained — never import Dashboard_Utama internals; Dashboard_Utama imports modules via `@modules/*`.
+- Gateway routes for modules live in `routes-config.json`; `shared/auth/paths.js` DASHBOARD_PATHS must not include module paths.
 
 ## Build, Test, and Development Commands
 
@@ -30,6 +33,14 @@ Run dashboard commands from `Dashboard_Utama/`:
 - `npm run lint`: run ESLint with Next core-web-vitals and TypeScript rules.
 - `npx tsc --noEmit`: run TypeScript validation.
 - `npx tsx modules/report-center/lib/reports/accounting-period.test.ts`: run a standalone assert-based test.
+
+Run module commands from `Module Services/report-center/`:
+
+- `bun start`: serve the standalone report center (port 3101).
+- `bun run dev`: Next.js dev server (port 3101).
+- `bun run build`: production build.
+- `npx tsc --noEmit`: TypeScript validation.
+- `npx tsx lib/reports/sql-gateway-config.test.ts`: module unit test.
 
 ## Coding Style & Naming Conventions
 
