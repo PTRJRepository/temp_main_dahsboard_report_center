@@ -15,7 +15,7 @@
  */
 
 // ─── ESM Imports (must be at top) ────────────────────────────────────────────
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { verifyJWT, extractToken } from './shared/auth/jwt.js';
@@ -684,6 +684,40 @@ setInterval(() => {
     catch (e) { /* reaper must never crash the gateway */ }
 }, 30000);
 
+// Routes hot-reload: if routes-config.json mtime changes, reload the table and
+// rebuild derived artifacts (rewrite regexes, static roots). Cheap stat every 5s.
+let _routesMtime = 0;
+try { _routesMtime = statSync(routesConfigPath).mtimeMs; } catch { /* file gone? */ }
+setInterval(() => {
+    try {
+        const m = statSync(routesConfigPath).mtimeMs;
+        if (m !== _routesMtime) {
+            _routesMtime = m;
+            const configuredRoutes = JSON.parse(readFileSync(routesConfigPath, 'utf-8'))
+                .filter(r => r.enabled !== false)
+                .flatMap(route => [
+                    route,
+                    ...(Array.isArray(route.aliases)
+                        ? route.aliases.map(alias => ({
+                            ...route,
+                            id: `${route.id}:${alias}`,
+                            path: alias,
+                            rewritePath: false,
+                            staticRoots: [],
+                            spaIndex: undefined,
+                            hidden: true,
+                        }))
+                        : []),
+                ]);
+            routesConfig = configuredRoutes.sort((a, b) => b.path.length - a.path.length);
+            refreshRouteDerivedArtifacts();
+            console.log(`[routes] hot-reloaded ${routesConfig.length} routes`);
+        }
+    } catch (e) {
+        console.error(`[routes] hot-reload failed: ${e.message}`);
+    }
+}, 5000);
+
 // ─── Routes Configuration ─────────────────────────────────────────────────────
 const routesConfigPath = `${ROOT_DIR}/routes-config.json`;
 let routesConfig = [];
@@ -714,17 +748,33 @@ try {
     process.exit(1);
 }
 
+// Artifacts derived from the route table; rebuilt whenever the config file
+// changes on disk (mtime hot-reload — previously regexes/staticRoots were
+// built once at boot and went stale after route edits).
+let routeDerived = null;
+function refreshRouteDerivedArtifacts() {
+    // Rewrite regexes derived from the live route table (was a hardcoded
+    // service-name list — stale whenever a route was added/renamed).
+    const pathAlts = routesConfig.map(r => r.path.replace(/^\//, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    REWRITE_PATTERNS.length = 0;
+    REWRITE_PATTERNS.push(
+        { from: /https?:\/\/localhost:8002\//g, to: '/upah/' },
+        { from: /https?:\/\/localhost:5176\//g, to: '/absen/' },
+        { from: /https?:\/\/localhost:5177\//g, to: '/monitoring-beras/' },
+        { from: /https?:\/\/localhost:5178\//g, to: '/file/' },
+        { from: /https?:\/\/localhost:8003\//g, to: '/ifess/' },
+        { from: new RegExp(`src="(/(?!${pathAlts}|backend|assets|dashboard|src|@vite|node_modules)[^"]*)"`, 'g'), to: 'src="/dashboard$1"' },
+        { from: new RegExp(`href="(/(?!${pathAlts}|backend|assets|dashboard|src|@vite|node_modules)[^"]*)"`, 'g'), to: 'href="/dashboard$1"' },
+        { from: /ws:\/\/localhost:\d+/g, to: `ws://localhost:${PORT}` },
+    );
+    staticRoots = [
+        ...routesConfig.flatMap(normalizeStaticRoots),
+        ...DEFAULT_STATIC_ROOTS,
+    ].sort((a, b) => b.prefix.length - a.prefix.length);
+}
+
 // ─── URL Rewriting Utilities ──────────────────────────────────────────────────
-const REWRITE_PATTERNS = [
-    { from: /https?:\/\/localhost:8002\//g, to: '/upah/' },
-    { from: /https?:\/\/localhost:5176\//g, to: '/absen/' },
-    { from: /https?:\/\/localhost:5177\//g, to: '/monitoring-beras/' },
-    { from: /https?:\/\/localhost:5178\//g, to: '/file/' },
-    { from: /https?:\/\/localhost:8003\//g, to: '/ifess/' },
-    { from: /src="\/(?!upah|absen|monitoring-beras|server-monitor|network-monitor|report-center|report-center-assets|file|ifess|backend|query|assets|dashboard|src|@vite|node_modules)/g, to: 'src="/dashboard/' },
-    { from: /href="\/(?!upah|absen|monitoring-beras|server-monitor|network-monitor|report-center|report-center-assets|file|ifess|backend|query|assets|dashboard|src|@vite|node_modules)/g, to: 'href="/dashboard/' },
-    { from: /ws:\/\/localhost:\d+/g, to: `ws://localhost:${PORT}` },
-];
+const REWRITE_PATTERNS = [];
 
 function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -853,10 +903,10 @@ function normalizeStaticRoots(route) {
     }));
 }
 
-const staticRoots = [
-    ...routesConfig.flatMap(normalizeStaticRoots),
-    ...DEFAULT_STATIC_ROOTS,
-].sort((a, b) => b.prefix.length - a.prefix.length);
+let staticRoots = [];
+try {
+    refreshRouteDerivedArtifacts();
+} catch { /* staticRoots stays empty → route staticRoots just won't match */ }
 
 function getStaticFilePath(reqPath) {
     const root = staticRoots.find(item => reqPath === item.prefix || reqPath.startsWith(`${item.prefix}/`));
@@ -1016,9 +1066,9 @@ async function startModuleServicesIfNeeded() {
     console.log('[startup] Module services are external — not started by gateway');
     return;
 }
-async function proxyDashboard(req, reqPath, search) {
+async function proxyDashboard(req, reqPath, search, user = null) {
     const targetUrl = `${DASHBOARD_TARGET}${reqPath}${search}`;
-    const headers = buildProxyHeaders(req);
+    const headers = buildProxyHeaders(req, {}, user);
 
     try {
         const response = await fetch(targetUrl, {
@@ -1070,14 +1120,26 @@ function hasRequestBody(method) {
     return method !== 'GET' && method !== 'HEAD';
 }
 
-function buildProxyHeaders(req, options = {}) {
+// Identity headers injected into every proxied request. Inbound copies are
+// ALWAYS stripped first — only the gateway (which verifies the RS256 cookie)
+// may set these, so upstream modules can trust them as authenticated identity.
+const USER_HEADER_NAMES = ['x-user-id', 'x-user-name', 'x-user-email', 'x-user-role'];
+
+function buildProxyHeaders(req, options = {}, user = null) {
     const headers = new Headers();
     for (const [key, value] of req.headers.entries()) {
         const lower = key.toLowerCase();
         if (['connection', 'keep-alive', 'transfer-encoding', 'upgrade'].includes(lower)) continue;
         if (lower === 'host') continue;
+        if (USER_HEADER_NAMES.includes(lower)) continue; // anti-spoof: strip inbound
         if (options.stripAcceptEncoding && lower === 'accept-encoding') continue;
         headers.set(key, value);
+    }
+    if (user) {
+        if (user.userId != null) headers.set('X-User-Id', String(user.userId));
+        if (user.name) headers.set('X-User-Name', user.name);
+        if (user.email) headers.set('X-User-Email', user.email);
+        if (user.role) headers.set('X-User-Role', user.role);
     }
     headers.set('X-Forwarded-For', req.headers.get('x-forwarded-for') || '127.0.0.1');
     headers.set('X-Forwarded-Host', req.headers.get('host') || `localhost:${PORT}`);
@@ -1094,7 +1156,18 @@ function copyResponseHeaders(source) {
     return headers;
 }
 
-async function proxyFirebirdQueryService(req, reqPath, search) {
+// TCP reachability probe for /api/services/status (Bun.connect, 500ms cap).
+async function checkTcpPort(hostname, port, timeoutMs = 500) {
+    await Promise.race([
+        Bun.connect({ hostname, port, socket: { data() {}, close() {}, error() {} } })
+            .then(sock => { try { sock.end(); } catch { /* already closed */ } }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tcp-timeout')), timeoutMs)),
+    ]);
+}
+
+const serviceStatusCache = { at: 0, value: null };
+
+async function proxyFirebirdQueryService(req, reqPath, search, user = null) {
     const servicePath = reqPath
         .replace(/^\/api\/ifess\/query-gateway/, '')
         .replace(/^\/api\/query-gateway/, '') || '/';
@@ -1103,7 +1176,7 @@ async function proxyFirebirdQueryService(req, reqPath, search) {
     try {
         const response = await fetch(targetUrl, {
             method: req.method,
-            headers: buildProxyHeaders(req),
+            headers: buildProxyHeaders(req, {}, user),
             body: hasRequestBody(req.method) ? req.body : undefined,
             redirect: 'manual',
             signal: req.signal,
@@ -1140,7 +1213,7 @@ async function prewarmConnections() {
 }
 
 // ─── Bun HTTP Server ─────────────────────────────────────────────────────────
-async function proxyRequest(req, route, reqPath) {
+async function proxyRequest(req, route, reqPath, user = null) {
     const url = new URL(req.url);
     const targetPath = route.rewritePath === false
         ? reqPath
@@ -1177,7 +1250,7 @@ async function proxyRequest(req, route, reqPath) {
         } catch { /* fall through to normal proxy */ }
     }
 
-    const headers = buildProxyHeaders(req, { stripAcceptEncoding: shouldRewriteContent });
+    const headers = buildProxyHeaders(req, { stripAcceptEncoding: shouldRewriteContent }, user);
 
     const startTime = Date.now();
     // Cache key includes acceptEncoding so gzip/br responses aren't served to clients that didn't request compression
@@ -1517,6 +1590,29 @@ server = Bun.serve({
             }));
         }
 
+        // Service health for the portal cards: TCP-check each enabled route
+        // target. Cached 30s so many users don't multiply probes.
+        if (reqPath === '/api/services/status') {
+            const statusToken = extractToken(req.headers.get('cookie') || '');
+            const statusUser = statusToken ? verifyJwtForRoot(statusToken) : null;
+            if (!statusUser) return redirectToLogin(req, reqPath, url.search);
+
+            if (!serviceStatusCache.value || Date.now() - serviceStatusCache.at > 30_000) {
+                const checks = routesConfig
+                    .filter(r => !r.hidden && isHttpTarget(r.target) && r.target.startsWith('http://127.0.0.1'))
+                    .map(async r => {
+                        try {
+                            const u = new URL(r.target);
+                            await checkTcpPort(u.hostname, Number(u.port) || 80, 500);
+                            return { serviceId: r.id, path: r.path, up: true };
+                        } catch { return { serviceId: r.id, path: r.path, up: false }; }
+                    });
+                serviceStatusCache.value = await Promise.all(checks);
+                serviceStatusCache.at = Date.now();
+            }
+            return jsonResp(200, { success: true, checkedAt: serviceStatusCache.at, services: serviceStatusCache.value });
+        }
+
         const directRoute = matchRoute(reqPath);
         const refererRoute = !directRoute && isViteDevAssetPath(reqPath)
             ? matchRouteFromReferer(req)
@@ -1600,12 +1696,12 @@ server = Bun.serve({
 
         // ── Dashboard paths first (before route matching) ─────────────────────
         if (isDashboardPath(reqPath)) {
-            return proxyDashboard(req, reqPath, url.search);
+            return proxyDashboard(req, reqPath, url.search, user);
         }
 
         // ── Proxy to upstream ───────────────────────────────────────────────
         if (route) {
-            return proxyRequest(req, route, routeReqPath);
+            return proxyRequest(req, route, routeReqPath, user);
         }
 
         if (isProtectedPath(reqPath) && !user) {
