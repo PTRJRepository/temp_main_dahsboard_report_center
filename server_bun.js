@@ -15,7 +15,7 @@
  */
 
 // ─── ESM Imports (must be at top) ────────────────────────────────────────────
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { verifyJWTCached, extractToken } from './shared/auth/jwt.js';
@@ -53,7 +53,9 @@ const PORT = parseInt(process.env.PORT || '3001');
 const HOST = process.env.HOST || '0.0.0.0';
 const DASHBOARD_DIR = `${ROOT_DIR}/Dashboard_Utama`;
 const DASHBOARD_PORT = parseInt(process.env.DASHBOARD_PORT || '3100');
-const DASHBOARD_HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
+// Portal binds loopback only: LAN users must go through the gateway (:3001) —
+// direct portal access would bypass the auth center.
+const DASHBOARD_HOST = process.env.DASHBOARD_HOST || '127.0.0.1';
 const DASHBOARD_TARGET = process.env.DASHBOARD_TARGET || `http://127.0.0.1:${DASHBOARD_PORT}`;
 const FIREBIRD_QUERY_TARGET = process.env.FIREBIRD_QUERY_TARGET || 'http://localhost:8004';
 const START_DASHBOARD = process.env.START_DASHBOARD !== 'false';
@@ -1026,37 +1028,77 @@ async function isUpstreamReady(target) {
     }
 }
 
-async function startDashboardIfNeeded() {
-    if (await isUpstreamReady(DASHBOARD_TARGET)) {
-        console.log(`Dashboard upstream ready: ${DASHBOARD_TARGET}`);
-        return;
-    }
+// ─── Portal (Dashboard_Utama) supervisor ─────────────────────────────────────
+// The portal is a CHILD of the gateway, never a peer the operator manages:
+// production runs its standalone build (instant start, no compiler); dev runs
+// `next dev` for HMR. If it dies, it is respawned with exponential backoff —
+// the gateway and every proxied module stay up regardless.
+let _portalChild = null;
+let _portalRespawnDelayMs = 3000;
 
-    const bunExecutable = process.execPath;
-    console.log(`Starting dashboard dev server on ${DASHBOARD_HOST}:${DASHBOARD_PORT}...`);
-    const child = Bun.spawn({
-        cmd: [bunExecutable, 'run', 'dev', '--', '-p', String(DASHBOARD_PORT), '--hostname', DASHBOARD_HOST],
+function portalSpawnCmd() {
+    const standaloneServer = process.env.DASHBOARD_STANDALONE
+        || `${DASHBOARD_DIR}/.next/standalone/Dashboard_Utama/server.js`;
+    if (process.env.NODE_ENV === 'production' && !process.env.DASHBOARD_DEV && existsSync(standaloneServer)) {
+        return { cmd: [process.execPath, standaloneServer], kind: 'standalone' };
+    }
+    return {
+        cmd: [process.execPath, 'run', 'dev', '--', '-p', String(DASHBOARD_PORT), '--hostname', DASHBOARD_HOST],
         cwd: DASHBOARD_DIR,
+        kind: 'dev',
+    };
+}
+
+function spawnPortalChild() {
+    const spec = portalSpawnCmd();
+    console.log(`[portal] starting (${spec.kind}) on ${DASHBOARD_HOST}:${DASHBOARD_PORT}...`);
+    const child = Bun.spawn({
+        cmd: spec.cmd,
+        cwd: spec.cwd || ROOT_DIR,
         stdout: 'inherit',
         stderr: 'inherit',
         env: {
             ...process.env,
             HOST: DASHBOARD_HOST,
             PORT: String(DASHBOARD_PORT),
+            HOSTNAME: DASHBOARD_HOST,
+            NODE_ENV: process.env.NODE_ENV || 'development',
         },
     });
+    _portalChild = child;
+    process.on('exit', () => { try { child.kill(); } catch { /* already gone */ } });
 
-    process.on('exit', () => child.kill());
+    // Respawn watchdog with exponential backoff (3s → 6s → … cap 60s; reset on long uptime).
+    child.exited.then(code => {
+        _portalChild = null;
+        if (_portalShuttingDown) return;
+        console.error(`[portal] exited (code ${code}) — respawning in ${Math.round(_portalRespawnDelayMs / 1000)}s`);
+        setTimeout(async () => {
+            await spawnPortalChild();
+            _portalRespawnDelayMs = Math.min(_portalRespawnDelayMs * 2, 60_000);
+        }, _portalRespawnDelayMs);
+    }).catch(() => {});
+    return child;
+}
 
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+let _portalShuttingDown = false;
+async function startDashboardIfNeeded() {
+    if (await isUpstreamReady(DASHBOARD_TARGET)) {
+        console.log(`Portal upstream ready (external): ${DASHBOARD_TARGET}`);
+        return;
+    }
+
+    spawnPortalChild();
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
         await Bun.sleep(500);
         if (await isUpstreamReady(DASHBOARD_TARGET)) {
-            console.log(`Dashboard upstream ready: ${DASHBOARD_TARGET}`);
+            console.log(`Portal upstream ready: ${DASHBOARD_TARGET}`);
+            _portalRespawnDelayMs = 3000;
             return;
         }
     }
-
-    console.warn(`Dashboard upstream did not become ready yet: ${DASHBOARD_TARGET}`);
+    console.warn(`Portal upstream did not become ready yet: ${DASHBOARD_TARGET} (watchdog keeps retrying)`);
 }
 
 async function startModuleServicesIfNeeded() {
