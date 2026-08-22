@@ -6,6 +6,7 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   const base = process.env.VITE_BASE_PATH || '/server-monitor/';
   const hmrDisabled = process.env.DISABLE_HMR === 'true';
+  const port = Number(process.env.PORT || 3102);
 
   return {
     base,
@@ -16,6 +17,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      host: '0.0.0.0',
+      port,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: hmrDisabled
@@ -28,6 +31,10 @@ export default defineConfig(() => {
           },
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: hmrDisabled ? null : {},
+    },
+    preview: {
+      host: '0.0.0.0',
+      port,
     },
   };
 });

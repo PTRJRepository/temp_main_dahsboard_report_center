@@ -98,7 +98,7 @@
     "path": "/server-monitor",
     "servicePath": "/server-monitor/servers",
     "serviceUrl": "http://localhost:3001/server-monitor/servers",
-    "target": "http://localhost:3000",
+    "target": "http://127.0.0.1:3102",
     "name": "Server Monitor",
     "description": "Monitoring kesehatan server fisik dan virtual",
     "enabled": true,
@@ -150,13 +150,23 @@
     "path": "/report-center",
     "servicePath": "/report-center",
     "serviceUrl": "http://localhost:3001/report-center",
-    "target": "http://127.0.0.1:3100",
+    "target": "http://127.0.0.1:3101",
     "name": "Report Center",
     "description": "Dashboard laporan inventaris, analisis stok, dan pergerakan barang",
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": false,
     "image": "/assets/kebun sawit.webp"
+  },
+  {
+    "id": "api-reports",
+    "path": "/api/reports",
+    "target": "http://127.0.0.1:3101",
+    "description": "Report Center API",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false,
+    "public": true
   },
   {
     "id": "query",
@@ -168,21 +178,32 @@
     "rewritePath": false
   },
   {
-    "id": "file",
-    "path": "/file",
+    "id": "file-legacy",
+    "path": "/file-legacy",
     "target": "http://localhost:5178",
-    "description": "Google Drive File Gateway",
+    "description": "Google Drive File Gateway (legacy)",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": true
+    "rewritePath": true,
+    "public": true
+  },
+  {
+    "id": "file",
+    "path": "/file",
+    "target": "http://127.0.0.1:3100",
+    "description": "File Management LMS — Kerani=siswa (Next dashboard UI)",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false
   },
   {
     "id": "rjfm",
     "path": "/rjfm",
     "target": "http://localhost:8011",
-    "description": "Rebinmas Jaya File Management — task dispatch, file ingestion, mandatory revision loop",
+    "description": "RJFM API — task dispatch, file ingestion, mandatory revision loop",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": false
+    "rewritePath": false,
+    "public": true
   }
 ]
