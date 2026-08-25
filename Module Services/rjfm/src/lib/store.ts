@@ -63,6 +63,8 @@ export type Revision = {
   manager_feedback: string | null
   reviewed_at: string | null
 }
+export type DriveSource = 'upload' | 'task_submission'
+
 export type DriveItem = {
   file_id: number
   owner_user_id: number
@@ -77,6 +79,14 @@ export type DriveItem = {
   starred: boolean
   created_at: string
   updated_at: string
+  // Jejak asal berkas — untuk badge "dari siapa / kapan / catatan apa" di UI.
+  source?: DriveSource
+  source_task_id?: number | null
+  source_assignment_id?: number | null
+  task_title?: string | null
+  submitter_name?: string | null
+  submitted_at?: string | null
+  notes?: string | null
 }
 export type Notif = {
   notification_id: number
@@ -108,14 +118,16 @@ function seed(): Store {
   const hash = bcrypt.hashSync('kerani123', 8)
   const hashMgr = bcrypt.hashSync('manager123', 8)
   const hashAdm = bcrypt.hashSync('admin123', 8)
+  // ID demo pakai rentang TINGGI (9xxxx) supaya tidak bentrok dengan ID asli
+  // user_ptrj (1..30-an) saat sinkronisasi directory DB → store.
   const s: Store = {
-    seq: { user: 3, cat: 5, afd: 5, task: 2, assignment: 3, revision: 1, drive: 6, notif: 2 },
+    seq: { user: 90003, cat: 5, afd: 5, task: 2, assignment: 3, revision: 1, drive: 6, notif: 2 },
     users: [
-      { user_id: 1, username: 'manager', full_name: 'Estate Manager', email: 'manager@rebinmas.local', phone_number: '+628111000001', role_code: 'MANAGER', afdeling_id: null, password_hash: hashMgr, is_active: true },
-      { user_id: 2, username: 'kerani', full_name: 'Kerani Afdeling 01', email: 'kerani@rebinmas.local', phone_number: '+628111000002', role_code: 'KERANI', afdeling_id: 1, password_hash: hash, is_active: true },
-      { user_id: 3, username: 'asisten', full_name: 'Asisten Afdeling 01', email: 'asisten@rebinmas.local', phone_number: '+628111000003', role_code: 'ASISTEN', afdeling_id: 1, password_hash: hashMgr, is_active: true },
-      { user_id: 4, username: 'admin', full_name: 'Superadmin IT', email: 'admin@rebinmas.local', phone_number: '+628111000000', role_code: 'SUPERADMIN', afdeling_id: null, password_hash: hashAdm, is_active: true },
-      { user_id: 5, username: 'kerani_afd2', full_name: 'Kerani Afdeling 02', email: 'kerani2@rebinmas.local', phone_number: '+628111000004', role_code: 'KERANI', afdeling_id: 2, password_hash: hash, is_active: true },
+      { user_id: 90001, username: 'manager', full_name: 'Estate Manager', email: 'manager@rebinmas.local', phone_number: '+628111000001', role_code: 'MANAGER', afdeling_id: null, password_hash: hashMgr, is_active: true },
+      { user_id: 90002, username: 'kerani', full_name: 'Kerani Afdeling 01', email: 'kerani@rebinmas.local', phone_number: '+628111000002', role_code: 'KERANI', afdeling_id: 1, password_hash: hash, is_active: true },
+      { user_id: 90003, username: 'asisten', full_name: 'Asisten Afdeling 01', email: 'asisten@rebinmas.local', phone_number: '+628111000003', role_code: 'ASISTEN', afdeling_id: 1, password_hash: hashMgr, is_active: true },
+      { user_id: 90004, username: 'admin_demo', full_name: 'Superadmin IT (demo)', email: 'admin@rebinmas.local', phone_number: '+628111000000', role_code: 'SUPERADMIN', afdeling_id: null, password_hash: hashAdm, is_active: true },
+      { user_id: 90005, username: 'kerani_afd2', full_name: 'Kerani Afdeling 02', email: 'kerani2@rebinmas.local', phone_number: '+628111000004', role_code: 'KERANI', afdeling_id: 2, password_hash: hash, is_active: true },
     ],
     categories: [
       { category_id: 1, category_name: 'Laporan Harian Panen (LHP)', description: 'Rekap pemetikan TBS', is_active: true },
@@ -133,7 +145,7 @@ function seed(): Store {
     ],
     tasks: [
       {
-        task_id: 1, category_id: 1, created_by_user_id: 1,
+        task_id: 1, category_id: 1, created_by_user_id: 90001,
         title: 'LHP Harian Afdeling 01 — 21 Agu 2026',
         description: 'Unggah scan LHP resmi yang ditandatangani mandor + foto kondisi TPH Blok C. Format PDF/JPG.',
         allowed_mime_types: 'application/pdf,image/jpeg,image/png',
@@ -141,7 +153,7 @@ function seed(): Store {
         priority: 'HIGH', template_file_path: null, is_active: true, created_at: now(),
       },
       {
-        task_id: 2, category_id: 3, created_by_user_id: 3,
+        task_id: 2, category_id: 3, created_by_user_id: 90003,
         title: 'Rekap Restan TBS TPH 12–14',
         description: 'Hitung restan per TPH. Jika ada selisih vs nota PKS, lampirkan foto tumpukan.',
         allowed_mime_types: 'application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg',
@@ -150,9 +162,9 @@ function seed(): Store {
       },
     ],
     assignments: [
-      { assignment_id: 1, task_id: 1, kerani_user_id: 2, current_status: 'ASSIGNED', assigned_at: now(), completed_at: null },
-      { assignment_id: 2, task_id: 2, kerani_user_id: 2, current_status: 'REVISION_NEEDED', assigned_at: now(), completed_at: null },
-      { assignment_id: 3, task_id: 1, kerani_user_id: 5, current_status: 'ASSIGNED', assigned_at: now(), completed_at: null },
+      { assignment_id: 1, task_id: 1, kerani_user_id: 90002, current_status: 'ASSIGNED', assigned_at: now(), completed_at: null },
+      { assignment_id: 2, task_id: 2, kerani_user_id: 90002, current_status: 'REVISION_NEEDED', assigned_at: now(), completed_at: null },
+      { assignment_id: 3, task_id: 1, kerani_user_id: 90005, current_status: 'ASSIGNED', assigned_at: now(), completed_at: null },
     ],
     revisions: [
       {
@@ -161,22 +173,22 @@ function seed(): Store {
         file_storage_path: 'drive/seed_restan_v1.pdf', file_size_bytes: 1200,
         file_mime_type: 'application/pdf', file_hash_sha256: crypto.createHash('sha256').update('seed').digest('hex'),
         notes_from_kerani: 'Draft awal restan TPH 12', submitted_at: now(),
-        reviewed_by_user_id: 1, review_status: 'REJECTED_NEEDS_REVISION',
+        reviewed_by_user_id: 90001, review_status: 'REJECTED_NEEDS_REVISION',
         manager_feedback: 'Angka tonase TPH 12 halaman 2 tidak sinkron dengan nota timbang PKS. Hitung ulang dan upload v2.',
         reviewed_at: now(),
       },
     ],
     drive: [
-      { file_id: 1, owner_user_id: 2, parent_id: null, name: 'Laporan Panen', kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: true, created_at: now(), updated_at: now() },
-      { file_id: 2, owner_user_id: 2, parent_id: null, name: 'Foto TPH', kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: false, created_at: now(), updated_at: now() },
-      { file_id: 3, owner_user_id: 2, parent_id: 1, name: 'Template_LHP.xlsx', kind: 'file', mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size_bytes: 2048, storage_path: 'drive/template_lhp.xlsx', sha256: 'abc', trashed: false, starred: false, created_at: now(), updated_at: now() },
-      { file_id: 4, owner_user_id: 1, parent_id: null, name: 'Shared Manager', kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: false, created_at: now(), updated_at: now() },
-      { file_id: 5, owner_user_id: 2, parent_id: null, name: 'Draft lama.pdf', kind: 'file', mime_type: 'application/pdf', size_bytes: 800, storage_path: 'drive/draft_lama.pdf', sha256: 'def', trashed: true, starred: false, created_at: now(), updated_at: now() },
-      { file_id: 6, owner_user_id: 2, parent_id: 2, name: 'tph-blok-c.jpg', kind: 'file', mime_type: 'image/jpeg', size_bytes: 4096, storage_path: 'drive/tph-blok-c.jpg', sha256: 'ghi', trashed: false, starred: true, created_at: now(), updated_at: now() },
+      { file_id: 1, owner_user_id: 90002, parent_id: null, name: 'Laporan Panen', kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: true, created_at: now(), updated_at: now() },
+      { file_id: 2, owner_user_id: 90002, parent_id: null, name: 'Foto TPH', kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: false, created_at: now(), updated_at: now() },
+      { file_id: 3, owner_user_id: 90002, parent_id: 1, name: 'Template_LHP.xlsx', kind: 'file', mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size_bytes: 2048, storage_path: 'drive/template_lhp.xlsx', sha256: 'abc', trashed: false, starred: false, created_at: now(), updated_at: now() },
+      { file_id: 4, owner_user_id: 90001, parent_id: null, name: 'Shared Manager', kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: false, created_at: now(), updated_at: now() },
+      { file_id: 5, owner_user_id: 90002, parent_id: null, name: 'Draft lama.pdf', kind: 'file', mime_type: 'application/pdf', size_bytes: 800, storage_path: 'drive/draft_lama.pdf', sha256: 'def', trashed: true, starred: false, created_at: now(), updated_at: now() },
+      { file_id: 6, owner_user_id: 90002, parent_id: 2, name: 'tph-blok-c.jpg', kind: 'file', mime_type: 'image/jpeg', size_bytes: 4096, storage_path: 'drive/tph-blok-c.jpg', sha256: 'ghi', trashed: false, starred: true, created_at: now(), updated_at: now() },
     ],
     notifications: [
-      { notification_id: 1, user_id: 2, title: 'Tugas baru: LHP Harian', message: 'Unggah scan LHP + foto TPH sebelum jam 17.00.', channel: 'IN_APP', related_task_id: 1, is_read: false, created_at: now() },
-      { notification_id: 2, user_id: 2, title: 'Perlu Revisi: Rekap Restan', message: 'Catatan Koreksi: Angka tonase TPH 12 tidak sinkron.', channel: 'IN_APP', related_task_id: 2, is_read: false, created_at: now() },
+      { notification_id: 1, user_id: 90002, title: 'Tugas baru: LHP Harian', message: 'Unggah scan LHP + foto TPH sebelum jam 17.00.', channel: 'IN_APP', related_task_id: 1, is_read: false, created_at: now() },
+      { notification_id: 2, user_id: 90002, title: 'Perlu Revisi: Rekap Restan', message: 'Catatan Koreksi: Angka tonase TPH 12 tidak sinkron.', channel: 'IN_APP', related_task_id: 2, is_read: false, created_at: now() },
     ],
   }
   s.seq.user = 5
@@ -247,7 +259,7 @@ export const store = {
     return list.map(a => {
       const t = s.tasks.find(x => x.task_id === a.task_id)
       const u = s.users.find(x => x.user_id === a.kerani_user_id)
-      return { ...a, title: t?.title, description: t?.description, deadline: t?.deadline, priority: t?.priority, kerani_username: u?.username }
+      return { ...a, title: t?.title, description: t?.description, deadline: t?.deadline, priority: t?.priority, kerani_username: u?.username, kerani_full_name: u?.full_name }
     })
   },
   assignment(id: number) {
@@ -290,6 +302,35 @@ export const store = {
     s.revisions.unshift(rev)
     a.current_status = 'SUBMITTED'
     a.completed_at = null
+    // Mirror otomatis ke Drive pribadi kerani (folder "Tugas") — berkas tugas
+    // = berkas drive, lengkap dengan jejak pengirim/waktu/catatan.
+    const kerani = s.users.find(u => u.user_id === a.kerani_user_id)
+    const task = s.tasks.find(t => t.task_id === a.task_id)
+    let folder = s.drive.find(d => d.owner_user_id === a.kerani_user_id && d.kind === 'folder' && !d.trashed && d.name.toLowerCase() === 'tugas')
+    if (!folder) {
+      folder = { file_id: next(s, 'drive'), owner_user_id: a.kerani_user_id, parent_id: null, name: 'Tugas', kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: false, created_at: now(), updated_at: now(), source: 'upload' }
+      s.drive.unshift(folder)
+    }
+    s.drive.unshift({
+      file_id: next(s, 'drive'),
+      owner_user_id: a.kerani_user_id,
+      parent_id: folder.file_id,
+      name: file.originalName,
+      kind: 'file',
+      mime_type: file.mimeType,
+      size_bytes: file.sizeBytes,
+      storage_path: file.storagePath,
+      sha256: file.sha256,
+      trashed: false, starred: false,
+      created_at: now(), updated_at: now(),
+      source: 'task_submission',
+      source_task_id: a.task_id,
+      source_assignment_id: assignmentId,
+      task_title: task?.title ?? `Tugas #${a.task_id}`,
+      submitter_name: kerani?.full_name || kerani?.username || `User #${a.kerani_user_id}`,
+      submitted_at: rev.submitted_at,
+      notes: notes || null,
+    })
     save()
     return rev
   },
@@ -349,10 +390,16 @@ export const store = {
     const item: DriveItem = { file_id, owner_user_id: ownerId, parent_id, name, kind: 'folder', mime_type: null, size_bytes: 0, storage_path: null, sha256: null, trashed: false, starred: false, created_at: now(), updated_at: now() }
     s.drive.unshift(item); save(); return item
   },
-  driveAddFile(ownerId: number, rec: Omit<DriveItem, 'file_id' | 'owner_user_id' | 'created_at' | 'updated_at' | 'trashed' | 'starred' | 'kind'> & { kind?: 'file' }) {
+  driveAddFile(ownerId: number, rec: Omit<DriveItem, 'file_id' | 'owner_user_id' | 'created_at' | 'updated_at' | 'trashed' | 'starred' | 'kind'> & { kind?: 'file' }, meta?: Partial<Pick<DriveItem, 'source' | 'submitter_name' | 'notes'>>) {
     const s = load()
     const file_id = next(s, 'drive')
-    const item: DriveItem = { file_id, owner_user_id: ownerId, kind: 'file', trashed: false, starred: false, created_at: now(), updated_at: now(), ...rec }
+    const item: DriveItem = {
+      file_id, owner_user_id: ownerId, kind: 'file', trashed: false, starred: false, created_at: now(), updated_at: now(),
+      source: meta?.source || 'upload',
+      submitter_name: meta?.submitter_name ?? null,
+      notes: meta?.notes ?? null,
+      ...rec,
+    }
     s.drive.unshift(item); save(); return item
   },
   drivePatch(id: number, ownerId: number, patch: Partial<Pick<DriveItem, 'name' | 'parent_id' | 'trashed' | 'starred'>>) {
@@ -379,6 +426,7 @@ export const store = {
         file_original_name: r.file_original_name, file_storage_path: r.file_storage_path,
         file_size_bytes: r.file_size_bytes, file_mime_type: r.file_mime_type, file_hash_sha256: r.file_hash_sha256,
         review_status: r.review_status, submitted_at: r.submitted_at, manager_feedback: r.manager_feedback,
+        notes_from_kerani: r.notes_from_kerani,
         task_id: a?.task_id, task_title: t?.title, kerani_user_id: a?.kerani_user_id, kerani_name: u?.full_name,
       }
     }).sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))

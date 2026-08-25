@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { auth, MANAGER_ROLES } from '../middleware/auth.js'
-import { saveBuffer, createReadStream } from '../lib/storage.js'
+import { saveBuffer, downloadBuffer, contentDisposition } from '../lib/storage.js'
 import { sniffMime, validateUpload, sanitizeFilename } from '../lib/validators.js'
 import { env } from '../config/env.js'
 import { store } from '../lib/store.js'
@@ -45,7 +45,7 @@ driveRouter.post('/upload', auth(), (req, res, next) => {
     const item = store.driveAddFile(req.user.user_id, {
       parent_id, name: saved.originalName, mime_type: saved.mimeType, size_bytes: saved.sizeBytes,
       storage_path: saved.storagePath, sha256: saved.sha256,
-    })
+    }, { source: 'upload', submitter_name: req.user.username || `User #${req.user.user_id}`, notes: null })
     res.status(201).json({ status: 'success', data: item })
   } catch (e: any) {
     res.status(e.status || 500).json({ status: 'error', message: e.message })
@@ -63,24 +63,25 @@ driveRouter.patch('/:id', auth(), (req, res) => {
   }
 })
 
-driveRouter.get('/:id/stream', auth(), (req, res) => {
+driveRouter.get('/:id/stream', auth(), async (req, res) => {
   const item = store.driveGet(Number(req.params.id))
   if (!item) return res.status(404).json({ status: 'error', message: 'Not found' })
   const isOwner = item.owner_user_id === req.user!.user_id
   const isManager = MANAGER_ROLES.includes(req.user!.role_code)
   if (!isOwner && !isManager) return res.status(404).json({ status: 'error', message: 'Not found' })
   if (item.kind === 'folder') return res.status(400).json({ status: 'error', message: 'folder' })
-  if (!item.storage_path) {
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-    return res.end(`(demo) ${item.name}`)
-  }
   try {
-    const stream = createReadStream(item.storage_path)
+    if (!item.storage_path) throw Object.assign(new Error('Berkas fisik tidak ditemukan'), { status: 404 })
+    const buf = await downloadBuffer(item.storage_path)
+    if (!buf || !buf.length) {
+      return res.status(404).json({ status: 'error', message: 'Berkas fisik tidak ditemukan di NAS. Mungkin terhapus atau belum tersinkron.' })
+    }
     res.setHeader('Content-Type', item.mime_type || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(item.name)}"`)
-    stream.on('error', () => { res.setHeader('Content-Type', 'text/plain'); res.end(`(demo) ${item.name}`) })
-    stream.pipe(res)
-  } catch {
-    res.setHeader('Content-Type', 'text/plain'); res.end(`(demo) ${item.name}`)
+    res.setHeader('Content-Disposition', contentDisposition(item.name))
+    res.send(buf)
+  } catch (e: any) {
+    if (res.headersSent) return res.end()
+    if (e.status === 404) return res.status(404).json({ status: 'error', message: 'Berkas fisik tidak ditemukan di NAS. Mungkin terhapus atau belum tersinkron.' })
+    res.status(e.status || 502).json({ status: 'error', message: e.message })
   }
 })

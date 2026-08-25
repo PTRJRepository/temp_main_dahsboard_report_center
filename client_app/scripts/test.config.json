@@ -1,0 +1,53 @@
+{
+  // Config khusus pengujian end-to-end dengan mock server (port 8100).
+  "controlServer": {
+    "enabled": true,
+    "baseUrl": "http://localhost:8100",
+    "apiKey": "test-key",
+    "clientId": "CLIENT-TEST-01",
+    "clientName": "Local Test Client",
+    "environment": "Test",
+    "heartbeatIntervalSeconds": 2,
+    "commandPollIntervalSeconds": 1,
+    "maxCommandsPerPoll": 20,
+    "requestTimeoutSeconds": 5,
+    "inflightCommands": 3,
+    "retry": { "baseDelaySeconds": 0.5, "maxDelaySeconds": 5, "jitterRatio": 0.2 }
+  },
+  "logging": { "rootPath": "logs", "retainDays": 3, "console": true },
+  "modules": [
+    {
+      "Code": "IFESS_AUTO_TASK_KILL",
+      "Name": "IFESS Auto Task Kill",
+      "Enabled": true,
+      "AutoStart": true,
+      "customConfig": {
+        "defaultTargets": ["definitely-not-running-target"],
+        "matchMode": "Exact",
+        "scheduleCheckIntervalSeconds": 2
+      }
+    },
+    {
+      "Code": "IFESS_QUERY_GATEWAY",
+      "Name": "IFESS Query Gateway",
+      "Enabled": true,
+      "AutoStart": true,
+      "customConfig": {
+        "database": {
+          "type": "Firebird",
+          "path": "",
+          "username": "TEST_USER",
+          "password": "test-password",
+          "useLocalhost": true
+        },
+        "queryPolicy": {
+          "maxRows": 100,
+          "timeoutSeconds": 10,
+          "maxConcurrentQueries": 2,
+          "maxQueueSize": 10,
+          "chunkSize": 50
+        }
+      }
+    }
+  ]
+}

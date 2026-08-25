@@ -16,6 +16,35 @@ const STANDALONE = process.env.RJFM_UI_STANDALONE
 const STATIC_ASSETS = path.resolve(__dirname, '../../ui-app/.next/static')
 const PUBLIC_DIR = path.join(STANDALONE, 'public')
 
+/**
+ * Rewriter /api/file/* → /api/v1/*.
+ * WAJIB tax dipasang SEBELUM route API di server.ts (app-level, bukan router
+ * ter-scope: req.url di middleware ter-scope hanya berisi suffix). originalUrl
+ * ikut di-rewrite supaya fallback proxy UI tidak mengirim path lama ke Next.
+ */
+export function mountApiRewriter(app: express.Express) {
+  app.use((req: any, res: any, next: any) => {
+    if (req.url === '/api/file' || req.url.startsWith('/api/file/')) {
+      const rest = req.url.slice('/api/file'.length)
+      // Pemetaan path UI → API:
+      //   /api/file/login|logout            → /api/v1/auth/login|logout
+      //   /api/file/meta/users              → /api/v1/users   (metaRouter di root)
+      //   /api/file/meta/admin/*            → /api/v1/admin/*
+      //   /api/file/meta/notifications[/id/read] → /api/v1/notifications...
+      //   /api/file/files/<id>/stream       → /api/v1/files/<id>/stream
+      //   sisanya (tasks, assignments, drive, submissions) → /api/v1/<suffix>
+      let target: string
+      if (rest === '/login' || rest === '/logout') target = '/api/v1/auth' + rest
+      else if (rest.startsWith('/meta/admin/')) target = '/api/v1/admin/' + rest.slice('/meta/admin/'.length)
+      else if (rest.startsWith('/meta/')) target = '/api/v1/meta' + rest.slice('/meta'.length)
+      else target = '/api/v1' + rest
+      req.url = target
+      req.originalUrl = target
+    }
+    next()
+  })
+}
+
 export function mountUi(app: express.Express): Promise<void> {
   if (!fs.existsSync(path.join(STANDALONE, 'server.js'))) {
     console.log('[rjfm-ui] standalone build tidak ditemukan — UI dimatikan (jalankan: cd Dashboard_Utama && npx next build)')
@@ -24,16 +53,9 @@ export function mountUi(app: express.Express): Promise<void> {
   // (mounting continues below; always returns a promise)
 
   // Proxy API untuk UI: /api/file/* → /api/v1/*.
-  // WAJIB app-level (bukan router ter-scope): req.url di dalam middleware
-  // ter-scope '/api/file' hanya berisi SUFFIX ('/login'), dan mengubah itu
-  // tidak mengubah path matching layer berikutnya. Rewrite di level app
-  // memodifikasi full URL sehingga Express match /api/v1/* dengan benar.
-  app.use((req: any, res: any, next: any) => {
-    if (req.url === '/api/file' || req.url.startsWith('/api/file/')) {
-      req.url = '/api/v1' + req.url.slice('/api/file'.length)
-    }
-    next()
-  })
+  // REWRITER dipasang di server.ts SEBELUM route API (mountApiRewriter) —
+  // kalau dipasang di sini (setelah route API), request /api/file/* sudah
+  // lolos semua route dan jatuh ke HPM dengan path asli → Next 404.
 
   // Static assets Next. assetPrefix UI = '/file', jadi browser minta
   // /file/_next/static/* — sedang file fisik ada di ui-app/.next/static/*.

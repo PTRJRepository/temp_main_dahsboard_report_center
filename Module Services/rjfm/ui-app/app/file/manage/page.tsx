@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Send, Users, CalendarClock, CheckCircle2, Loader2, History } from 'lucide-react'
+import { Send, Users, CalendarClock, CheckCircle2, Loader2, History, ShieldAlert } from 'lucide-react'
+import { PalmAccent } from '../decor'
 
 type UserRow = { user_id: number; username: string; full_name: string; role_code: string; raw_role?: string; divisi?: string | null }
+
+// Kebijakan: hanya Manager/Admin/GM yang boleh membuat tugas.
+const TASK_CREATORS = ['MANAGER', 'SUPERADMIN', 'ADMIN', 'GM_ESTATE']
 
 const DEADLINE_CHIPS = [
   { key: 'today17', label: 'Hari ini 17.00' },
@@ -24,6 +28,7 @@ function chipDeadline(key: string): string {
 }
 
 export default function FileManagePage() {
+  const [roleOk, setRoleOk] = useState<boolean | null>(null)
   const [users, setUsers] = useState<UserRow[]>([])
   const [picked, setPicked] = useState<number[]>([])
   const [usersErr, setUsersErr] = useState<string | null>(null)
@@ -35,6 +40,14 @@ export default function FileManagePage() {
   const [ok, setOk] = useState<{ task_id: number; count: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [recent, setRecent] = useState<any[]>([])
+
+  useEffect(() => {
+    try {
+      const me = JSON.parse(localStorage.getItem('rjfm-user') || 'null')
+      const r = (me?.role_code || me?.role || '').toUpperCase()
+      setRoleOk(TASK_CREATORS.includes(r))
+    } catch { setRoleOk(false) }
+  }, [])
 
   const kerani = useMemo(() => users.filter(u => (u.raw_role || u.role_code || '').toUpperCase() === 'KERANI'), [users])
 
@@ -73,72 +86,94 @@ export default function FileManagePage() {
     } catch (e: any) { setErr(e.message) } finally { setBusy(false) }
   }
 
+  if (roleOk === false) {
+    return (
+      <div className="max-w-lg mx-auto anim-pop relative">
+        <div className="card rounded-3xl border-red-200 p-12 text-center relative overflow-hidden">
+          <PalmAccent className="absolute -bottom-2 right-4 w-28 h-28 opacity-10 pointer-events-none" />
+          <div className="w-16 h-16 rounded-full bg-red-50 mx-auto grid place-items-center"><ShieldAlert className="w-8 h-8 text-red-500" /></div>
+          <p className="mt-5 text-2xl font-black tracking-tight text-green-950">Akses Terbatas</p>
+          <p className="text-sm text-slate-600 mt-2">Pembuatan tugas hanya untuk <b className="text-green-800">Manager, Admin, dan GM</b>. Kerani &amp; Asisten tidak dapat membuat penugasan.</p>
+          <Link href="/file/home" className="btn-primary inline-block mt-6 px-6 py-3 rounded-2xl text-sm font-extrabold">Kembali ke Beranda</Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Tugas Baru</h1>
-        <p className="text-sm text-slate-500">Tulis seperti memo — judul, instruksi, pilih kerani, kirim.</p>
+    <div className="max-w-4xl mx-auto space-y-7">
+      <div className="anim-fadeup">
+        <h1 className="text-4xl font-black tracking-tight flex items-center gap-3 text-green-950"><Send className="w-8 h-8 text-green-600" /> Tugas Baru</h1>
+        <p className="text-sm text-slate-500 mt-1.5">Tulis seperti memo — judul, instruksi, pilih kerani, kirim.</p>
       </div>
 
       {ok ? (
-        <div className="rounded-3xl bg-white border border-emerald-200 p-10 text-center shadow-sm">
-          <div className="w-14 h-14 rounded-full bg-emerald-50 mx-auto grid place-items-center"><CheckCircle2 className="w-7 h-7 text-emerald-600" /></div>
-          <p className="mt-4 font-semibold text-slate-900">Tugas terkirim ke {ok.count} kerani</p>
-          <p className="text-sm text-slate-500 mt-1">Notifikasi sudah masuk ke beranda mereka.</p>
-          <div className="mt-5 flex justify-center gap-2">
-            <button onClick={() => setOk(null)} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">Buat lagi</button>
-            <Link href="/file/tasks" className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50">Lihat semua tugas</Link>
+        <div className="anim-pop card rounded-3xl border-green-200 p-14 text-center relative overflow-hidden">
+          <PalmAccent className="absolute -bottom-3 right-6 w-32 h-32 opacity-15 pointer-events-none" />
+          <div className="w-20 h-20 rounded-full bg-green-100 mx-auto grid place-items-center "><CheckCircle2 className="w-10 h-10 text-green-600" /></div>
+          <p className="mt-6 text-2xl font-black tracking-tight text-green-950">Tugas terkirim ke {ok.count} kerani</p>
+          <p className="text-sm text-slate-500 mt-2">Notifikasi sudah masuk ke beranda mereka.</p>
+          <div className="mt-8 flex justify-center gap-3">
+            <button onClick={() => setOk(null)} className="btn-primary px-7 py-3.5 rounded-2xl text-sm font-extrabold">Buat lagi</button>
+            <Link href="/file/tasks" className="px-7 py-3.5 rounded-2xl bg-white border border-green-900/15 text-sm font-bold text-green-900 hover:bg-green-50 transition-colors">Lihat semua tugas</Link>
           </div>
         </div>
       ) : (
-        <div className="rounded-3xl bg-white border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+        <div className="card rounded-3xl shadow-xl shadow-green-900/10 p-8 sm:p-10 space-y-7 anim-fadeup d-1">
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Judul</span>
+            <span className="text-xs font-extrabold text-green-900 uppercase tracking-widest">Judul</span>
             <input value={title} onChange={e => setTitle(e.target.value)} autoFocus placeholder="LHP Harian 21 Agu"
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300" />
+              className="input-field mt-2 w-full rounded-2xl px-4 py-3.5 text-base font-semibold" />
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Instruksi</span>
+            <span className="text-xs font-extrabold text-green-900 uppercase tracking-widest">Instruksi</span>
             <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={4} placeholder="Tolong scan LHP hari ini + foto kondisi TPH blok C..."
-              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300" />
+              className="input-field mt-2 w-full rounded-2xl px-4 py-3.5 text-base" />
           </label>
 
           <div>
-            <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><CalendarClock className="w-4 h-4 text-slate-400" /> Deadline</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <p className="text-xs font-extrabold text-green-900 uppercase tracking-widest flex items-center gap-1.5"><CalendarClock className="w-4 h-4 text-green-600" /> Deadline</p>
+            <div className="mt-3 flex flex-wrap gap-2">
               {DEADLINE_CHIPS.map(c => (
                 <button key={c.key} onClick={() => setDlKey(c.key)}
-                  className={`px-3.5 py-2 rounded-full text-sm border transition-colors ${dlKey === c.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+                  className={`px-4 py-2.5 rounded-2xl text-sm font-bold border transition-all ${dlKey === c.key ? 'chip-on' : 'bg-white text-slate-600 border-slate-200 hover:border-green-400 hover:text-green-900'}`}>
                   {c.label}
                 </button>
               ))}
             </div>
             {dlKey === 'custom' && (
               <input type="datetime-local" value={customDl} onChange={e => setCustomDl(e.target.value)}
-                className="mt-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+                className="input-field mt-3 rounded-2xl px-4 py-3 text-sm" />
             )}
           </div>
 
           <div>
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><Users className="w-4 h-4 text-slate-400" /> Untuk kerani</p>
-              <button onClick={() => setPicked(p => p.length === kerani.length ? [] : kerani.map(u => u.user_id))} className="text-xs font-medium text-emerald-700 hover:underline">
+              <p className="text-xs font-extrabold text-green-900 uppercase tracking-widest flex items-center gap-1.5"><Users className="w-4 h-4 text-green-600" /> Untuk kerani <span className="text-green-700">({picked.length} dipilih)</span></p>
+              <button onClick={() => setPicked(p => p.length === kerani.length ? [] : kerani.map(u => u.user_id))} className="text-xs font-extrabold text-green-700 hover:text-green-600">
                 {picked.length === kerani.length && kerani.length > 0 ? 'Kosongkan' : 'Pilih semua'}
               </button>
             </div>
             {kerani.length === 0 ? (
-              <p className="mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+              <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
                 {usersErr || 'Tidak ada user KERANI di database. Tambahkan di menu user portal.'}
               </p>
             ) : (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {kerani.map(u => {
                   const on = picked.includes(u.user_id)
                   return (
                     <button key={u.user_id} onClick={() => toggle(u.user_id)}
-                      className={`px-3.5 py-2 rounded-full text-sm border transition-colors ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400'}`}>
-                      {u.full_name}{u.divisi ? <span className={`ml-1.5 text-[11px] ${on ? 'text-emerald-100' : 'text-slate-400'}`}>{u.divisi}</span> : null}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-left text-sm border transition-all ${on ? 'chip-on scale-[1.02]' : 'bg-white text-slate-700 border-slate-200 hover:border-green-400 hover:text-green-900'}`}>
+                      <span className={`w-9 h-9 rounded-xl grid place-items-center text-xs font-black shrink-0 ${on ? 'bg-white/25' : 'bg-green-100 text-green-700'}`}>
+                        {u.full_name.split(/\s+/).slice(0, 2).map(x => x[0]?.toUpperCase()).join('')}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-extrabold truncate">{u.full_name}</span>
+                        {u.divisi && <span className={`block text-[10px] truncate font-semibold ${on ? 'text-green-50' : 'text-slate-400'}`}>{u.divisi}</span>}
+                      </span>
+                      {on && <CheckCircle2 className="w-4 h-4 ml-auto shrink-0" />}
                     </button>
                   )
                 })}
@@ -146,30 +181,30 @@ export default function FileManagePage() {
             )}
           </div>
 
-          {err && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">{err}</p>}
+          {err && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">{err}</p>}
 
           <button onClick={submit} disabled={busy}
-            className="w-full rounded-2xl bg-emerald-600 text-white py-3.5 font-semibold hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            className="btn-primary w-full rounded-2xl py-4 text-base font-extrabold disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             {busy ? 'Mengirim...' : `Kirim ke ${picked.length} kerani`}
           </button>
-          <p className="text-xs text-slate-400 text-center">Kerani langsung melihat tugas ini di beranda mereka. Format berkas default: PDF, Excel, JPG, PNG (maks 10 MB).</p>
+          <p className="text-xs text-slate-400 text-center font-semibold">Kerani langsung melihat tugas ini di beranda mereka. Format default: PDF, Excel, JPG, PNG (maks 10 MB). Berkas yang dikumpulkan otomatis masuk Drive kerani.</p>
         </div>
       )}
 
       {/* Tugas terbaru */}
-      <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-          <History className="w-4 h-4 text-slate-400" />
-          <h2 className="font-semibold text-sm">Baru saja dibuat</h2>
+      <div className="card rounded-3xl overflow-hidden anim-fadeup d-2">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+          <History className="w-4 h-4 text-green-600" />
+          <h2 className="font-extrabold text-sm">Baru saja dibuat</h2>
         </div>
-        <div className="divide-y divide-slate-100">
-          {recent.length === 0 ? <p className="p-5 text-sm text-slate-500">Belum ada tugas.</p> : recent.map((t: any) => (
-            <div key={t.task_id} className="px-5 py-3 flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+        <div className="divide-y divide-slate-50">
+          {recent.length === 0 ? <p className="p-6 text-sm text-slate-500">Belum ada tugas.</p> : recent.map((t: any) => (
+            <div key={t.task_id} className="px-6 py-3.5 flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{t.title}</p>
-                <p className="text-xs text-slate-500">{t.deadline ? new Date(t.deadline).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</p>
+                <p className="font-extrabold truncate text-sm">{t.title}</p>
+                <p className="text-xs text-slate-400">{t.deadline ? new Date(t.deadline).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</p>
               </div>
             </div>
           ))}

@@ -1,0 +1,8 @@
+# Runtime data (outbox, schedules, pid)
+data/
+logs/
+*.log
+
+# Override konfigurasi lokal (kredensial spesifik mesin) - jangan di-commit
+client.config.local.json
+scripts/*.local.json

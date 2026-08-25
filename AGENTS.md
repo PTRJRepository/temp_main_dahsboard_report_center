@@ -17,6 +17,36 @@ Rules:
 - Module services must stay self-contained — never import Dashboard_Utama internals; Dashboard_Utama imports modules via `@modules/*`.
 - Gateway routes for modules live in `routes-config.json`; `shared/auth/paths.js` DASHBOARD_PATHS must not include module paths.
 
+## Port Contract (JANGAN DIUBAH SEMBARANGAN)
+
+Port setiap service adalah **kontrak monorepo** — dipakai gateway
+(`routes-config.json`), launcher (`scripts/module.js`,
+`start-module-services.ps1`), dan antar modul. **DILARANG mengubah port
+service/port internal tanpa izin eksplisit user.** Daftar port baku:
+
+| Service | Port |
+|---|---|
+| Gateway (server_bun.js/server.js) | 3001 |
+| Dashboard_Utama (Next dev) | 3100 |
+| report-center | 3101 |
+| rebinmas-jaya-server | 3102 |
+| rjfm | 8011 (internal UI: RJFM_UI_PORT) |
+| sql-gateway | 8001 |
+
+Kalau port sibuk, JANGAN ganti konfigurasi port — matikan proses pemegang
+port lama atau laporkan ke user.
+
+## Design & UI Rules (semua module services)
+
+- Saat membuat/mengubah UI visual (SVG, ilustrasi, empty state, hero):
+  **aktifkan skill `professional-svg`** (personal skill) — standar corporate
+  flat profesional untuk aplikasi industri (dipakai manager/CEO), BUKAN gaya
+  kartun/anak-anak. Palet maks 4–6 warna turunan token modul, tanpa wajah
+  karakter, tanpa animasi infinite (blob/sway/glow/shimmer bergerak).
+- Animasi dibatasi transisi/fade sekali jalan yang tenang.
+- Untuk foto latar nyata, gunakan `shared/google-image-search`
+  (lihat contoh penerapan di Module Services/rjfm → `/api/v1/meta/scene`).
+
 ## Build, Test, and Development Commands
 
 Run gateway commands from the repository root:

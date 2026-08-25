@@ -14,9 +14,33 @@ const MAGIC: Array<{ mime: string; bytes: number[] }> = [
   { mime: 'image/gif', bytes: [0x47, 0x49, 0x46] }, // GIF8
   { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46] }, // RIFF (webp container)
   { mime: 'video/mp4', bytes: [0x00, 0x00, 0x00] }, // ftyp box (cek ftyp di bawah)
-  { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', bytes: [0x50, 0x4b, 0x03, 0x04] }, // zip/ooxml
-  { mime: 'application/vnd.ms-excel', bytes: [0xd0, 0xcf, 0x11, 0xe0] }, // OLE
+  { mime: 'video/webm', bytes: [0x1a, 0x45, 0xdf, 0xa3] }, // EBML (webm/mkv container)
+  { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', bytes: [0x50, 0x4b, 0x03, 0x04] }, // zip/ooxml — tipe pasti ditentukan di bawah
+  { mime: 'application/vnd.ms-excel', bytes: [0xd0, 0xcf, 0x11, 0xe0] }, // OLE — tipe pasti ditentukan di bawah
 ];
+
+const ZIP_OOXML_TYPES: Record<string, string> = {
+  'word/': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'xl/': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'ppt/': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+
+/**
+ * Deteksi tipe pasti di dalam container ZIP (OOXML: docx/xlsx/pptx, dan kmz).
+ * Doc/Excel/PPT semuanya mulai PK\x03\x04 — pembedanya adalah nama entry ZIP
+ * (disimpan apa adanya, tidak terkompresi): 'word/', 'xl/', 'ppt/', 'doc.kml'.
+ * Tanpa langkah ini (.docx/.xlsx) tertukar dan ditolak di validasi.
+ */
+function sniffZip(buffer: Buffer): string | null {
+  const head = buffer.subarray(0, 1024 * 1024).toString('latin1');
+  const tail = buffer.subarray(Math.max(0, buffer.length - 1024 * 1024)).toString('latin1');
+  const hay = head + tail;
+  if (hay.includes('doc.kml') || hay.includes('.kml')) return 'application/vnd.google-earth.kmz';
+  for (const key of Object.keys(ZIP_OOXML_TYPES)) {
+    if (hay.includes(key)) return ZIP_OOXML_TYPES[key];
+  }
+  return null;
+}
 
 export function sniffMime(buffer: Buffer): string | null {
   for (const { mime, bytes } of MAGIC) {
@@ -24,6 +48,17 @@ export function sniffMime(buffer: Buffer): string | null {
       if (mime === 'video/mp4') {
         const brand = buffer.toString('latin1', 4, 8);
         if (brand !== 'ftyp') return null;
+      }
+      if (mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+        // docx/xlsx/pptx/kmz semuanya ZIP — baca isi untuk tipe pasti
+        return sniffZip(buffer) ?? null;
+      }
+      if (mime === 'application/vnd.ms-excel') {
+        // OLE container dipakai .xls (Workbook) & .doc (WordDocument) — nama
+        // stream OLE disimpan UTF-16LE
+        const head = buffer.subarray(0, 8192).toString('utf16le');
+        if (head.includes('WordDocument')) return 'application/msword';
+        return 'application/vnd.ms-excel';
       }
       return mime;
     }
@@ -34,7 +69,26 @@ export function sniffMime(buffer: Buffer): string | null {
     if (head.includes('<kml')) return 'application/vnd.google-earth.kml+xml';
   }
   if (head.startsWith('pk')) return null; // kmz = zip; sudah tertangani zip magic di atas
+  // CSV/TXT: teks murni tanpa byte biner (NUL/kontrol) pada 4 KB pertama
+  if (isPlainText(buffer)) {
+    const sample = buffer.subarray(0, 4096).toString('utf8');
+    const hasComma = sample.includes(',') || sample.includes(';');
+    return hasComma ? 'text/csv' : 'text/plain';
+  }
   return null;
+}
+
+function isPlainText(buffer: Buffer): boolean {
+  const sample = buffer.subarray(0, 4096);
+  if (sample.length === 0) return false;
+  let printable = 0;
+  for (const b of sample) {
+    // izinkan tab, LF, CR, dan printable ASCII/UTF-8 lanjutan (>=0x80)
+    if (b === 0x09 || b === 0x0a || b === 0x0d || b === 0x1b) continue;
+    if (b < 0x20) return false; // kontrol lain = biner
+    printable++;
+  }
+  return printable / sample.length > 0.85;
 }
 
 // ---- Sanitasi upload: blokir ekstensi/mime berbahaya & rapikan nama file ----
@@ -48,7 +102,7 @@ const SAFE_EXT_BY_MIME: Record<string, string[]> = {
   'image/webp': ['webp'],
   'video/mp4': ['mp4'],
   'video/webm': ['webm'],
-  'text/plain': ['txt'],
+  'text/plain': ['txt', 'log'],
   'text/csv': ['csv'],
   'application/vnd.ms-excel': ['xls'],
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['xlsx'],

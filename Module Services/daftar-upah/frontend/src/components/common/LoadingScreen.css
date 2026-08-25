@@ -1,0 +1,259 @@
+/* =====================================================================
+   LoadingScreen — Estate Ledger
+   Paper datar, kartu hairline, aksen daun, angka mono. Tanpa starfield.
+   ===================================================================== */
+
+.loading-screen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.loading-screen-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--color-pagebg, #F0EEE6);
+}
+
+.loading-screen-content {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-rule, #E0DED2);
+  border-radius: 10px;
+  box-shadow: var(--shadow, 0 1px 2px rgba(21,33,26,.04), 0 4px 14px rgba(21,33,26,.06));
+  padding: 2rem 2rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: loadingFadeIn 0.25s ease;
+}
+
+@keyframes loadingFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Logo ---------- */
+.loading-logo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+
+.loading-logo {
+  height: 44px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.loading-company-name {
+  font-family: var(--font-display, 'Sora', sans-serif);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-ink, #15211A);
+}
+
+.loading-app-name {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-muted, #6E7A70);
+}
+
+/* ---------- Progress ---------- */
+.loading-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.loading-progress-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono, 'Roboto Mono', monospace);
+  font-size: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--color-ink, #15211A);
+  line-height: 1;
+}
+
+.loading-active-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-leaf-mid, #1F6F43);
+  animation: loadingDotPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes loadingDotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.loading-progress-bar-container {
+  height: 4px;
+  background: var(--color-rule, #E0DED2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-progress-bar-fill {
+  height: 100%;
+  background: var(--color-leaf-mid, #1F6F43);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+/* ---------- Report info pills ---------- */
+.loading-report-info {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--color-surface-2, #F5F3EC);
+  border: 1px solid var(--color-rule, #E0DED2);
+  border-radius: 8px;
+  font-family: var(--font-mono, 'Roboto Mono', monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-ink-2, #3D4A41);
+}
+
+/* ---------- Divider ---------- */
+.loading-divider {
+  height: 1px;
+  background: var(--color-rule, #E0DED2);
+}
+
+/* ---------- Tips ---------- */
+.loading-tips-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 74px;
+}
+
+.loading-tip-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-leaf-mid, #1F6F43);
+}
+
+.loading-tip-text {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--color-ink-2, #3D4A41);
+  animation: loadingTipIn 0.3s ease;
+}
+
+@keyframes loadingTipIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.loading-location-info {
+  margin-top: 4px;
+}
+
+.location-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--color-muted, #6E7A70);
+}
+
+.location-badge svg {
+  color: var(--color-leaf-mid, #1F6F43);
+}
+
+.location-loading {
+  opacity: 0.7;
+}
+
+/* ---------- Action logs ---------- */
+.loading-logs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 20px;
+}
+
+.loading-log-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--color-ink-2, #3D4A41);
+}
+
+.log-icon {
+  width: 16px;
+  text-align: center;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.log-icon.completed {
+  color: var(--color-leaf-mid, #1F6F43);
+}
+
+.log-icon.processing {
+  color: var(--color-warn, #B45309);
+  animation: loadingDotPulse 1s ease-in-out infinite;
+}
+
+/* ---------- Bottom stats ---------- */
+.loading-stats-row {
+  display: flex;
+  border-top: 1px solid var(--color-rule, #E0DED2);
+  padding-top: 0.9rem;
+}
+
+.loading-stat-item {
+  flex: 1;
+  text-align: center;
+}
+
+.loading-stat-item + .loading-stat-item {
+  border-left: 1px solid var(--color-rule, #E0DED2);
+}
+
+.loading-stat-value {
+  font-family: var(--font-mono, 'Roboto Mono', monospace);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink, #15211A);
+}
+
+.loading-stat-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-muted, #6E7A70);
+  margin-top: 2px;
+}

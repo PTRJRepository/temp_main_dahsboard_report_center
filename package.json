@@ -22,6 +22,10 @@
     "dev:gateway": "cross-env NODE_ENV=development HOST=0.0.0.0 DASHBOARD_HOST=0.0.0.0 DASHBOARD_PORT=3100 START_DASHBOARD=false START_MODULE_SERVICES=false bun run server_bun.js",
     "dev:report-center": "bun --cwd \"Module Services/report-center\" run dev",
     "start:report-center": "bun --cwd \"Module Services/report-center\" run start",
+    "start:modules": "powershell -ExecutionPolicy Bypass -File scripts/start-module-services.ps1 -Mode prod",
+    "dev:modules": "powershell -ExecutionPolicy Bypass -File scripts/start-module-services.ps1 -Mode dev",
+    "stop:modules": "powershell -ExecutionPolicy Bypass -File scripts/start-module-services.ps1 -Stop",
+    "status:modules": "powershell -ExecutionPolicy Bypass -File scripts/start-module-services.ps1 -Status",
     "dev:ifess-services": "powershell -ExecutionPolicy Bypass -File scripts/start-ifess-services.ps1"
   },
   "dependencies": {

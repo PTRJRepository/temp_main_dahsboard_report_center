@@ -1,0 +1,875 @@
+/* ============================================================================
+   CustomPayrollTable.skeuo.css — "ESTATE LEDGER" (v3, selaras cost-per-ton-story)
+   ----------------------------------------------------------------------------
+   Satu bahasa visual dengan cpts: kertas putih di atas pageBg hijau pucat,
+   hairline #DFE8E0, aksen sawit #1F6F43 dipakai hemat, punch panel leafDark
+   hanya untuk grand total. Skeuomorphism-nya halus: kedalaman kertas,
+   tombol yang bisa "ditekan", bukan kontras logam/kulit.
+
+   Header dibuat SATU KELUARGA dengan badan tabel (tint hijau lembut + hairline
+   yang sama) supaya saat di-scroll header tetap terasa menempel pada lembaran,
+   bukan seperti bar terpisah. Tanpa mengurangi satu komponen pun.
+
+   Ringan: 100% CSS, tanpa gambar; animasi transform/opacity saja.
+   Aktif via shell `theme-skeuo` (default) · toggle "Klasik" → `theme-classic`.
+   ============================================================================ */
+
+.payroll-table-shell.theme-skeuo {
+  /* ── Token: mirror cost-per-ton-story ── */
+  --c-upah:      #1F6F43;
+  --c-leafDark:  #14532D;
+  --c-leafLight: #4CBB6B;
+  --c-ink:       #12241A;
+  --c-text2:     #46584C;
+  --c-muted:     #7C8B80;
+  --c-border:    #DFE8E0;
+  --c-surface:   #FFFFFF;
+  --c-surface2:  #F6FAF5;
+  --c-pageBg:    #EDF3EC;
+  --c-accent-soft: #E4EDE5;
+  --c-good-bg:   #E4F4EB;
+  --c-good-bd:   #C4E6D2;
+
+  --sk-shadow-card: 0 1px 2px rgba(18, 36, 26, 0.05), 0 6px 18px rgba(18, 36, 26, 0.08);
+  --sk-shadow-pop:  0 12px 28px rgba(18, 36, 26, 0.14);
+}
+
+/* ============================================================================
+   1. PANGGUNG — pageBg hijau pucat, tenang
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo {
+  background:
+    radial-gradient(110% 55% at 20% -10%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 55%),
+    var(--c-pageBg);
+  padding: 10px 12px 8px;
+  border-radius: 14px;
+}
+
+/* Lembar tabel = kartu permukaan putih ala cpts-hero-card */
+.payroll-table-shell.theme-skeuo .payroll-table-container {
+  border: none;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 24px),
+    var(--c-surface);
+  box-shadow:
+    var(--sk-shadow-card),
+    inset 0 0 0 1px rgba(18, 36, 26, 0.03);
+}
+
+/* ============================================================================
+   2. HEADER — keluarga material yang sama dengan badan (soft sage, hairline)
+   ============================================================================ */
+/* Sub-level header: surface → surface2, tinta forest, garis sama dgn body */
+.payroll-table-shell.theme-skeuo .payroll-table thead th {
+  background-color: var(--c-surface);
+  background-image: linear-gradient(180deg, var(--c-surface) 0%, var(--c-surface2) 100%);
+  color: var(--c-text2);
+  text-shadow: none;
+  border-right: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-border);
+  box-shadow: none;
+}
+
+/* Baris grup teratas — "masthead" soft green: masih kertas, bukan bar gelap */
+.payroll-table-shell.theme-skeuo .payroll-table thead tr:nth-child(1) th {
+  font-family: var(--font-display, 'Sora', sans-serif);
+  letter-spacing: 0.06em;
+  color: var(--c-leafDark);
+  background-color: var(--c-accent-soft);
+  background-image: linear-gradient(180deg, #EDF4EC 0%, var(--c-accent-soft) 100%);
+  box-shadow: inset 0 -1px 0 rgba(31, 111, 67, 0.16);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table thead th[class*="header-group-"] {
+  background-color: var(--c-surface);
+  background-image: linear-gradient(180deg, var(--c-surface) 0%, var(--c-surface2) 100%);
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .sticky-header {
+  background-color: var(--c-surface);
+  background-image: linear-gradient(180deg, var(--c-surface) 0%, var(--c-surface2) 100%);
+  /* Bayangan lembut di bawah header sticky: menempel ke isi, tidak lepas */
+  box-shadow: 0 8px 14px -8px rgba(18, 36, 26, 0.22);
+}
+
+.payroll-table-shell.theme-skeuo .sticky-corner {
+  background-color: var(--c-accent-soft) !important;
+  background-image: linear-gradient(180deg, #EDF4EC 0%, var(--c-accent-soft) 100%) !important;
+  color: var(--c-leafDark) !important;
+  box-shadow: 0 8px 14px -8px rgba(18, 36, 26, 0.22), inset -1px 0 0 var(--c-border) !important;
+}
+
+/* Header grup aktif — underline sawit ala .cpts-print-rule */
+.payroll-table-shell.theme-skeuo .payroll-table thead th[data-active-group="true"] {
+  background-color: var(--c-good-bg) !important;
+  background-image: linear-gradient(180deg, var(--c-good-bg) 0%, #D9EEE1 100%) !important;
+  color: var(--c-leafDark) !important;
+  font-weight: 800 !important;
+  box-shadow:
+    inset 0 -3px 0 var(--c-upah),
+    inset 0 0 0 1px rgba(31, 111, 67, 0.10) !important;
+}
+
+/* ============================================================================
+   3. KOLOM IDENTITAS BEKU — surface2 dengan tepi jilid tipis sawit
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo .payroll-table tbody td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-even td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-odd td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr:hover td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-highlighted td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-highlighted:hover td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo .payroll-table tfoot td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo.mode-detail .payroll-table tbody td.sticky-col.frozen-col-theme,
+.payroll-table-shell.theme-skeuo.mode-simple .payroll-table tbody td.sticky-col.frozen-col-theme {
+  background-color: var(--c-surface2) !important;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 30%) !important;
+  color: var(--c-ink) !important;
+  text-shadow: none;
+  border-right: 1px solid var(--c-border) !important;
+  border-bottom: 1px solid var(--c-border) !important;
+  box-shadow: inset 3px 0 0 rgba(31, 111, 67, 0.35) !important;
+}
+
+/* GARIS MARGIN LEDGER — merah selembut mungkin setelah kolom nama */
+.payroll-table-shell.theme-skeuo .payroll-table tbody td[data-field="nama"]:not(.frozen-col-theme) {
+  box-shadow: inset -3px 0 0 rgba(179, 57, 46, 0.30);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table tbody td[data-field="nama"].cell-selected,
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr:hover td[data-field="nama"]:not(.frozen-col-theme) {
+  box-shadow:
+    inset -3px 0 0 rgba(179, 57, 46, 0.30),
+    inset 0 0 0 999px rgba(31, 111, 67, 0.05),
+    inset 0 0 0 2px rgba(31, 111, 67, 0.30);
+}
+
+/* ============================================================================
+   4. BADAN — kertas putih, hairline hangat-hijau, tanpa noise
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo .payroll-table tbody td {
+  background-image: none;
+  border-right: 1px solid rgba(223, 232, 224, 0.85);
+  border-bottom: 1px solid var(--c-border);
+  text-shadow: none;
+}
+
+/* Zebra — surface vs surface2 */
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-even {
+  background-color: var(--c-surface2);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-odd {
+  background-color: var(--c-surface);
+}
+
+/* Hover — sapuan good-bg + ring sawit tipis (jelas tapi lembut) */
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr:hover td {
+  box-shadow:
+    inset 0 0 0 999px rgba(31, 111, 67, 0.05),
+    inset 0 0 0 2px rgba(31, 111, 67, 0.28);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr:hover .sticky-col:not(.frozen-col-theme) {
+  box-shadow:
+    inset 0 0 0 999px rgba(31, 111, 67, 0.05),
+    inset 0 0 0 2px rgba(31, 111, 67, 0.25);
+}
+
+/* Baris terpilih — punch panel leafDark ala cpts-hero-punch */
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-highlighted td {
+  background-color: var(--c-leafDark) !important;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 40%) !important;
+  color: #EAF4EC !important;
+  text-shadow: none;
+  box-shadow: inset 3px 0 0 var(--c-leafLight);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-highlighted td.sticky-col.frozen-col-theme {
+  background-color: var(--c-leafDark) !important;
+}
+
+/* Cell terpilih — ring sawit di atas good-bg */
+.payroll-table-shell.theme-skeuo td.cell-selected {
+  background-color: var(--c-good-bg) !important;
+  color: var(--c-leafDark) !important;
+  outline: 2px solid var(--c-upah) !important;
+  outline-offset: -2px !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table tbody td.sticky-col.frozen-col-theme.cell-selected {
+  background-color: var(--c-good-bg) !important;
+  color: var(--c-leafDark) !important;
+}
+
+/* ============================================================================
+   5. BANNER GANG — pita sage lembut, kode tinta forest, daun tetap hidup
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo .gang-header-row td {
+  --gang-marker-navy: #1F6F43;
+  --gang-marker-blue: #2C855A;
+  --gang-marker-gold: #C4E6D2;
+  background: linear-gradient(90deg, #DFF0E4 0%, var(--c-good-bg) 45%, #D2E8DA 100%);
+  animation: none;
+  border-top: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-good-bd);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 6px 14px -6px rgba(18, 36, 26, 0.18);
+  color: var(--c-ink);
+}
+
+.payroll-table-shell.theme-skeuo .gang-header-banner__eyebrow {
+  color: var(--c-upah);
+  opacity: 1;
+  text-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .gang-header-banner__code {
+  font-family: var(--font-display, 'Sora', sans-serif);
+  color: var(--c-leafDark);
+  text-shadow: none;
+  letter-spacing: 0.04em;
+}
+
+.payroll-table-shell.theme-skeuo .gang-header-banner__rail {
+  background: repeating-linear-gradient(90deg, rgba(31, 111, 67, 0.35) 0 14px, rgba(31, 111, 67, 0.10) 14px 24px);
+}
+
+.payroll-table-shell.theme-skeuo .gang-leaf-orbit::before {
+  background: var(--c-upah);
+  box-shadow: 0 0 8px rgba(31, 111, 67, 0.45);
+}
+
+.payroll-table-shell.theme-skeuo .gang-leaf-orbit__leaf {
+  background: linear-gradient(135deg, #DFF2E4 0%, #7FCB98 45%, var(--c-leafMid, #1F6F43) 100%);
+  box-shadow: 0 0 10px rgba(76, 187, 107, 0.4);
+}
+
+/* Marker melayang — chip sawit */
+.payroll-table-shell.theme-skeuo .gang-floating-marker {
+  border: 1px solid var(--c-good-bd);
+  background: linear-gradient(90deg, rgba(20, 83, 45, 0.96) 0%, rgba(31, 111, 67, 0.95) 100%);
+  box-shadow: 0 10px 20px rgba(18, 36, 26, 0.28);
+}
+
+.payroll-table-shell.theme-skeuo .gang-floating-marker__label {
+  color: #CBE8D4;
+}
+
+.payroll-table-shell.theme-skeuo .gang-floating-marker strong {
+  font-family: var(--font-display, 'Sora', sans-serif);
+  color: #FFFFFF;
+}
+
+/* ============================================================================
+   6. BARIS TOTAL
+   ============================================================================ */
+/* Total gang — accent-soft dengan rule sawit */
+.payroll-table-shell.theme-skeuo .gang-total-row td {
+  background-color: var(--c-accent-soft) !important;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 42%) !important;
+  color: var(--c-leafDark) !important;
+  border-top: 2px solid var(--c-good-bd) !important;
+  border-bottom: 1px solid var(--c-border) !important;
+  text-shadow: none !important;
+}
+
+/* Grand total — punch panel leafDark (satu-satunya blok gelap, sengaja) */
+.payroll-table-shell.theme-skeuo .grand-total-row td {
+  background-color: var(--c-leafDark) !important;
+  background-image: linear-gradient(180deg, #1A6639 0%, var(--c-leafDark) 70%) !important;
+  animation: none;
+  color: #F0F6EF !important;
+  border-top: 3px solid var(--c-upah) !important;
+  text-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .grand-total-row .sticky-col {
+  background-color: #1A6639 !important;
+  background-image: none !important;
+  color: #F0F6EF !important;
+}
+
+.payroll-table-shell.theme-skeuo .grand-total-row td[data-active-group="true"] {
+  box-shadow: inset 3px 0 0 var(--c-leafLight) !important;
+}
+
+/* ============================================================================
+   7. DOCK SCROLL — pill putih, thumb sawit
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo .payroll-scroll-dock__arrow {
+  width: 28px;
+  height: 24px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-upah);
+  font-size: 0.92rem;
+  box-shadow: 0 1px 2px rgba(18, 36, 26, 0.08);
+  transition: all 0.15s ease;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-scroll-dock__arrow:hover {
+  background: var(--c-upah);
+  border-color: var(--c-upah);
+  color: #FFFFFF;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(31, 111, 67, 0.28);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-scroll-dock__arrow:active {
+  transform: translateY(0);
+  box-shadow: inset 0 1px 3px rgba(18, 36, 26, 0.25);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-scroll-dock__lane::before {
+  background: var(--c-border);
+  border: none;
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-scroll-dock__viewport {
+  background: var(--c-upah);
+  border: none;
+  box-shadow: 0 0 0 1px rgba(31, 111, 67, 0.2);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-scroll-dock__flag-pill {
+  background: var(--c-leafDark);
+  color: #F0F6EF;
+  border: none;
+  box-shadow: 0 4px 10px rgba(18, 36, 26, 0.28);
+}
+
+/* ============================================================================
+   8. FOOTER DOCK — panel surface, tab pill ala act-nav
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo .payroll-footer-dock {
+  background: var(--c-surface);
+  border-top: 1px solid var(--c-border);
+  box-shadow: 0 -8px 24px rgba(18, 36, 26, 0.10);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-footer-scrollbar {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface2);
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-footer-scrollbar__meta {
+  color: var(--c-muted);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-footer-scrollbar__range::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg,
+      var(--c-upah) 0%,
+      var(--c-upah) var(--payroll-slider-progress, 0%),
+      var(--c-border) var(--payroll-slider-progress, 0%),
+      var(--c-border) 100%);
+  border: none;
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-footer-scrollbar__range::-webkit-slider-thumb {
+  border: 2px solid var(--c-surface);
+  background: var(--c-upah);
+  box-shadow: 0 1px 4px rgba(18, 36, 26, 0.3);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-footer-scrollbar__nudge {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-upah);
+  box-shadow: 0 1px 2px rgba(18, 36, 26, 0.08);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-footer-scrollbar__nudge:hover:not(:disabled) {
+  background: var(--c-upah);
+  border-color: var(--c-upah);
+  color: #FFFFFF;
+  transform: translateY(-1px);
+}
+
+.payroll-table-shell.theme-skeuo .tabs-scroll-container {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .footer-tab-btn {
+  background: transparent;
+  color: var(--c-muted);
+  border: 1px solid transparent;
+  text-shadow: none;
+  box-shadow: none;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.payroll-table-shell.theme-skeuo .footer-tab-btn:hover {
+  background: var(--c-surface2);
+  color: var(--c-leafDark);
+  border-color: var(--c-border);
+  transform: none;
+}
+
+.payroll-table-shell.theme-skeuo .footer-tab-btn.is-active {
+  background: var(--c-upah);
+  color: #FFFFFF;
+  border-color: var(--c-upah);
+  text-shadow: none;
+  box-shadow: 0 2px 8px rgba(31, 111, 67, 0.28);
+}
+
+.payroll-table-shell.theme-skeuo .footer-tab-btn:active {
+  transform: translateY(1px);
+}
+
+/* Toggle mode FOKUS/SEMUA — dua warna semantik, bentuk pill lembut */
+.payroll-table-shell.theme-skeuo .footer-mode-toggle {
+  background: var(--c-surface2);
+  color: var(--c-leafDark);
+  border: 1px solid var(--c-good-bd);
+  box-shadow: 0 1px 3px rgba(18, 36, 26, 0.08);
+}
+
+.payroll-table-shell.theme-skeuo .footer-mode-toggle::before {
+  background: var(--c-upah);
+}
+
+.payroll-table-shell.theme-skeuo .footer-mode-toggle::after {
+  background: var(--c-amber, #B45309);
+}
+
+.payroll-table-shell.theme-skeuo .footer-mode-toggle.is-all {
+  border-color: rgba(180, 83, 9, 0.4);
+}
+
+.payroll-table-shell.theme-skeuo .footer-mode-toggle__label {
+  mix-blend-mode: normal;
+  color: #FFFFFF;
+  text-shadow: 0 1px 1px rgba(18, 36, 26, 0.35);
+}
+
+/* Streaming — track border, fill sawit, chip good-bg */
+.payroll-table-shell.theme-skeuo .payroll-footer-stream-bar {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface2);
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .stream-progress-track {
+  background: var(--c-border);
+  border: none;
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .stream-progress-fill {
+  background-image: none;
+  animation: none;
+  box-shadow: 0 0 8px rgba(31, 111, 67, 0.35);
+  border-radius: 999px;
+}
+
+.payroll-table-shell.theme-skeuo .stream-chip {
+  background: var(--c-good-bg);
+  color: var(--c-leafDark);
+  border: 1px solid var(--c-good-bd);
+  animation: skChipIn 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.payroll-table-shell.theme-skeuo .stream-status-text {
+  color: var(--c-muted);
+}
+
+/* ============================================================================
+   9. EDIT DOCK & NOTIFIKASI — kartu putih, aksen semantik
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock {
+  background: var(--c-warn-bg, #F7EBD9);
+  border: 1px solid var(--c-warn-border, #E5CFA3);
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 10px 24px rgba(18, 36, 26, 0.14);
+  color: #12241A;
+  animation: skDockIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock.has-pending {
+  box-shadow: 0 12px 26px rgba(180, 83, 9, 0.18);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock__eyebrow {
+  color: #92400E;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock__metric {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(180, 83, 9, 0.25);
+  color: #46584C;
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock__primary {
+  border: none;
+  background: var(--c-upah);
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(31, 111, 67, 0.3);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock__primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: var(--c-leafDark);
+  box-shadow: 0 4px 10px rgba(31, 111, 67, 0.32);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock__primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-edit-save-dock__secondary {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--c-border);
+  color: #46584C;
+}
+
+/* Toast — kartu putih + rel warna semantik */
+.payroll-table-shell.theme-skeuo .payroll-toast {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--sk-shadow-pop);
+  animation: skToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-toast strong {
+  color: var(--c-ink);
+  font-family: var(--font-display, 'Sora', sans-serif);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-toast p {
+  color: var(--c-text2);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-backdrop {
+  background: rgba(18, 36, 26, 0.38);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  box-shadow: var(--sk-shadow-pop);
+  animation: skCardIn 0.26s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card__mark {
+  background: var(--c-upah);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card--danger .payroll-confirm-card__mark {
+  background: var(--c-red, #B3392E);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card__eyebrow {
+  color: var(--c-upah);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card h3 {
+  color: var(--c-ink);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card p {
+  color: var(--c-text2);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card__cancel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  color: var(--c-text2);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card__cancel:hover {
+  background: var(--c-surface2);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card__confirm {
+  border: none;
+  background: var(--c-upah);
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(31, 111, 67, 0.3);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-confirm-card--danger .payroll-confirm-card__confirm {
+  background: var(--c-red, #B3392E);
+}
+
+/* ============================================================================
+   10. TOOLBAR (portal Pengaturan) — kartu putih, tombol pill
+   ============================================================================ */
+.theme-skeuo .payroll-view-toolbar {
+  background: var(--c-pageBg);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.theme-skeuo .payroll-view-toolbar__label {
+  color: var(--c-muted);
+}
+
+.theme-skeuo .payroll-view-toolbar__group {
+  background: var(--c-surface2);
+  border: 1px solid var(--c-border);
+  box-shadow: none;
+}
+
+.theme-skeuo .payroll-view-toolbar__select {
+  background: var(--c-surface);
+  border-color: var(--c-border);
+  color: var(--c-ink);
+  box-shadow: none;
+}
+
+/* Tombol pill: putih → hover surface2 → aktif sawit (ala act-nav) */
+.theme-skeuo .payroll-view-toolbar__button {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  color: var(--c-text2);
+  box-shadow: none;
+  transition: all 0.15s ease;
+}
+
+.theme-skeuo .payroll-view-toolbar__button:hover {
+  background: var(--c-surface2);
+  border-color: var(--c-upah);
+  color: var(--c-leafDark);
+  transform: none;
+  box-shadow: none;
+}
+
+.theme-skeuo .payroll-view-toolbar__button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 3px rgba(18, 36, 26, 0.12);
+}
+
+.theme-skeuo .payroll-view-toolbar__button.is-active {
+  background: var(--c-upah);
+  border-color: var(--c-upah);
+  color: #FFFFFF;
+  text-shadow: none;
+  box-shadow: 0 2px 8px rgba(31, 111, 67, 0.25);
+}
+
+.theme-skeuo .payroll-view-toolbar__button-state {
+  background: var(--c-surface2);
+  color: var(--c-text2);
+}
+
+.theme-skeuo .payroll-view-toolbar__button.is-active .payroll-view-toolbar__button-state {
+  background: rgba(255, 255, 255, 0.22);
+  color: #FFFFFF;
+}
+
+/* Mode sumber — semantik warna tetap, gaya pill serasi */
+.theme-skeuo .payroll-view-toolbar__button--source-non_db_ptrj.is-active {
+  background: linear-gradient(135deg, #23855B 0%, var(--c-leafDark) 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+}
+
+.theme-skeuo .payroll-view-toolbar__button--source-db_ptrj_only.is-active {
+  background: linear-gradient(135deg, #2563EB 0%, #1E40AF 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+}
+
+.theme-skeuo .payroll-view-toolbar__button--dbptrj.is-active {
+  background: linear-gradient(135deg, #0F766E 0%, #115E59 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+}
+
+/* Saklar fokus grup — track sawit, knob putih berpegas */
+.theme-skeuo .payroll-view-toolbar__toggle {
+  background: var(--c-surface2);
+  border: 1px solid var(--c-border);
+  box-shadow: none;
+}
+
+.theme-skeuo .payroll-view-toolbar__toggle-indicator {
+  background: var(--c-border);
+  box-shadow: inset 0 1px 2px rgba(18, 36, 26, 0.12);
+}
+
+.theme-skeuo .payroll-view-toolbar__toggle-indicator::after {
+  background: var(--c-surface);
+  box-shadow: 0 1px 3px rgba(18, 36, 26, 0.3);
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-skeuo .payroll-view-toolbar__toggle.is-active .payroll-view-toolbar__toggle-indicator {
+  background: var(--c-upah);
+}
+
+.theme-skeuo .payroll-view-toolbar__toggle-title {
+  color: var(--c-ink);
+}
+
+.theme-skeuo .payroll-view-toolbar__toggle-subtitle {
+  color: var(--c-muted);
+}
+
+/* ============================================================================
+   11. INPUT EDIT & MISC
+   ============================================================================ */
+.payroll-table-shell.theme-skeuo .edit-input {
+  background-color: var(--c-surface) !important;
+  background-image: none !important;
+  border: 1px solid rgba(180, 83, 9, 0.5) !important;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.10) !important;
+  color: var(--c-ink) !important;
+}
+
+.payroll-table-shell.theme-skeuo .edit-input:focus {
+  border-color: var(--c-amber, #B45309) !important;
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.18) !important;
+}
+
+.payroll-table-shell.theme-skeuo .header-add-btn {
+  background: var(--c-upah);
+  color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(18, 36, 26, 0.25);
+}
+
+.payroll-table-shell.theme-skeuo .header-add-btn:hover {
+  transform: scale(1.15);
+  background: var(--c-leafDark);
+}
+
+.payroll-table-shell.theme-skeuo .kontan-badge {
+  background: var(--c-upah);
+  border: none;
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .selection-status-bar {
+  background: var(--c-accent-soft);
+  border: 1px solid var(--c-good-bd);
+  color: var(--c-text2);
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .selection-status-bar .stat-item strong {
+  color: var(--c-leafDark);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-source-indicator {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  box-shadow: 0 1px 2px rgba(18, 36, 26, 0.05);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-source-indicator__label {
+  color: var(--c-muted);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-source-indicator__value {
+  color: var(--c-leafDark);
+}
+
+/* Scrollbar — thumb sage, track transparan */
+.payroll-table-shell.theme-skeuo .payroll-table-container {
+  scrollbar-color: #AECDB8 transparent;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table-container::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table-container::-webkit-scrollbar-thumb {
+  background: #AECDB8;
+  border-radius: 999px;
+  border: 3px solid var(--c-surface);
+  box-shadow: none;
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--c-upah);
+}
+
+.payroll-table-shell.theme-skeuo .payroll-table-container::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============================================================================
+   12. ANIMASI — halus & cepat
+   ============================================================================ */
+@keyframes skChipIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.88); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes skToastIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes skCardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes skDockIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Baris streaming — lembar masuk dari atas (override base fadeInRow) */
+.payroll-table-shell.theme-skeuo .payroll-table tbody tr.row-animating {
+  animation: skRowIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes skRowIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.payroll-table-shell.theme-skeuo .gang-chunk-new .gang-header-row {
+  animation: skGangIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes skGangIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Saat print: bersih datar */
+@media print {
+  .payroll-table-shell.theme-skeuo {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .payroll-table-shell.theme-skeuo .payroll-table-container {
+    box-shadow: none;
+    border: 1px solid #999;
+    border-radius: 0;
+  }
+
+  .payroll-table-shell.theme-skeuo .payroll-table thead th,
+  .payroll-table-shell.theme-skeuo .sticky-header,
+  .payroll-table-shell.theme-skeuo .sticky-corner {
+    background-image: none !important;
+    background-color: #EEF3EE !important;
+    color: #000 !important;
+  }
+}

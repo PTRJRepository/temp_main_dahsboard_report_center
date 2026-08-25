@@ -1,0 +1,13 @@
+{
+  "name": "daftar-upah",
+  "version": "1.0.0",
+  "description": "Daftar Upah Payroll (PT Rebinmas) — Bun/Elysia backend serving API + built Vite SPA frontend in one process",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && bun run src/index.ts",
+    "dev": "cd backend && bun --watch run src/index.ts",
+    "build:frontend": "cd frontend && npm run build",
+    "test": "cd backend && bun test",
+    "typecheck": "cd backend && bunx tsc --noEmit"
+  }
+}

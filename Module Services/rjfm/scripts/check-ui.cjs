@@ -18,10 +18,19 @@ async function main() {
     const r3 = await fetch(base + '/api/file/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }), signal: ac.signal })
     console.log('POST login:', r3.status)
     if (r3.ok) {
-      const ck = (r3.headers.getSetCookie?.() || []).map(c => c.split(';')[0]).join('; ')
-      const r4 = await fetch(base + '/api/file/meta/users', { headers: { cookie: ck } })
-      const j = await r4.json()
-      console.log('users:', r4.status, '| kerani:', (j.data || []).filter(x => ((x.raw_role || x.role_code || '') + '').toUpperCase() === 'KERANI').length)
+      const setc = (r3.headers.getSetCookie?.() || [])
+      const ck = setc.map(c => c.split(';')[0]).join('; ')
+      console.log('cookie:', ck.slice(0, 40) + '...')
+      // meta/users butuh JWT Bearer — cookie rjfm-token diverifikasi Next bridge;
+      // di monolith, panggil langsung dengan Bearer dari body login.
+      const tok = (await r3.json())?.data?.token
+      const r4 = await fetch(base + '/api/file/meta/users', { headers: { cookie: ck, Authorization: 'Bearer ' + tok } })
+      const ct4 = r4.headers.get('content-type') || ''
+      console.log('users:', r4.status, '| ct:', ct4)
+      if (ct4.includes('json')) {
+        const j = await r4.json()
+        console.log('| kerani:', (j.data || []).filter(x => ((x.raw_role || x.role_code || '') + '').toUpperCase() === 'KERANI').length)
+      }
     }
   } catch (e) { console.log('POST login hang/err:', e.message) }
 }

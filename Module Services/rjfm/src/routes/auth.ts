@@ -17,6 +17,12 @@ authRouter.post('/login', async (req, res) => {
   if (!username || !password) return res.status(400).json({ status: 'error', message: 'username & password required' })
   const id = String(username).trim()
 
+  // Helper: set cookie rjfm-token untuk UI monolith (middleware menerima cookie ini)
+  const withCookie = (payload: any) => {
+    res.setHeader('Set-Cookie', `rjfm-token=${payload.token}; Path=/; SameSite=Lax; Max-Age=${12 * 3600}`)
+    return res.json({ status: 'success', data: payload })
+  }
+
   // 1) extend_db_ptrj.user_ptrj — sumber utama (login pakai email)
   try {
     const pool = await getPool()
@@ -38,7 +44,7 @@ authRouter.post('/login', async (req, res) => {
       }
       syncToStore({ ...user, email: user.username, raw_role: String(row.role || ''), afdeling_id: null } as any)
       const token = tokenFor({ user_id: user.user_id, username: user.username, role_code, afdeling_id: null })
-      return res.json({ status: 'success', data: { token, user, mode: 'mssql' } })
+      return withCookie({ token, user, mode: 'mssql' })
     }
   } catch {
     // DB tidak reachable → lanjut ke demo store
@@ -50,7 +56,7 @@ authRouter.post('/login', async (req, res) => {
     const ok = await bcrypt.compare(String(password), local.password_hash)
     if (!ok) return res.status(401).json({ status: 'error', message: 'Email atau password salah' })
     const token = tokenFor(local)
-    return res.json({ status: 'success', data: { token, user: { user_id: local.user_id, username: local.username, role_code: local.role_code, full_name: local.full_name, afdeling_id: local.afdeling_id }, mode: 'demo' } })
+    return withCookie({ token, user: { user_id: local.user_id, username: local.username, role_code: local.role_code, full_name: local.full_name, afdeling_id: local.afdeling_id }, mode: 'demo' })
   }
 
   return res.status(401).json({ status: 'error', message: 'Email atau password salah' })

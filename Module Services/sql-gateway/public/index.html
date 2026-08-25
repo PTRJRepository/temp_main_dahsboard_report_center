@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQL Gateway — Traffic & Audit</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🛢️</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🛢️</span>
+      <div>
+        <h1>SQL Gateway <span class="sub">traffic &amp; audit monitor</span></h1>
+        <div id="connState" class="conn-state">connecting…</div>
+      </div>
+    </div>
+    <div class="controls">
+      <label class="ctl">Window
+        <select id="windowSel">
+          <option value="15">15m</option>
+          <option value="60" selected>1h</option>
+          <option value="240">4h</option>
+          <option value="1440">24h</option>
+        </select>
+      </label>
+      <label class="ctl switch"><input type="checkbox" id="autoRefresh" checked> Auto 3s</label>
+      <button id="refreshBtn" class="btn" title="Refresh now">⟳ Refresh</button>
+      <span id="identityChip" class="chip" title="Resolved identity">…</span>
+      <button id="logoutBtn" class="btn ghost" title="Keluar (hapus key tersimpan)">⎋</button>
+    </div>
+  </header>
+
+  <section class="cards" id="cards"><!-- metric cards --></section>
+
+  <section class="panel chart-panel">
+    <div class="panel-head"><h2>Requests / queries per minute</h2><span class="legend"><i class="lg req"></i>requests <i class="lg err"></i>errors <i class="lg qry"></i>queries</span></div>
+    <canvas id="chart" height="120"></canvas>
+  </section>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="traffic" class="tab active">Live Traffic</button>
+    <button data-tab="queries" class="tab">Queries</button>
+    <button data-tab="security" class="tab">Security</button>
+    <button data-tab="callers" class="tab">Callers &amp; IPs</button>
+    <button data-tab="servers" class="tab">Servers</button>
+    <button data-tab="logs" class="tab">Log Files</button>
+    <button data-tab="tester" class="tab">Tester</button>
+    <span class="spacer"></span>
+    <button id="exportBtn" class="btn ghost" title="Download current table as CSV">⭳ CSV</button>
+  </nav>
+
+  <section class="tabwrap">
+    <div id="tab-traffic" class="tabpane active">
+      <div class="filters">
+        <input id="trafficQ" placeholder="filter path/caller/ip…">
+        <select id="trafficStatus"><option value="">all status</option><option value="2xx">2xx</option><option value="4xx">4xx</option><option value="5xx">5xx</option></select>
+      </div>
+      <div class="tablewrap"><table id="trafficTable"><thead><tr>
+        <th>time</th><th>method</th><th>path</th><th>status</th><th>ms</th><th>caller</th><th>mode</th><th>ip → client</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div id="tab-queries" class="tabpane">
+      <div class="filters"><input id="queriesQ" placeholder="filter sql/db/caller…"></div>
+      <div class="tablewrap"><table id="queriesTable"><thead><tr>
+        <th>time</th><th>server/db</th><th>sql</th><th>type</th><th>decision</th><th>rows</th><th>ms</th><th>cache</th><th>caller</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div id="tab-security" class="tabpane">
+      <div class="filters">
+        <select id="secKind">
+          <option value="">all kinds</option>
+          <option>invalid-api-key</option><option>spoof-attempt</option><option>blocked-sql</option>
+          <option>rate-limited</option><option>unauthorized</option>
+        </select>
+      </div>
+      <div class="tablewrap"><table id="securityTable"><thead><tr>
+        <th>time</th><th>kind</th><th>ip</th><th>caller</th><th>detail</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div id="tab-callers" class="tabpane">
+      <div class="cols">
+        <div class="tablewrap"><h3>Callers</h3><table id="callersTable"><thead><tr>
+          <th>caller</th><th>mode</th><th>reqs</th><th>errors</th><th>last seen</th><th>ips</th>
+        </tr></thead><tbody></tbody></table></div>
+        <div class="tablewrap"><h3>Top IPs (window)</h3><table id="ipsTable"><thead><tr>
+          <th>ip</th><th>requests</th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div id="tab-servers" class="tabpane"><div class="servergrid" id="serverGrid"></div></div>
+
+    <div id="tab-logs" class="tabpane">
+      <div class="tablewrap"><table id="logsTable"><thead><tr>
+        <th>file</th><th>size</th><th>last write</th>
+      </tr></thead><tbody></tbody></table></div>
+      <p class="hint">JSONL files live in <code>Module Services/sql-gateway/data/logs</code> (gitignored). Retention: <span id="retentionInfo">…</span>.</p>
+    </div>
+
+    <div id="tab-tester" class="tabpane">
+      <div class="tester">
+        <div class="tester-form">
+          <div class="row2">
+            <label>Server profile <select id="tServer"></select></label>
+            <label>Database <input id="tDb" placeholder="(profile default)"></label>
+          </div>
+          <label>SQL (read-only unless admin on the write window)</label>
+          <textarea id="tSql" rows="7" spellcheck="false">SELECT TOP 20 name FROM sys.databases WHERE state = 0 ORDER BY name</textarea>
+          <label>Params JSON <input id="tParams" placeholder='{"id": 123}'></label>
+          <div class="row2">
+            <button id="tRun" class="btn primary">▶ Run query</button>
+            <button id="tPurge" class="btn ghost" title="Purge read-result cache">Purge cache</button>
+            <span id="tMeta" class="meta"></span>
+          </div>
+        </div>
+        <div class="tester-result">
+          <div class="tablewrap"><table id="tResult"><thead></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="drawer" class="drawer" hidden>
+    <div class="drawer-head">
+      <h3 id="drawerTitle">detail</h3>
+      <button id="drawerClose" class="btn ghost">✕</button>
+    </div>
+    <pre id="drawerBody"></pre>
+  </div>
+
+  <footer class="foot">
+    <span>API: <code>POST /v1/query</code> · <code>/v1/servers</code> · <code>/v1/databases</code> · <code>/v1/query/batch</code> · monitor: <code>/monitor/*</code> · health: <code>/health</code></span>
+    <span id="footMeta"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

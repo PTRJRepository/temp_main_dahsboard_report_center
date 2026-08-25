@@ -6,6 +6,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id } = await params
     const r = await rjfmFetch(`/api/v1/drive/${id}/stream`)
+    if (!r.ok) {
+      const body = await r.text()
+      return new NextResponse(body, { status: r.status, headers: { 'Content-Type': r.headers.get('Content-Type') || 'application/json' } })
+    }
     const buf = Buffer.from(await r.arrayBuffer())
     const headers: Record<string, string> = {}
     const ct = r.headers.get('Content-Type'); if (ct) headers['Content-Type'] = ct

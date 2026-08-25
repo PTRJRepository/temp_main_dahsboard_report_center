@@ -10,7 +10,8 @@
 ## Isolasi & Kemandirian
 
 - Modul ini **aplikasi lengkap sendiri**: Express TS API + UI (Next.js di
-  `ui-app/`) + penyimpanan berkas (NAS via SMB `Z:`) + auth sendiri.
+  `ui-app/`) + penyimpanan berkas (NAS Synology via FileStation HTTP API,
+  lihat `src/lib/nas.ts` + `src/lib/storage.ts`) + auth sendiri.
 - **Jalan sendiri**: `npm run dev` / `npx tsx src/server.ts` dari folder ini
   → hidup di port 8011, tanpa butuh gateway portal (3001), tanpa Dashboard_Utama.
 - **Kedepannya modul ini jadi subrepo git tersendiri** — jaga agar:
@@ -45,6 +46,22 @@
 - Endpoint: `/api/gateway/{health,stats,files,download,upload,file,tasks,revisions/:id/stream,users}`.
 - Delete via API hanya boleh di bawah folder `gateway/`.
 
+## Penyimpanan berkas (NAS Synology via HTTP)
+
+- Berkas fisik disimpan di NAS Synology **Storage03** `http://10.0.0.8:5000`
+  (DSM/FileStation API) — BUKAN lagi SMB drive `Z:`.
+- Konfigurasi `.env`: `RJFM_NAS_URL`, `RJFM_NAS_USER`, `RJFM_NAS_PASS`,
+  `RJFM_STORAGE_PATH` (folder dasar remote, mis. `/IT/Extend Server Portal/RJFM`).
+- Klien: `src/lib/nas.ts` (login+sid cache, list, upload, download, mkdir -p,
+  delete, walk). Adapter: `src/lib/storage.ts` memakai klien itu dan
+  dipakai semua route.
+- Gotcha DSM yang sudah ditangani di klien:
+  - Upload v2 memakai field form **`path`** (bukan `dest_folder_path`) + part `file`.
+  - Multipart dibangun manual sebagai Buffer — FormData/Blob Node mengirim
+    chunked yang membuat DSM memotong isi berkas (byte NUL/biner hilang).
+  - Download sukses ditandai header `Content-Disposition`; tanpa itu berarti
+    error JSON → diperlakukan 404.
+
 ## Perintah
 
 - `npm run dev` → `tsx watch src/server.ts` (API + UI monolith, port 8011)
@@ -61,3 +78,20 @@
 - ❌ Menjalankan Next dev terpisah untuk UI modul ini — pakai build standalone
   + proxy dari `src/ui/serve.ts`.
 - ❌ Membuat port kedua untuk UI (UI wajib lewat 8011).
+- ❌ **MENGUBAH PORT APAPUN TANPA IZIN EKSPLISIT USER** — port adalah kontrak
+  monorepo (8011 API+UI, internal UI `RJFM_UI_PORT`). Ganti port = putus
+  gateway, routes-config.json, dan modul lain.
+
+## Aturan UI & Design
+
+- **SAAT mengerjakan UI/visual (`ui-app/**`): aktifkan skill
+  `professional-svg`** sebelum menggambar/mengubah SVG, ilustrasi, empty
+  state, atau hero. Standar: corporate flat profesional untuk industri
+  (manager/CEO) — BUKAN gaya kartun/anak-anak.
+- Ilustrasi SVG mengikuti palet token di `ui-app/app/globals.css`
+  (maks 4–6 warna, tanpa wajah karakter, tanpa animasi infinite).
+- Untuk foto latar nyata gunakan endpoint `/api/v1/meta/scene?theme=…`
+  (tool `shared/google-image-search`) via komponen `ScenePhoto`; SVG hanya
+  fallback dan elemen kecil.
+- Animasi dibatasi fadeup/pop/slidex sekali jalan. DILARANG menambah
+  animasi infinite baru (blob/sway/glow/shimmer bergerak).

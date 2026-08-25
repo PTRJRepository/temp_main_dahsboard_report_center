@@ -45,9 +45,11 @@ Current module services (full rulebook + registry: **`docs/MONOREPO.md`**):
 | `Module Services/ifess-control` | — | static UI | `/ifess-control` |
 | `Module Services/rjfm` | 8011 | `npx tsx src/server.ts` | `/rjfm` + `/file` (RJ Drive UI = ui-app build, internal :8012) |
 | `Module Services/Wifi_LAN_Monitor` | — | static | `/network-monitor` |
+| `Module Services/sql-gateway` | 8001 | `bun start` | `/sql-gateway` + `/api/sql-gateway` (internal MSSQL API, traffic & audit UI; port lama SQL Gateway, alias `/query/v1/*`) |
+| `Module Services/daftar-upah` | 3104 | `npm start` (bun backend serve API + dist) | `/upah` + `/backend/upah` (Daftar Upah payroll; snapshot of PORTAL_ESTATE V2) |
 
 Registered EXTERNAL services (source outside this repo — do not move):
-`/upah` :8002 · `/absen` :5176 · `/monitoring-beras` :5177 · `/basis-panen` :3002 ·
+`/absen` :5176 · `/monitoring-beras` :5177 · `/basis-panen` :3002 ·
 `/query` :8001 · `/file-legacy` :5178.
 
 Gateway routes for module services live in `routes-config.json` (hot-reload).

@@ -1,7 +1,14 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
-import { env } from '../config/env.js';
+// Lapisan penyimpanan RJFM — berkas fisik disimpan di NAS Synology
+// (http://RJFM_NAS_URL) via FileStation API. Path relatif (mis. "tasks/12/assign_13/x.pdf")
+// dipetakan ke folder dasar RJFM_STORAGE_PATH (mis. /IT/Extend Server Portal/RJFM).
+//
+// Sebelumnya: SMB mount Z:. Kini HTTP murni agar modul tidak bergantung pada
+// drive mapping Windows.
+import path from 'node:path'
+import crypto from 'node:crypto'
+import { Readable } from 'node:stream'
+import { env } from '../config/env.js'
+import * as nas from './nas.js'
 
 export type SavedFile = {
   originalName: string;
@@ -37,8 +44,9 @@ function mimeForExt(ext: string): string {
   return EXT_MIME[ext.toLowerCase()] || 'application/octet-stream';
 }
 
-export function ensureStorageRoot(): void {
-  fs.mkdirSync(env.storagePath, { recursive: true });
+/** Pastikan folder dasar tersedia di NAS (mkdir -p). */
+export async function ensureStorageRoot(): Promise<void> {
+  await nas.nasEnsureDir(env.storagePath.replace(/\/+$/, ''))
 }
 
 export async function saveBuffer(
@@ -57,32 +65,50 @@ export async function saveBuffer(
     throw Object.assign(new Error(`Ukuran melebihi ${env.maxFileMb} MB.`), { status: 413 });
   }
 
-  // ponytail: sharp auto-compression skipped for MVP (no extra dep, saves CPU at 17:00 burst).
-  // Add when foto lapangan >2MB sering: sharp(buffer).resize({width:1920,height:1080,fit:'inside'}).jpeg({quality:80})
-
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
   const safeBase = path.basename(originalName, ext).replace(/[^a-zA-Z0-9_-]/g, '_') || 'file';
   const systemName = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}_${safeBase}${ext}`;
-  const dir = path.join(env.storagePath, subFolder);
-  fs.mkdirSync(dir, { recursive: true });
-  const fullPath = path.join(dir, systemName);
-  await fs.promises.writeFile(fullPath, buffer);
-  const storagePath = path.join(subFolder, systemName).replace(/\\/g, '/');
+  const dirRel = String(subFolder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  const absDir = dirRel ? `${env.storagePath.replace(/\/+$/, '')}/${dirRel}` : env.storagePath;
+  await nas.nasUpload(absDir, systemName, buffer);
+  const storagePath = [dirRel, systemName].filter(Boolean).join('/');
   return { originalName, systemName, storagePath, sizeBytes: buffer.length, mimeType: mime, sha256 };
 }
 
-export function absolutePath(relativePath: string): string {
-  // prevent traversal: relativePath must not escape storage root
-  const full = path.resolve(path.join(env.storagePath, relativePath));
-  const root = path.resolve(env.storagePath);
-  if (!full.startsWith(root)) throw Object.assign(new Error('Invalid storage path'), { status: 400 });
-  return full;
+/**
+ * Content-Disposition yang benar menurut RFC 6266/5987:
+ * `filename*=` (UTF-8) untuk nama non-ASCII, `filename=` fallback ASCII.
+ */
+export function contentDisposition(name: string, disposition: 'inline' | 'attachment' = 'inline'): string {
+  const ascii = String(name).replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_').slice(0, 150) || 'file';
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name).replace(/'/g, '%27')}`;
 }
 
-export function createReadStream(relativePath: string): fs.ReadStream {
-  const full = absolutePath(relativePath);
-  if (!fs.existsSync(full)) throw Object.assign(new Error('Berkas tidak ditemukan'), { status: 404 });
-  return fs.createReadStream(full);
+/** Stat berkas relatif → { size, mtime } atau null bila tidak ada. */
+export async function statRemote(relativePath: string): Promise<{ size: number; mtime: number } | null> {
+  const f = await nas.nasStat(nas.nasFullPath(relativePath));
+  if (!f || f.isdir) return null;
+  return { size: f.size, mtime: f.mtime };
+}
+
+/** Hapus berkas/folder relatif dari NAS. */
+export async function deleteRemote(relativePath: string): Promise<void> {
+  await nas.nasRemove([nas.nasFullPath(relativePath)]);
+}
+
+/** Unduh seluruh isi berkas relatif. Null bila berkas tidak ada di NAS. */
+export async function downloadBuffer(relativePath: string): Promise<Buffer | null> {
+  return nas.nasDownload(nas.nasFullPath(relativePath));
+}
+
+/** Bungkus buffer menjadi stream Readable (dipakai route stream). */
+export function bufferToStream(buffer: Buffer): Readable {
+  return Readable.from(buffer);
+}
+
+/** Walk seluruh berkas di bawah root storage → daftar relatif + ukuran + mtime. */
+export async function listAllFiles(): Promise<Array<{ rel: string; size: number; mtime: number }>> {
+  return nas.nasWalk('');
 }
 
 export async function getStorageHealth(): Promise<{
@@ -93,12 +119,10 @@ export async function getStorageHealth(): Promise<{
   isAlertNeeded: boolean;
 }> {
   try {
-    const stats: any = await (fs.promises as any).statfs(env.storagePath);
-    const totalBytes = stats.bsize * stats.blocks;
-    const freeBytes = stats.bsize * stats.bfree;
-    const usedBytes = totalBytes - freeBytes;
-    const freePercentage = totalBytes ? (freeBytes / totalBytes) * 100 : 100;
-    return { totalBytes, freeBytes, usedBytes, freePercentage, isAlertNeeded: freePercentage < 15 };
+    const reachable = await nas.nasPing();
+    if (!reachable) throw new Error('NAS unreachable');
+    // Kuota volume share tidak diekspos FileStation — laporkan sehat tanpa angka.
+    return { totalBytes: 0, freeBytes: 0, usedBytes: 0, freePercentage: 100, isAlertNeeded: false };
   } catch {
     return { totalBytes: 0, freeBytes: 0, usedBytes: 0, freePercentage: 100, isAlertNeeded: false };
   }

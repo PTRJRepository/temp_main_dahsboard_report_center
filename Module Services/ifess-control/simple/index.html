@@ -4,342 +4,353 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IFESS Query Console</title>
+<link rel="icon" href="/ifess-assets/logo-ifess.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ifess-assets/css/tokens.css?v=1">
 <style>
-  :root {
-    --bg: #1e1e1e; --bg-2: #252526; --bg-3: #2d2d2d; --bg-4: #3c3c3c;
-    --border: #3c3c3c; --border-2: #4c4c4c;
-    --text: #d4d4d4; --text-dim: #888; --text-mut: #666;
-    --accent: #0c6da8; --accent-2: #0d7fc0;
-    --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --blue: #6cb6ff;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-  .header { background: var(--bg-2); border-bottom: 1px solid var(--border); padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-  .header-left { display: flex; align-items: center; gap: 12px; }
-  .logo { font-size: 14px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 6px; }
-  .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-  .header-right { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-dim); }
-  .conn-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
-  .conn-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .conn-dot.offline { background: var(--red); }
+/* Hallmark · macrostructure: Workbench Control-Room (compact) · theme: Midnight Ops (custom) */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { overflow-x: clip; }
+body { font-family: var(--font-body); background: var(--color-paper); color: var(--color-ink); font-size: var(--text-base); height: 100vh; display: flex; flex-direction: column; }
+::selection { background: var(--color-accent-dim); color: var(--color-accent); }
 
-  .container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  .topbar { background: var(--bg-2); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; gap: 10px; align-items: end; flex-wrap: wrap; flex-shrink: 0; }
-  .field { display: flex; flex-direction: column; gap: 3px; }
-  .field label { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-  select, input { background: var(--bg-4); border: 1px solid var(--border-2); color: var(--text); border-radius: 4px; padding: 6px 9px; font-size: 12px; outline: none; }
-  select:focus, input:focus { border-color: var(--accent); }
-  .editor-wrap { flex: 1; display: flex; flex-direction: column; padding: 12px 16px; overflow: hidden; min-height: 0; }
-  .editor-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
-  .editor-bar .left { display: flex; gap: 8px; align-items: center; }
-  .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--bg-3); color: var(--text-dim); }
-  .btn { padding: 7px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: background 0.15s; }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { background: var(--accent-2); }
-  .btn-primary:disabled { background: var(--bg-4); cursor: not-allowed; opacity: 0.6; }
-  .btn-sec { background: var(--bg-4); color: var(--text); }
-  .btn-sec:hover { background: var(--border-2); }
-  .btn-sm { padding: 4px 10px; font-size: 11px; }
-  textarea#query { background: var(--bg); border: 1px solid var(--border); color: #e6e6e6; border-radius: 6px; padding: 12px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; width: 100%; resize: none; flex: 1; min-height: 120px; line-height: 1.5; }
-  textarea#query:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.header { background: var(--color-paper-2); border-bottom: var(--rule-hairline); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; gap: 12px; }
+.header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logo { font-size: var(--text-base); font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.logo img { width: 24px; height: 24px; }
+.logo .tag { font-family: var(--font-data); font-size: 9.5px; color: var(--color-accent); text-transform: uppercase; letter-spacing: .1em; border: 1px solid oklch(80% .125 184 / 40%); padding: 2px 7px; border-radius: 999px; background: var(--color-accent-dim); }
+.conn { display: flex; align-items: center; gap: 7px; font-family: var(--font-data); font-size: var(--text-xs); color: var(--color-ink-muted); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ink-muted); }
+.dot.live { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
 
-  .status-bar { padding: 7px 12px; border-radius: 4px; font-size: 11px; margin: 8px 0; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  .status-bar.info { background: rgba(12,109,168,0.15); color: var(--blue); border: 1px solid rgba(12,109,168,0.3); }
-  .status-bar.success { background: rgba(74,222,128,0.1); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
-  .status-bar.error { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
-  .status-bar.warn { background: rgba(251,191,36,0.1); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
-  .status-bar .spinner { width: 11px; height: 11px; }
+.container { flex: 1; display: grid; grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr); gap: 14px; padding: 14px; overflow: hidden; min-height: 0; }
+.panel { background: var(--color-paper-2); border: var(--rule-hairline); border-radius: var(--radius-md); display: flex; flex-direction: column; overflow: clip; min-height: 0; }
+.panel-head { padding: 10px 16px; border-bottom: var(--rule-hairline); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.panel-head h2 { font-size: var(--text-sm); font-weight: 700; margin-right: auto; }
+.panel-body { flex: 1; padding: 14px; overflow-y: auto; min-height: 0; }
 
-  .result-section { flex-shrink: 0; }
-  .result-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; padding: 0 2px; }
-  .result-meta .meta-left { display: flex; gap: 12px; }
-  .result-meta .meta-stat { display: flex; align-items: center; gap: 4px; }
-  .result-meta .meta-stat b { color: var(--text); }
+.field label { display: block; font-size: 9.5px; font-family: var(--font-data); color: var(--color-ink-muted); text-transform: uppercase; letter-spacing: .09em; margin-bottom: 3px; }
+.field input, .field select, .field textarea { background: var(--color-paper); border: var(--rule-strong); color: var(--color-ink); border-radius: var(--radius-xs); padding: 7px 10px; font-size: var(--text-sm); width: 100%; font-family: inherit; }
+.field textarea { font-family: var(--font-data); line-height: 1.55; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--color-focus); outline: none; }
+.field-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
 
-  .table-wrap { border: 1px solid var(--border); border-radius: 6px; overflow: auto; max-height: calc(100vh - 420px); min-height: 150px; background: var(--bg); }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  thead { position: sticky; top: 0; z-index: 5; }
-  th { background: #37373d; color: #9cdcfe; text-align: left; padding: 8px 12px; border-right: 1px solid var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
-  td { padding: 6px 12px; border-right: 1px solid #252526; border-bottom: 1px solid #252526; white-space: nowrap; max-width: 350px; overflow: hidden; text-overflow: ellipsis; font-family: 'Consolas', monospace; color: #ccc; }
-  td:hover { white-space: normal; max-width: none; }
-  tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
-  tbody tr:hover { background: rgba(12,109,168,0.12); }
-  tbody tr:hover td { color: #fff; }
+.btn { font-family: inherit; font-weight: 700; font-size: var(--text-sm); cursor: pointer; border: var(--rule-strong); border-radius: var(--radius-xs); padding: 7px 14px; background: var(--color-paper-3); color: var(--color-ink); transition: all var(--dur-fast) var(--ease-out); }
+.btn:hover { background: var(--color-paper-raised); border-color: var(--color-ink-muted); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.btn:disabled, .btn[data-state="loading"] { opacity: .45; cursor: not-allowed; transform: none; }
+.btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: #04121f; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.sm { padding: 4px 10px; font-size: var(--text-xs); }
 
-  .empty { padding: 50px; text-align: center; color: var(--text-mut); font-size: 12px; }
-  .empty .spinner-wrap { margin-bottom: 10px; }
-  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--bg-4); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+.checks { display: flex; flex-wrap: wrap; gap: 6px; max-height: 110px; overflow-y: auto; padding: 8px; border: var(--rule-hairline); border-radius: var(--radius-xs); }
+.checks label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-family: var(--font-data); padding: 3px 8px; border-radius: var(--radius-xs); cursor: pointer; color: var(--color-ink-soft); }
+.checks label:hover { background: oklch(100% 0 0 / 5%); }
+.checks input { accent-color: var(--color-accent); width: auto; }
 
-  .client-block { border-bottom: 2px solid var(--border); }
-  .client-block:last-child { border-bottom: none; }
-  .client-head { background: var(--bg-2); padding: 6px 12px; font-size: 11px; color: var(--text-dim); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 4; }
-  .client-head .name { color: var(--blue); font-weight: 500; }
-  .client-head .count { background: var(--bg-4); padding: 2px 8px; border-radius: 10px; font-size: 10px; }
-  .truncated-tag { color: var(--yellow); font-size: 10px; margin-left: 8px; }
+.table-wrap { overflow: auto; max-height: calc(100vh - 220px); }
+table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+thead th { position: sticky; top: 0; background: var(--color-paper-3); text-align: left; z-index: 1; font-family: var(--font-data); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--color-ink-muted); padding: 8px 12px; border-bottom: var(--rule-strong); white-space: nowrap; }
+tbody td { padding: 7px 12px; border-bottom: var(--rule-hairline); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tbody tr:hover { background: oklch(100% 0 0 / 3.5%); }
+.empty { padding: 40px 20px; text-align: center; color: var(--color-ink-muted); font-size: var(--text-sm); }
 
-  .kbd { font-size: 10px; background: var(--bg-4); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border-2); color: var(--text-dim); }
+.meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-family: var(--font-data); font-size: var(--text-xs); color: var(--color-ink-muted); }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-data); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid; }
+.b-ok { color: var(--color-success); border-color: oklch(76% .16 155 / 40%); background: oklch(76% .16 155 / 9%); }
+.b-bad { color: var(--color-danger); border-color: oklch(66% .19 15 / 40%); background: oklch(66% .19 15 / 9%); }
+.b-info { color: var(--color-info); border-color: oklch(70% .14 245 / 40%); background: oklch(70% .14 245 / 9%); }
+.progress { height: 4px; border-radius: 999px; background: var(--color-paper-raised); overflow: clip; margin-bottom: 10px; }
+.progress > i { display: block; height: 100%; background: var(--color-accent); transition: width var(--dur-slow) var(--ease-in-out); }
+
+.me-chip { display: flex; align-items: center; gap: 8px; padding: 4px 11px; border: var(--rule-hairline); border-radius: 999px; background: var(--color-paper-3); }
+.me-chip b { font-size: var(--text-xs); } .me-chip span { font-family: var(--font-data); font-size: 9px; color: var(--color-ink-muted); text-transform: uppercase; }
+.gate { margin: 18vh auto 0; max-width: 520px; text-align: center; padding: 0 20px; }
+.gate p { color: var(--color-ink-muted); line-height: 1.6; margin: 10px 0 18px; }
+.gate a { color: var(--color-accent); font-weight: 700; }
+
+@media (max-width: 900px) {
+  .container { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .panel { min-height: 300px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 </style>
 </head>
 <body>
-<div class="header">
+
+<header class="header">
   <div class="header-left">
-    <div class="logo"><span class="dot"></span> IFESS Query Console</div>
+    <div class="logo"><img src="/ifess-assets/logo-ifess.svg" alt=""> IFESS <span class="tag">Query</span></div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="conn-txt">connecting…</span></div>
   </div>
-  <div class="header-right">
-    <span><span class="conn-dot" id="connDot"></span><span id="connText">checking</span></span>
-    <span>Firebird read-only</span>
-  </div>
+  <div class="me-chip" id="me" hidden><b id="me-name">…</b><span id="me-src"></span></div>
+</header>
+
+<div class="container" id="app">
+  <!-- EDITOR PANEL -->
+  <section class="panel">
+    <div class="panel-head"><h2>Editor</h2><span class="badge b-ok" id="valid-badge" hidden>read-only ✓</span><span class="badge b-bad" id="invalid-badge" hidden>rejected</span></div>
+    <div class="panel-body">
+      <div class="field-row">
+        <div class="field" style="flex:1;min-width:150px;">
+          <label>Name</label>
+          <input id="q-name" placeholder="Ad-hoc query">
+        </div>
+        <div class="field" style="max-width:105px;">
+          <label>Max rows</label>
+          <input id="q-maxrows" type="number" value="1000" min="1" max="100000">
+        </div>
+        <div class="field" style="max-width:105px;">
+          <label>Timeout s</label>
+          <input id="q-timeout" type="number" value="30" min="5" max="300">
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>SQL — read-only (SELECT / WITH…SELECT)</label>
+        <textarea id="q-text" rows="9" spellcheck="false">SELECT FIRST 10 * FROM RDB$RELATIONS;</textarea>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Targets</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;" id="mode-row"></div>
+        <select id="t-group" style="display:none;margin-bottom:6px;"></select>
+        <div class="checks" id="t-clients" style="display:none;"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn primary" id="run-btn" style="flex:1;">▶ Run on targets</button>
+        <button class="btn" id="tpl-btn">Templates</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS PANEL -->
+  <section class="panel">
+    <div class="panel-head"><h2>Results</h2><span class="meta" style="margin:0;" id="r-meta"></span><button class="btn sm" id="csv-btn" hidden>⭳ CSV</button></div>
+    <div class="panel-body" id="results"><div class="empty">Run a query to see results per client</div></div>
+  </section>
 </div>
 
-<div class="container">
-  <div class="topbar">
-    <div class="field">
-      <label>Target Client</label>
-      <select id="clientSel" style="min-width:200px"><option value="">Loading...</option></select>
-    </div>
-    <div class="field">
-      <label>Template</label>
-      <select id="templateSel" style="min-width:220px"><option value="">— pick template —</option></select>
-    </div>
-    <div class="field">
-      <label>Max Rows</label>
-      <input type="number" id="maxRows" value="100" style="width:80px">
-    </div>
-    <div class="field">
-      <label>&nbsp;</label>
-      <button class="btn btn-sec btn-sm" id="refreshBtn">↻ Refresh</button>
-    </div>
-  </div>
-
-  <div class="editor-wrap">
-    <div class="editor-bar">
-      <div class="left">
-        <span class="badge" id="queryBadge">SELECT</span>
-        <span style="font-size:11px;color:var(--text-dim)">SQL Editor — <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> to run</span>
-      </div>
-      <div>
-        <button class="btn btn-primary" id="execBtn">▶ Execute</button>
-      </div>
-    </div>
-    <textarea id="query" spellcheck="false" placeholder="SELECT ... FROM ...">SELECT RDB$RELATION_NAME AS TABLE_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG = 0 ORDER BY RDB$RELATION_NAME</textarea>
-  </div>
-
-  <div class="status-bar info" id="status">Ready — pick a client and run a query</div>
-
-  <div class="result-section" style="padding: 0 16px 16px; flex:1; display:flex; flex-direction:column; min-height:0;">
-    <div class="result-meta" id="resultMeta"></div>
-    <div class="table-wrap" id="resultWrap">
-      <div class="empty">Execute a query to see results here.</div>
-    </div>
-  </div>
+<div class="gate" id="gate" hidden>
+  <img src="/ifess-assets/logo-ifess.svg" alt="" style="width:52px;height:52px;opacity:.9;">
+  <h1 style="margin-top:14px;">Portal sign-in required</h1>
+  <p>This console is protected by the portal identity layer. Open it through the dashboard portal.</p>
+  <a href="/">Go to portal →</a>
 </div>
 
 <script>
-const $ = id => document.getElementById(id);
-let pollTimer = null;
+'use strict';
+const $ = (id) => document.getElementById(id);
+let ME = null, TARGET_MODE = 'All', POLL = null, LAST = null;
 
-async function api(path, opts={}) {
-  const r = await fetch(path, { headers: {'Content-Type':'application/json'}, ...opts });
-  const t = await r.text();
-  try { return JSON.parse(t); } catch { return { error: t, status: r.status }; }
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (r.status === 401) throw Object.assign(new Error('unauthorized'), { code: 401 });
+  const b = await r.json().catch(() => null);
+  if (!r.ok) throw Object.assign(new Error(b && (b.error || b.message) || ('HTTP ' + r.status)), { status: r.status });
+  return b;
 }
-function clearNode(el) { while (el.firstChild) el.removeChild(el.firstChild); }
-function setText(el, txt) { clearNode(el); el.appendChild(document.createTextNode(txt)); }
+const rpc = (action, params = {}) => api('/api/ifess', { method: 'POST', body: JSON.stringify({ action, params }) });
 
-function setConn(online) {
-  const dot = $('connDot'); dot.className = 'conn-dot ' + (online ? 'online' : 'offline');
-  setText($('connText'), online ? 'gateway online' : 'gateway offline');
-}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-async function checkConn() {
-  try { await api('/api/ifess/health'); setConn(true); loadClients(); }
-  catch { setConn(false); setTimeout(checkConn, 3000); }
-}
-
-async function loadClients() {
-  const d = await api('/api/ifess', { method:'POST', body: JSON.stringify({action:'listClients'}) });
-  const clients = Array.isArray(d) ? d : (d.clients || []);
-  const sel = $('clientSel'); clearNode(sel);
-  if (clients.length === 0) {
-    const o = document.createElement('option'); o.value=''; o.textContent='No clients (start sim)'; sel.appendChild(o);
-  } else {
-    clients.forEach(c => { const o=document.createElement('option'); o.value=c.clientId; o.textContent=`${c.clientName} · ${c.status}`; sel.appendChild(o); });
+(async function boot() {
+  try {
+    ME = await api('/api/ifess/me');
+    $('me').hidden = false;
+    $('me-name').textContent = ME.name || ME.userId || '?';
+    $('me-src').textContent = ME.source;
+  } catch (e) {
+    if (e.code === 401) { $('gate').hidden = false; $('app').style.display = 'none'; return; }
   }
-}
+  try { await api('/health'); $('dot').className = 'dot live'; $('conn-txt').textContent = 'online'; } catch { $('dot').className = 'dot dead'; $('conn-txt').textContent = 'offline'; }
+  buildModes();
+  await refreshTargets();
+  wire();
+})();
 
-async function loadTemplates() {
-  const d = await api('/api/query-gateway/templates');
-  const arr = Array.isArray(d) ? d : [];
-  const sel = $('templateSel'); clearNode(sel);
-  const def = document.createElement('option'); def.value=''; def.textContent='— pick template —'; sel.appendChild(def);
-  arr.forEach(t => { const o=document.createElement('option'); o.value=t.templateCode; o.textContent=t.templateName; sel.appendChild(o); });
-}
-
-async function applyTemplate() {
-  const code = $('templateSel').value;
-  if (!code) return;
-  const d = await api('/api/query-gateway/templates');
-  const t = (Array.isArray(d)?d:[]).find(x => x.templateCode === code);
-  if (t) { $('query').value = t.queryText; $('maxRows').value = t.defaultMaxRows; updateBadge(); }
-}
-
-function updateBadge() {
-  const q = $('query').value.trim().toUpperCase();
-  const badge = $('queryBadge');
-  if (q.startsWith('SELECT')) { badge.textContent='SELECT'; badge.style.background='rgba(74,222,128,0.15)'; badge.style.color='var(--green)'; }
-  else if (q.startsWith('WITH')) { badge.textContent='WITH'; badge.style.background='rgba(108,182,255,0.15)'; badge.style.color='var(--blue)'; }
-  else { badge.textContent='SQL'; badge.style.background='var(--bg-3)'; badge.style.color='var(--text-dim)'; }
-}
-
-function setStatus(msg, type='info', spinner=false) {
-  $('status').className = 'status-bar ' + type;
-  clearNode($('status'));
-  if (spinner) { const s=document.createElement('span'); s.className='spinner'; $('status').appendChild(s); $('status').appendChild(document.createTextNode(' ')); }
-  $('status').appendChild(document.createTextNode(msg));
-}
-
-function showSpinner(msg) {
-  const wrap = $('resultWrap'); clearNode(wrap);
-  const div = document.createElement('div'); div.className='empty';
-  const sw = document.createElement('div'); sw.className='spinner-wrap';
-  const sp = document.createElement('span'); sp.className='spinner'; sw.appendChild(sp); div.appendChild(sw);
-  div.appendChild(document.createTextNode(msg));
-  wrap.appendChild(div);
-}
-
-function exportCSV(headers, rows) {
-  const esc = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; };
-  const lines = [headers.map(esc).join(',')];
-  rows.forEach(r => lines.push(headers.map((_, i) => esc(r[i])).join(',')));
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'query_result.csv'; a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-async function execute() {
-  if (pollTimer) clearInterval(pollTimer);
-  const query = $('query').value.trim();
-  const client = $('clientSel').value;
-  const maxRows = parseInt($('maxRows').value) || 100;
-  if (!query) { setStatus('Query is empty', 'error'); return; }
-  if (!client) { setStatus('No client selected — start the sim first', 'error'); return; }
-
-  $('execBtn').disabled = true;
-  clearNode($('resultMeta'));
-  setStatus('Validating query...', 'info', true);
-  showSpinner('Validating query syntax...');
-
-  const v = await api('/api/query-gateway/validate', { method:'POST', body: JSON.stringify({queryText: query}) });
-  if (!v.valid) {
-    setStatus('Invalid query: ' + (v.errors||[]).join(', '), 'error');
-    const wrap=$('resultWrap'); clearNode(wrap);
-    const d=document.createElement('div'); d.className='empty'; d.textContent='Query rejected — only SELECT / WITH ... SELECT allowed.'; wrap.appendChild(d);
-    $('execBtn').disabled=false; return;
-  }
-
-  setStatus(`Dispatching to ${client}...`, 'info', true);
-  showSpinner('Sending query to client...');
-  const disp = await api('/api/query-gateway/dispatch', { method:'POST', body: JSON.stringify({
-    queryName: 'Ad-hoc', queryText: query, targetMode: 'SingleClient',
-    targetClientIds: [client], maxRows, timeoutSeconds: 30
-  })});
-  if (!disp.success) { setStatus('Dispatch failed: ' + (disp.error||''), 'error'); $('execBtn').disabled=false; return; }
-
-  const batchId = disp.queryBatchId;
-  setStatus(`Executing on client (batch ${batchId.slice(0,18)}...)`, 'info', true);
-  showSpinner('Client executing query via isql...');
-
-  let attempts = 0;
-  pollTimer = setInterval(async () => {
-    attempts++;
-    const b = await api(`/api/query-gateway/batches/${batchId}`);
-    if (b.status === 'Completed' || b.status === 'Success' || b.status === 'Failed' || attempts > 40) {
-      clearInterval(pollTimer); pollTimer = null;
-      $('execBtn').disabled = false;
-      renderResults(b);
-    } else if (attempts % 4 === 0) {
-      setStatus(`Still executing... (${attempts}s)`, 'info', true);
-    }
-  }, 150);
-}
-
-function renderResults(batch) {
-  const results = batch.results || [];
-  const jobs = batch.jobs || [];
-  const wrap = $('resultWrap'); clearNode(wrap);
-
-  // meta bar
-  const meta = $('resultMeta'); clearNode(meta);
-  const ml = document.createElement('div'); ml.className='meta-left';
-  let totalRows = 0; results.forEach(r => totalRows += (r.rowCount||0));
-  const s1 = document.createElement('span'); s1.className='meta-stat'; s1.innerHTML=''; s1.appendChild(document.createTextNode('Status: ')); const b1=document.createElement('b'); b1.textContent=batch.status; b1.style.color = batch.status==='Completed'?'var(--green)':'var(--text)'; s1.appendChild(b1);
-  const s2 = document.createElement('span'); s2.className='meta-stat'; s2.appendChild(document.createTextNode('Rows: ')); const b2=document.createElement('b'); b2.textContent=totalRows; s2.appendChild(b2);
-  const s3 = document.createElement('span'); s3.className='meta-stat'; s3.appendChild(document.createTextNode('Clients: ')); const b3=document.createElement('b'); b3.textContent=results.length; s3.appendChild(b3);
-  ml.appendChild(s1); ml.appendChild(s2); ml.appendChild(s3);
-  meta.appendChild(ml);
-
-  if (results.length === 0) {
-    setStatus(`Done — ${batch.status}, but no results returned. ${jobs.length} job(s), ${batch.successCount} succeeded.`, 'warn');
-    const d = document.createElement('div'); d.className='empty';
-    d.textContent='No results. The client may not have executed — check the sim is running.';
-    wrap.appendChild(d);
-    return;
-  }
-  setStatus(`Done — ${batch.status}, ${results.length} client(s), ${totalRows} row(s)`, 'success');
-
-  results.forEach(r => {
-    const block = document.createElement('div'); block.className='client-block';
-    const head = document.createElement('div'); head.className='client-head';
-    const left = document.createElement('span'); left.className='name'; left.textContent = r.clientId;
-    head.appendChild(left);
-    if (r.isTruncated) { const t=document.createElement('span'); t.className='truncated-tag'; t.textContent='truncated'; head.appendChild(t); }
-    const cnt = document.createElement('span'); cnt.className='count'; cnt.textContent = `${r.rowCount} rows`; head.appendChild(cnt);
-    block.appendChild(head);
-
-    const headers = r.headers || [];
-    const rows = r.rows || [];
-    if (headers.length > 0 && rows.length > 0) {
-      // export button
-      const expBtn = document.createElement('button'); expBtn.className='btn btn-sec btn-sm'; expBtn.textContent='⬇ CSV'; expBtn.style.cssText='position:sticky;top:0;float:right;margin:4px 8px;z-index:6;';
-      expBtn.onclick = () => exportCSV(headers, rows);
-
-      const tbl = document.createElement('table');
-      const thead = document.createElement('thead');
-      const tr = document.createElement('tr');
-      headers.forEach(h => { const th=document.createElement('th'); th.textContent=h; tr.appendChild(th); });
-      thead.appendChild(tr); tbl.appendChild(thead);
-      const tb = document.createElement('tbody');
-      const visible = rows.slice(0, 500);
-      visible.forEach(row => {
-        const rtr = document.createElement('tr');
-        headers.forEach((_, i) => { const td=document.createElement('td'); td.textContent = row[i] != null ? String(row[i]) : ''; rtr.appendChild(td); });
-        tb.appendChild(rtr);
-      });
-      tbl.appendChild(tb);
-      const tw = document.createElement('div'); tw.style.cssText='overflow:auto;max-height:400px';
-      tw.appendChild(tbl);
-      block.appendChild(tw);
-      if (rows.length > 500) {
-        const note = document.createElement('div'); note.style.cssText='padding:6px 12px;font-size:10px;color:var(--text-mut);background:var(--bg-2)';
-        note.textContent = `Showing first 500 of ${rows.length} rows`; block.appendChild(note);
-      }
-      head.appendChild(expBtn);
-    } else {
-      const d = document.createElement('div'); d.className='empty'; d.textContent='Empty result set'; block.appendChild(d);
-    }
-    wrap.appendChild(block);
+function buildModes() {
+  const row = $('mode-row');
+  ['All', 'Group', 'Selected'].forEach(m => {
+    const b = document.createElement('button');
+    b.className = 'btn sm' + (m === TARGET_MODE ? ' primary' : '');
+    b.textContent = m;
+    b.addEventListener('click', () => {
+      TARGET_MODE = m;
+      [...row.children].forEach(c => c.classList.toggle('primary', c.textContent === m));
+      $('t-group').style.display = m === 'Group' ? '' : 'none';
+      $('t-clients').style.display = m === 'Selected' ? '' : 'none';
+    });
+    row.appendChild(b);
   });
 }
 
-$('refreshBtn').addEventListener('click', () => { loadClients(); loadTemplates(); });
-$('templateSel').addEventListener('change', applyTemplate);
-$('execBtn').addEventListener('click', execute);
-$('query').addEventListener('input', updateBadge);
-document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') e.preventDefault(), execute(); });
-checkConn();
-loadTemplates();
-updateBadge();
+async function refreshTargets() {
+  try {
+    const clients = await rpc('listClients');
+    const box = $('t-clients');
+    while (box.firstChild) box.removeChild(box.firstChild);
+    for (const c of clients) {
+      const l = document.createElement('label');
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = c.clientId;
+      l.appendChild(cb);
+      l.appendChild(document.createTextNode(c.clientName || c.clientId));
+      box.appendChild(l);
+    }
+    const groups = await rpc('listClientGroups').catch(() => []);
+    const gsel = $('t-group');
+    while (gsel.firstChild) gsel.removeChild(gsel.firstChild);
+    for (const g of groups) {
+      const o = document.createElement('option');
+      o.value = g.groupCode; o.textContent = g.groupName || g.groupCode;
+      gsel.appendChild(o);
+    }
+  } catch (e) { /* targets optional */ }
+}
+
+function setBusy(btn, on) {
+  if (!on) { delete btn.dataset.state; btn.disabled = false; return; }
+  btn.dataset.state = 'loading'; btn.disabled = true;
+}
+
+function wire() {
+  $('run-btn').addEventListener('click', run);
+  $('tpl-btn').addEventListener('click', showTemplates);
+  $('csv-btn').addEventListener('click', () => {
+    if (!LAST) return;
+    const blob = new Blob(['﻿' + toCSV(LAST.headers, LAST.rows)], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'query-' + Date.now() + '.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 300);
+  });
+}
+
+function toCSV(headers, rows) {
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  return [headers.map(q).join(',')].concat(rows.map(r => r.map(q).join(','))).join('\n');
+}
+
+async function run() {
+  const btn = $('run-btn'); setBusy(btn, true);
+  $('valid-badge').hidden = true; $('invalid-badge').hidden = true;
+  try {
+    const v = await fetch('/api/query-gateway/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ queryText: $('q-text').value }) }).then(r => r.json());
+    if (v.valid === false) {
+      $('invalid-badge').hidden = false;
+      $('results').innerHTML = '<div class="empty">' + esc((v.errors || ['validation failed']).join('; ')) + '</div>';
+      setBusy(btn, false);
+      return;
+    }
+    $('valid-badge').hidden = false;
+
+    const params = {
+      queryName: $('q-name').value.trim() || 'Quick Query',
+      queryText: $('q-text').value,
+      targetMode: TARGET_MODE,
+      targetGroup: TARGET_MODE === 'Group' ? ($('t-group').value || null) : null,
+      targetClientIds: TARGET_MODE === 'Selected' ? [...$('t-clients').querySelectorAll('input:checked')].map(i => i.value) : undefined,
+      maxRows: parseInt($('q-maxrows').value, 10) || 1000,
+      timeoutSeconds: parseInt($('q-timeout').value, 10) || 30,
+      requestedBy: (ME && ME.name) || 'simple-console',
+    };
+    const batch = await rpc('dispatch', params);
+    poll(batch.queryBatchId);
+  } catch (e) {
+    $('results').innerHTML = '<div class="empty">' + esc(e.message) + '</div>';
+  }
+  setBusy(btn, false);
+}
+
+function poll(batchId) {
+  clearInterval(POLL);
+  $('r-meta').innerHTML = '<span class="badge b-info">running…</span>';
+  const tick = async () => {
+    try {
+      const batch = await api('/api/query-gateway/batches/' + encodeURIComponent(batchId));
+      const jobs = batch.jobs || [];
+      const done = jobs.filter(j => ['Success', 'Failed', 'Rejected', 'Timeout'].includes(j.status)).length;
+      $('r-meta').textContent = done + '/' + jobs.length + ' · ' + (batch.successCount || 0) + ' ok · ' + (batch.failedCount || 0) + ' failed';
+      renderProgress(done, jobs.length);
+      if (jobs.length && done === jobs.length) { clearInterval(POLL); renderResults(batch); }
+    } catch (e) { clearInterval(POLL); $('results').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+  };
+  tick();
+  POLL = setInterval(tick, 1200);
+}
+
+function renderProgress(done, total) {
+  let p = $('prog');
+  if (!p) {
+    p = document.createElement('div'); p.className = 'progress'; p.id = 'prog';
+    p.appendChild(document.createElement('i'));
+    const box = $('results');
+    while (box.firstChild) box.removeChild(box.firstChild);
+    box.appendChild(p);
+  }
+  p.firstChild.style.width = (total ? Math.round(done / total * 100) : 0) + '%';
+}
+
+function renderResults(batch) {
+  const box = $('results');
+  const prog = $('prog'); if (prog) prog.remove();
+  while (box.firstChild) box.removeChild(box.firstChild);
+  const resultsByJob = new Map((batch.results || []).map(r => [r.queryJobId, r]));
+  for (const job of batch.jobs || []) {
+    const head = document.createElement('div'); head.className = 'meta';
+    const st = job.status === 'Success' ? 'b-ok' : 'b-bad';
+    const badge = document.createElement('span'); badge.className = 'badge ' + st; badge.textContent = job.targetClientId;
+    head.appendChild(badge);
+    head.appendChild(document.createTextNode((job.executionTimeMs != null ? job.executionTimeMs + ' ms · ' : '') + (job.rowCount || 0) + ' rows' + (job.isTruncated ? ' (truncated)' : '')));
+    box.appendChild(head);
+    if (job.errorMessage) {
+      const em = document.createElement('div'); em.className = 'empty'; em.textContent = job.errorMessage;
+      box.appendChild(em); continue;
+    }
+    const res = resultsByJob.get(job.queryJobId);
+    if (!res || !(res.rows || []).length) {
+      const nr = document.createElement('div'); nr.className = 'empty'; nr.textContent = 'No rows returned';
+      box.appendChild(nr); continue;
+    }
+    LAST = res;
+    $('csv-btn').hidden = false;
+    const wrap = document.createElement('div'); wrap.className = 'table-wrap';
+    const tbl = document.createElement('table');
+    const thead = document.createElement('thead'); const hr = document.createElement('tr');
+    res.headers.forEach(h => { const th = document.createElement('th'); th.textContent = String(h); hr.appendChild(th); });
+    thead.appendChild(hr); tbl.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    res.rows.slice(0, 500).forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach(c => { const td = document.createElement('td'); td.textContent = c == null ? '' : String(c); td.title = td.textContent; tr.appendChild(td); });
+      tbody.appendChild(tr);
+    });
+    if (res.rows.length > 500) {
+      const tr = document.createElement('tr'); const td = document.createElement('td');
+      td.colSpan = res.headers.length; td.className = 'empty';
+      td.textContent = 'first 500 of ' + res.rows.length + ' rows — export CSV for all';
+      tr.appendChild(td); tbody.appendChild(tr);
+    }
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    box.appendChild(wrap);
+  }
+}
+
+async function showTemplates() {
+  try {
+    const templates = await api('/api/query-gateway/templates');
+    const names = templates.map(t => '· ' + t.templateCode + ' — ' + (t.templateName || '')).join('\n');
+    const pick = prompt('Template code?\n' + names);
+    if (!pick) return;
+    const t = templates.find(x => x.templateCode.toLowerCase() === pick.trim().toLowerCase());
+    if (!t) { alert('Template not found'); return; }
+    $('q-text').value = t.queryText || '';
+    if (t.defaultMaxRows) $('q-maxrows').value = t.defaultMaxRows;
+    if (t.defaultTimeoutSeconds) $('q-timeout').value = t.defaultTimeoutSeconds;
+  } catch (e) { alert(e.message); }
+}
 </script>
 </body>
 </html>

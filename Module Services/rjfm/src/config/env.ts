@@ -18,8 +18,19 @@ export const env = {
   },
   jwtSecret: process.env.JWT_SECRET || 'ptrj-rjfm-dev-secret-2026',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
-  storagePath: process.env.RJFM_STORAGE_PATH || 'D:/RJFM_Storage/uploads',
+  // NAS Synology via FileStation HTTP API (bukan lagi SMB drive Z:)
+  nas: {
+    url: process.env.RJFM_NAS_URL || 'http://10.0.0.8:5000',
+    user: process.env.RJFM_NAS_USER || '',
+    pass: process.env.RJFM_NAS_PASS || '',
+  },
+  // Folder dasar di share NAS (path remote, bukan drive lokal)
+  storagePath: process.env.RJFM_STORAGE_PATH || '/IT/Extend Server Portal/RJFM',
   maxFileMb: parseInt(process.env.RJFM_MAX_FILE_MB || '10', 10),
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3001',
   apiKey: process.env.RJFM_API_KEY || '',
+  // Tool pencari gambar (shared/google-image-search) untuk foto ilustrasi scene
+  googleImageSearchPath:
+    process.env.RJFM_IMAGE_SEARCH_PATH ||
+    '../../../../shared/google-image-search/index.js',
 } as const;

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQL Gateway — Login</title>
+  <style>
+    :root {
+      --bg:#0b0f14; --panel:#11161d; --panel2:#0e1319; --border:#1e2630;
+      --text:#cfd8e3; --dim:#7a8699; --accent:#4da3ff; --ok:#2ecc71; --err:#e74c3c;
+      --mono: ui-monospace,'Cascadia Code',Consolas,monospace;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; min-height:100vh; display:grid; place-items:center;
+      background:var(--bg); color:var(--text);
+      font:14px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;
+    }
+    .card {
+      width:min(420px,92vw); background:var(--panel); border:1px solid var(--border);
+      border-radius:12px; padding:28px 26px 22px; box-shadow:0 18px 60px rgba(0,0,0,.45);
+    }
+    .brand { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+    .brand .logo { font-size:24px; }
+    h1 { font-size:16px; margin:0; }
+    .sub { color:var(--dim); font-size:12px; margin:2px 0 20px; }
+    .sso-btn {
+      display:flex; width:100%; align-items:center; justify-content:center; gap:8px;
+      background:var(--accent); color:#04121f; font-weight:650; border:none;
+      padding:11px 0; border-radius:8px; cursor:pointer; font-size:13.5px;
+    }
+    .sso-btn:hover { filter:brightness(1.08); }
+    .divider { display:flex; align-items:center; gap:10px; color:var(--dim); font-size:11px; margin:18px 0 12px; text-transform:uppercase; letter-spacing:.6px; }
+    .divider::before, .divider::after { content:''; flex:1; height:1px; background:var(--border); }
+    label { display:block; color:var(--dim); font-size:11px; margin-bottom:6px; }
+    input[type=password] {
+      width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text);
+      border-radius:8px; padding:10px 12px; font-family:var(--mono); font-size:12.5px;
+    }
+    input:focus { outline:1px solid var(--accent); }
+    .key-btn {
+      width:100%; margin-top:10px; background:var(--panel2); border:1px solid var(--border);
+      color:var(--text); padding:9px 0; border-radius:8px; cursor:pointer; font-size:13px;
+    }
+    .key-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .msg { min-height:18px; margin-top:10px; font-size:12px; }
+    .msg.err { color:var(--err); } .msg.ok { color:var(--ok); }
+    .hint { color:var(--dim); font-size:11px; margin-top:16px; line-height:1.55; border-top:1px solid var(--border); padding-top:12px; }
+    code { font-family:var(--mono); font-size:10.5px; background:var(--panel2); border:1px solid var(--border); border-radius:4px; padding:1px 5px; }
+    a { color:var(--accent); text-decoration:none; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand"><span class="logo">🛢️</span><h1>SQL Gateway</h1></div>
+    <p class="sub">Traffic &amp; audit dashboard — pilih cara masuk</p>
+
+    <button id="ssoBtn" class="sso-btn">🔐 Masuk lewat Portal SSO</button>
+    <div style="text-align:center;margin-top:8px">
+      <a id="portalLink" href="__LOGIN_URL__" style="font-size:11.5px">buka portal login di tab baru ↗</a>
+    </div>
+
+    <div class="divider">atau akses mesin / direct port</div>
+
+    <label for="apiKey">API key (header x-api-key)</label>
+    <input id="apiKey" type="password" placeholder="tempel API key…" autocomplete="off">
+    <button id="keyBtn" class="key-btn">Verifikasi &amp; masuk</button>
+    <div id="msg" class="msg"></div>
+
+    <p class="hint">
+      Dibuka lewat proxy portal (<code>:3001/sql-gateway</code>)? Kamu otomatis
+      terautentikasi via SSO — halaman ini tidak akan muncul.
+      API key disimpan hanya di <code>localStorage</code> browser ini dan
+      dikirim sebagai header pada tiap request.
+    </p>
+  </main>
+
+<script>
+'use strict';
+const params = new URLSearchParams(location.search);
+const BASE = location.pathname.startsWith('/sql-gateway') ? '/sql-gateway' : '';
+const nextUrl = params.get('next') || (BASE + '/');
+const LOGIN_URL = '__LOGIN_URL__';
+
+function $(id){ return document.getElementById(id); }
+
+$('ssoBtn').onclick = () => {
+  // Portal login lives at the gateway; after signing in there, the same
+  // cookie authenticates both :3001/* and direct :8001 access (same host).
+  window.open(LOGIN_URL, '_blank', 'noopener');
+  $('msg').className = 'msg';
+  $('msg').textContent = 'Selesai login di portal? Tutup tab itu lalu buka lagi halaman ini (link di atas juga bisa).';
+};
+$('portalLink').onclick = () => setTimeout(refreshCheck, 1500);
+
+async function tryKey(value, save) {
+  const res = await fetch(BASE + '/monitor/self', { headers: { accept: 'application/json', 'x-api-key': value } });
+  if (!res.ok) return false;
+  const json = await res.json();
+  if (!json.success || !json.data || json.data.kind !== 'service') return false;
+  if (save) localStorage.setItem('sqlgw_key', value);
+  location.replace(nextUrl.startsWith('/') ? nextUrl : BASE + '/');
+  return true;
+}
+
+$('keyBtn').onclick = async () => {
+  const v = $('apiKey').value.trim();
+  const msg = $('msg');
+  if (v.length < 8) { msg.className = 'msg err'; msg.textContent = 'API key terlalu pendek.'; return; }
+  msg.className = 'msg'; msg.textContent = 'memverifikasi…';
+  if (await tryKey(v, true)) return;
+  msg.className = 'msg err'; msg.textContent = 'API key tidak dikenal (401).';
+};
+$('apiKey').addEventListener('keydown', e => { if (e.key === 'Enter') $('keyBtn').click(); });
+
+// Already have a stored key or already SSO-authenticated? Go straight in.
+async function refreshCheck() {
+  try {
+    const res = await fetch(BASE + '/monitor/self', { headers: { accept: 'application/json' } });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data && json.data.kind === 'user') location.replace(nextUrl);
+    }
+  } catch { /* offline — stay on login */ }
+}
+(async function boot() {
+  const stored = localStorage.getItem('sqlgw_key');
+  if (stored && await tryKey(stored, false)) return;
+  refreshCheck();
+})();
+</script>
+</body>
+</html>

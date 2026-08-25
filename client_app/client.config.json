@@ -1,0 +1,138 @@
+{
+  // ======================================================================
+  // IFESS Client App - konfigurasi client untuk IFESS Control Server.
+  // Boleh memakai komentar // (dibaca dengan parser JSONC).
+  //
+  // Pasangan server-nya:
+  //   D:\Gawean Rebinmas\Kerani_Super_App\IFESS.ControlServer\js-server
+  //   (node server.js -> http://localhost:8003)
+  //
+  // Jalankan client dari folder ini:
+  //   npm start            (atau: node src/index.js)
+  //   node src/index.js --config <file-config-lain.json>
+  // ======================================================================
+
+  "app": {
+    "name": "IFESS Client App"
+  },
+
+  "logging": {
+    "rootPath": "logs",
+    "retainDays": 14,
+    "console": true
+  },
+
+  "controlServer": {
+    "enabled": true,
+
+    // Mode direct ke IFESS Client Gateway:
+    //   "http://localhost:8003" atau "http://10.0.0.128:8003"
+    // Mode reverse proxy lewat Main Dashboard (route /ifess):
+    //   "http://10.0.0.110:3001/ifess"
+    "baseUrl": "http://localhost:8003",
+
+    // Harus sama dengan IFESS_API_KEY di JS server. Jangan ganti di client saja.
+    "apiKey": "ptrj-rebinmas-air-ruak-parit-gunung-darul",
+
+    // Identitas unik per komputer client. Contoh: CLIENT-PTRJ-ARE-A
+    "clientId": "CLIENT-PTRJ-ARE-A",
+    "clientName": "PTRJ ARE A IFESS Client",
+    "environment": "Production",
+
+    // Client tetap retry otomatis jika server mati.
+    "heartbeatIntervalSeconds": 15,
+    "commandPollIntervalSeconds": 5,
+    "maxCommandsPerPoll": 20,
+    "requestTimeoutSeconds": 5,
+    "inflightCommands": 3,
+    "retry": {
+      "baseDelaySeconds": 2,
+      "maxDelaySeconds": 60,
+      "jitterRatio": 0.2
+    }
+  },
+
+  "modules": [
+    {
+      "Code": "IFESS_AUTO_TASK_KILL",
+      "Name": "IFESS Auto Task Kill",
+      "Enabled": true,
+      "AutoStart": true,
+      "customConfig": {
+        // Target aplikasi yang dimonitor/dikill jika command tidak menyertakan target.
+        "defaultTargets": ["PTRJ_IFES"],
+
+        // Exact = nama process harus sama persis; Contains = mengandung target.
+        "matchMode": "Contains",
+        "allowContainsMatch": true,
+        "killEntireProcessTree": true,
+        "stopTimeoutSeconds": 5,
+        "scheduleCheckIntervalSeconds": 5,
+
+        // Jangan masukkan proses Windows penting atau client app sendiri.
+        "protectedProcessNames": [
+          "IFESS.ClientApp", "IFESS.SuperApp", "System", "Idle", "Registry",
+          "smss", "csrss", "wininit", "winlogon", "services", "lsass",
+          "svchost", "explorer", "dwm", "node"
+        ],
+
+        // Jadwal awal dari config. Server juga bisa menambah jadwal lewat command.
+        // Kind: "Once" dengan runAt, atau "Daily" dengan dailyTime ("HH:mm").
+        "schedules": []
+      }
+    },
+    {
+      "Code": "IFESS_QUERY_GATEWAY",
+      "Name": "IFESS Query Gateway",
+      "Enabled": true,
+      "AutoStart": true,
+      "customConfig": {
+        "database": {
+          "type": "Firebird",
+
+          // Path file database lokal client. Ubah sesuai komputer masing-masing.
+          "path": "D:\\Gawean Rebinmas\\Monitoring Database\\Database Ifess\\IFESS_ARE_A_27-06-2026\\PTRJ_ARA.FDB",
+
+          // Gunakan user read-only untuk production. Jangan gunakan SYSDBA.
+          "username": "PTRJ_IFESS_GATEWAY",
+          "password": "PT@RJ0819",
+
+          // Opsional. Kosongkan untuk auto-detect isql.exe:
+          // isqlPath -> firebirdBinPath -> FIREBIRD_HOME -> folder Firebird
+          // di Program Files -> PATH Windows.
+          "firebirdBinPath": "",
+          "isqlPath": "",
+
+          // true = koneksi "localhost:<path db>"; false = langsung ke file path.
+          "useLocalhost": true,
+          "charset": "UTF8"
+        },
+        "queryPolicy": {
+          // Safety utama: hanya SELECT / WITH ... SELECT.
+          "readOnlyOnly": true,
+          "allowOnlySelect": true,
+          "allowWithSelect": true,
+          "blockMultipleStatements": true,
+
+          // Batas agar client stabil saat banyak query/client.
+          "maxRows": 1000,
+          "timeoutSeconds": 30,
+          "maxConcurrentQueries": 3,
+          "maxQueueSize": 20,
+          "maxQueryLength": 10000,
+          "chunkSize": 500,
+          "maxParameters": 50,
+
+          // Outbox menjaga hasil query tetap terkirim saat server mati.
+          "resultReportRetryCount": 3,
+          "resultReportRetryDelaySeconds": 2,
+          "resultOutboxEnabled": true,
+          "resultOutboxPath": "data\\query-gateway-outbox",
+          "resultOutboxFlushIntervalSeconds": 10,
+          "resultOutboxFlushBatchSize": 50,
+          "resultOutboxMaxFiles": 1000
+        }
+      }
+    }
+  ]
+}

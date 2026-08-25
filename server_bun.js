@@ -1028,6 +1028,30 @@ async function isUpstreamReady(target) {
     }
 }
 
+// A Next.js dev server leaves fingerprints a production build never emits:
+// `static/development/*` assets, the webpack HMR endpoint, and versioned chunk
+// URLs (`main-app.js?v=<timestamp>` — prod chunks are content-hashed instead).
+// Used to warn when a production gateway is about to silently adopt a dev
+// portal on its port (proxying every request through the slow dev compiler).
+const NEXT_DEV_MARKERS_RE = new RegExp([
+    '_next/static/development/',
+    '_next/webpack-hmr',
+    '_next/static/chunks/[\\w./-]+\\.js\\?v=\\d+',
+].join('|'));
+
+async function upstreamLooksLikeDevServer(baseUrl) {
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1500);
+        const response = await fetch(`${baseUrl.replace(/\/$/, '')}/`, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!response.ok) return false;
+        return NEXT_DEV_MARKERS_RE.test(await response.text());
+    } catch {
+        return false;
+    }
+}
+
 // ─── Portal (Dashboard_Utama) supervisor ─────────────────────────────────────
 // The portal is a CHILD of the gateway, never a peer the operator manages:
 // production runs its standalone build (instant start, no compiler); dev runs
@@ -1085,6 +1109,11 @@ let _portalShuttingDown = false;
 async function startDashboardIfNeeded() {
     if (await isUpstreamReady(DASHBOARD_TARGET)) {
         console.log(`Portal upstream ready (external): ${DASHBOARD_TARGET}`);
+        if (process.env.NODE_ENV === 'production' && await upstreamLooksLikeDevServer(DASHBOARD_TARGET)) {
+            console.warn(`[portal] WARNING: ${DASHBOARD_TARGET} is served by a Next.js DEV server while the gateway runs in production mode.`);
+            console.warn('[portal]          Traffic is proxied through the slow dev compiler. Restart the portal in prod mode:');
+            console.warn('[portal]          powershell -ExecutionPolicy Bypass -File scripts/start-module-services.ps1 -IncludeDashboard');
+        }
         return;
     }
 

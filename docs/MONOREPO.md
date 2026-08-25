@@ -1,7 +1,51 @@
 # MONOREPO — Module Platform Rulebook
 
-**Last updated:** 2026-08-22
+**Last updated:** 2026-08-24
 Single source of truth for how services are organized, run, routed, and authenticated in the PT Rebinmas Main Dashboard monorepo.
+
+---
+
+## 0. Start/stop ALL modules in one command
+
+`scripts/start-module-services.ps1` is the central launcher. It knows every
+module's port, dev/prod command, and build marker; skips anything whose port is
+already occupied; builds first in prod when the artifact is missing; writes logs
+to `logs/modules/`; tracks PIDs in `logs/modules/module-pids.json`.
+
+```bash
+npm run start:modules        # prod semua module (build otomatis jika perlu)
+npm run dev:modules          # dev semua module (watch/HMR)
+npm run status:modules       # tabel RUNNING/DOWN per port
+npm run stop:modules         # matikan semua yang dikelola (gateway :3001 TIDAK disentuh)
+
+# variasi
+pwsh -File scripts/start-module-services.ps1 -Only rebinmas-jaya-server,rjfm   # subset
+pwsh -File scripts/start-module-services.ps1 -Rebuild                          # paksa rebuild sebelum prod
+pwsh -File scripts/start-module-services.ps1 -IncludeDashboard                 # + portal :3100 (standalone build, .next/static disinkron otomatis)
+```
+
+Catatan:
+- **Gateway tidak pernah men-spawn module services** (`START_MODULE_SERVICES`
+  default false) — launcher inilah cara baku menjalankan semuanya.
+- Jika gateway sudah jalan dan portal :3100 mati, jalankan ulang launcher dengan
+  `-IncludeDashboard` (memakai `.next/standalone`, NODE_ENV=production).
+- **Standalone build wajib ada `.next/static`**: setelah `next build`, Next TIDAK
+  menyalinnya otomatis — tanpa ini portal jalan tapi CSS/JS 404. Launcher
+  `-IncludeDashboard` kini menyinkronkannya sendiri tiap start (copy penuh diulang
+  saat BUILD_ID berubah). Jalankan portal di luar launcher, salin manual:
+  `Copy-Item -Recurse -Force Dashboard_Utama\.next\static Dashboard_Utama\.next\standalone\Dashboard_Utama\.next\static`
+  (`public/` juga, tapi biasanya sudah tersalin).
+- `bun start` root memang sudah otomatis spawn portal (:3100) — syaratnya port
+  3100 KOSONG saat gateway start. Kalau ada proses lama yang menduduki 3100,
+  gateway akan menganggap "upstream ready" dan tidak spawn; begitu proses itu
+  mati, landing mati juga. Cek dengan `status:modules` / `-IncludeDashboard`.
+  Gateway produksi kini mendeteksi kalau penduduk :3100 adalah server DEV Next.js
+  (fingerprint HMR / chunk `?v=`) dan mencetak `[portal] WARNING ...` saat startup —
+  upstream tetap di-adopt, jadi matikan proses dev itu lalu start ulang portal prod.
+- Port WAJIB sama dengan target `routes-config.json`: 3101, 3102, 8011, 8001,
+  3104. `daftar-upah` default internalnya 8002 → launcher memaksa `PORT=3104`.
+- Mode prod = tanpa watch/HMR, aset ter-build. Kalau ada service jalan di mode
+  dev saat `bun start` root, itu sisa proses lama — cek dengan `status:modules`.
 
 ---
 
@@ -18,9 +62,9 @@ Single source of truth for how services are organized, run, routed, and authenti
         ┌───────────────┬───────────┼────────────────┬─────────────┐
         ▼               ▼           ▼                           ▼
   Dashboard_Utama  report-center rjfm                      external services
-  :3100 (portal,   :3101         :8011 (API + RJ Drive     upah :8002 · absen :5176
-  admin, landing)  (Next)        UI via internal :8012)    monitoring-beras :5177
-                                                           basis-panen :3002 · query :8001
+  :3100 (portal,   :3101         :8011 (API + RJ Drive     absen :5176 · beras :5177
+  admin, landing)  (Next)        UI via internal :8012)    basis-panen :3002 · query :8001
+                                                           daftar-upah :3104 (in-repo)
 ```
 
 - **Gateway = front door.** Everything is reached through `:3001/<path>`.
@@ -76,8 +120,10 @@ cd "Module Services" && node -e "require('fs').symlinkSync('../Dashboard_Utama/n
 | Gateway itself | `/` | 3001 | Bun server | root `npm start` / `PORT=… START_DASHBOARD=false bun run server_bun.js` |
 | Dashboard_Utama | `/dashboard-user` `/admin` `/login` `/config-path` + landing | 3100 | Next.js 16 | spawned by gateway or `cd Dashboard_Utama && npm run dev` |
 | report-center | `/report-center` + `/api/reports` | 3101 | Next.js 16 | `cd "Module Services/report-center" && bun start` |
-| rebinmas-jaya-server | `/server-monitor` | 3102 | Vite React SPA | `cd "Module Services/rebinmas-jaya-server" && npm run dev` |
-| rjfm | `/rjfm` + `/file` | 8011 | Express TS API + Next UI (ui-app) | `cd "Module Services/rjfm" && npm start` |
+| rebinmas-jaya-server | `/server-monitor` | 3102 | Vite React SPA | `cd "Module Services/rebinmas-jaya-server" && npm run dev` (prod: `npm run build` lalu `npm start` = vite preview) |
+| rjfm | `/rjfm` + `/file` | 8011 | Express TS API + Next UI (ui-app) | `cd "Module Services/rjfm" && npm start` (`tsx src/server.ts`; `--loader tsx` TIDAK dipakai lagi — tsx ≥4 wajib `--import`/CLI langsung) |
+| sql-gateway | `/sql-gateway` + `/api/sql-gateway` | 8001 (legacy port takeover) | Fastify TS API + static UI | `cd "Module Services/sql-gateway" && bun start` |
+| daftar-upah | `/upah` + `/backend/upah` | 3104 | Bun/Elysia API + built Vite SPA (one process) | `cd "Module Services/daftar-upah" && npm start` |
 | Wifi_LAN_Monitor | `/network-monitor` | — | static site | served by gateway (`staticSiteDir`) |
 | ifess-control UI | `/ifess-control` | — | static HTML | served by gateway from `Module Services/ifess-control/` |
 | IFESS control server | `/api/ifess/*` | embedded | JS lib | `require()`d into gateway process (`Services/ifess-control-server/service.js`) |
@@ -87,12 +133,20 @@ cd "Module Services" && node -e "require('fs').symlinkSync('../Dashboard_Utama/n
 
 | Route | Port | Source location |
 |---|---|---|
-| `/upah` (+ `/backend/upah`) | 8002 | `D:/Gawean Rebinmas/PORTAL_ESTATE/Plantware_Auto_Report/Daftar_Upah_baru/payroll_daftar_upah/refactor_production` (Vite dist + Python backend) |
 | `/absen` | 5176 | external Vite dev server |
 | `/monitoring-beras` | 5177 | external Vite dev server |
 | `/basis-panen` | 3002 | external PWA |
-| `/query` | 8001 | SQL Gateway API (external process) |
 | `/file-legacy` | 5178 | Gdrive Gateway (legacy) |
+
+> Former external SQL Gateway (`/query` :8001, `D:/Tools_Gawe/Database_Query_Gateway`)
+> has been migrated in-repo as `Module Services/sql-gateway` — it took over port
+> 8001 and still answers the legacy `/query/v1/*` path shape.
+
+> Daftar Upah (`/upah`, previously external at :8002 pointing to
+> `PORTAL_ESTATE/.../refactor_production`) has been migrated in-repo as
+> `Module Services/daftar-upah` (:3104) on 2026-08-24. Snapshot of
+> `PORTAL_ESTATE/V 2 (begin versioning)`; sync changes from that source into the
+> module folder.
 
 ---
 

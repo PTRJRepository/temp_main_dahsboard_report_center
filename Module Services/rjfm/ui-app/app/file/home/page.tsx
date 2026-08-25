@@ -1,28 +1,29 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   UploadCloud, AlertTriangle, CheckCircle2, Clock, ChevronRight,
-  ClipboardList, Plus, FileCheck2, Users, Files, Inbox,
+  ClipboardList, Plus, FileCheck2, Users, Files, Inbox, Zap,
 } from 'lucide-react'
+import { ScenePhoto, TicketCard, StickyNote } from '../decor'
 
 type Row = any
 
-function badge(status: string) {
-  const map: Record<string, string> = {
-    ASSIGNED: 'bg-blue-50 text-blue-700 border-blue-200',
-    SUBMITTED: 'bg-amber-50 text-amber-700 border-amber-200',
-    REVISION_NEEDED: 'bg-red-50 text-red-700 border-red-200',
-    APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  }
-  return map[status] || 'bg-slate-50 text-slate-600 border-slate-200'
-}
+const TASK_CREATORS = ['MANAGER', 'SUPERADMIN', 'ADMIN', 'GM_ESTATE']
+const MANAGER_LIKE = ['MANAGER', 'ASISTEN', 'SUPERADMIN', 'ADMIN', 'GM_ESTATE']
+
 const STATUS_LABEL: Record<string, string> = {
   ASSIGNED: 'Perlu Diupload',
   REVISION_NEEDED: 'Perlu Revisi',
   SUBMITTED: 'Menunggu Review',
   APPROVED: 'Disetujui',
+}
+const STATUS_CLS: Record<string, string> = {
+  ASSIGNED: 'bg-sky-100 text-sky-800 border-sky-200',
+  SUBMITTED: 'bg-amber-100 text-amber-800 border-amber-200',
+  REVISION_NEEDED: 'bg-red-100 text-red-700 border-red-200',
+  APPROVED: 'bg-green-100 text-green-800 border-green-200',
 }
 
 function countdown(deadline?: string) {
@@ -34,11 +35,27 @@ function countdown(deadline?: string) {
   let txt = h >= 24 ? `${Math.floor(h / 24)} hari ${h % 24} jam` : h >= 1 ? `${h} jam ${m} menit` : `${m} menit`
   return { late: diff < 0, txt }
 }
-function priorityDot(p?: string) {
-  if (p === 'URGENT') return 'bg-red-600'
-  if (p === 'HIGH') return 'bg-orange-500'
-  if (p === 'MEDIUM') return 'bg-blue-500'
-  return 'bg-slate-400'
+function priorityColor(p?: string) {
+  if (p === 'URGENT') return { dot: 'bg-red-500', stripe: 'border-l-red-500' }
+  if (p === 'HIGH') return { dot: 'bg-orange-400', stripe: 'border-l-orange-400' }
+  if (p === 'MEDIUM') return { dot: 'bg-sky-400', stripe: 'border-l-sky-400' }
+  return { dot: 'bg-slate-300', stripe: 'border-l-slate-300' }
+}
+
+function CountUp({ value }: { value: number }) {
+  const [n, setN] = useState(0)
+  const raf = useRef<number | null>(null)
+  useEffect(() => {
+    const t0 = performance.now(), dur = 700
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / dur)
+      setN(Math.round(value * (1 - Math.pow(1 - k, 3))))
+      if (k < 1) raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => { if (raf.current) cancelAnimationFrame(raf.current) }
+  }, [value])
+  return <>{n}</>
 }
 
 export default function FileHomePage() {
@@ -66,9 +83,9 @@ export default function FileHomePage() {
   }, [])
 
   const role = (me?.role_code || me?.role || '').toUpperCase()
-  const isMgr = ['MANAGER', 'ASISTEN', 'SUPERADMIN'].includes(role)
+  const isMgr = MANAGER_LIKE.includes(role)
+  const isCreator = TASK_CREATORS.includes(role)
 
-  // Kerani: baris tugas sudah join assignment_id + current_status dari GET /tasks
   const keraniRows = useMemo(() => {
     const order: Record<string, number> = { REVISION_NEEDED: 0, ASSIGNED: 1, SUBMITTED: 2, APPROVED: 3 }
     return [...tasks].sort((a, b) => {
@@ -92,35 +109,52 @@ export default function FileHomePage() {
   const greet = hour < 11 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 19 ? 'Selamat sore' : 'Selamat malam'
 
   if (loading) {
-    return <div className="max-w-6xl mx-auto"><div className="rounded-2xl bg-white border border-slate-200 p-10 text-center text-sm text-slate-500">Memuat beranda...</div></div>
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="card rounded-3xl p-12 text-center text-sm text-slate-500 animate-pulse">Memuat beranda...</div>
+      </div>
+    )
   }
 
+  const StatCard = ({ label, value, icon: Icon, accent }: any) => (
+    <div className={`anim-fadeup card card-hover rounded-3xl p-6 relative overflow-hidden border-l-4 ${accent.stripe}`}>
+      <div className={`absolute -right-8 -top-8 w-28 h-28 rounded-full blur-2xl opacity-25 ${accent.blob}`} />
+      <div className={`w-11 h-11 rounded-2xl grid place-items-center ${accent.chip}`}><Icon className="w-5 h-5" /></div>
+      <p className="mt-4 text-5xl font-black tracking-tight tabular-nums text-green-950"><CountUp value={value} /></p>
+      <p className="text-sm font-bold text-slate-600 mt-1">{label}</p>
+    </div>
+  )
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header sambutan */}
-      <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white p-6 sm:p-8 relative overflow-hidden">
-        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-emerald-500/10 blur-2xl" />
-        <div className="absolute -left-10 -bottom-20 w-56 h-56 rounded-full bg-teal-500/10 blur-2xl" />
-        <div className="relative">
-          <p className="text-sm text-emerald-300/90">{greet},</p>
-          <h1 className="text-2xl sm:text-3xl font-bold mt-0.5">{me?.full_name || me?.username || 'Pengguna'}</h1>
-          <p className="mt-2 text-sm text-slate-300 max-w-xl">
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* ===== Hero perkebunan ===== */}
+      <div className="anim-fadeup rounded-[2rem] overflow-hidden relative border border-green-900/10 shadow-lg shadow-green-900/10 min-h-[290px] flex flex-col justify-between">
+        <ScenePhoto theme="estate" className="absolute inset-0" />
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/80 via-white/40 to-transparent" />
+        <div className="relative p-8 sm:p-12 pb-4">
+          <p className="text-green-700 font-extrabold uppercase tracking-[0.25em] text-xs flex items-center gap-2"><Zap className="w-4 h-4" /> {greet}</p>
+          <h1 className="mt-2 text-4xl sm:text-6xl font-black tracking-tight leading-none text-green-950 drop-shadow-sm">{me?.full_name || me?.username || 'Pengguna'}</h1>
+        </div>
+        <div className="relative p-8 sm:p-12 pt-2 flex flex-col lg:flex-row lg:items-end gap-5">
+          <p className="text-base sm:text-lg font-semibold text-green-950/85 max-w-xl bg-white/70 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/60">
             {isMgr
-              ? 'Pantau submission kerani, buat instruksi tugas baru, dan review berkas yang masuk.'
+              ? 'Pantau submission kerani, review berkas masuk, dan kelola penugasan estate.'
               : needUpload.length > 0
-                ? `Ada ${needUpload.length} berkas yang harus Anda kumpulkan. Cek daftar di bawah — urut sesuai deadline.`
+                ? `Ada ${needUpload.length} berkas yang harus Anda kumpulkan — urut sesuai deadline.`
                 : 'Semua berkas sudah terkumpul. Tugas baru dari atasan akan muncul di sini.'}
           </p>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3 lg:ml-auto">
             {isMgr ? (
               <>
-                <Link href="/file/manage" className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-900 text-sm font-semibold hover:bg-emerald-400"><Plus className="w-4 h-4" /> Buat Tugas</Link>
-                <Link href="/file/review" className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white text-sm font-medium hover:bg-white/15"><FileCheck2 className="w-4 h-4" /> Review{mgrPendingReview.length > 0 ? ` (${mgrPendingReview.length})` : ''}</Link>
+                {isCreator && (
+                  <Link href="/file/manage" className="btn-primary inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base"><Plus className="w-5 h-5" /> Buat Tugas</Link>
+                )}
+                <Link href="/file/review" className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base bg-white/90 border border-green-900/15 text-green-900 hover:bg-white transition-colors shadow"><FileCheck2 className="w-5 h-5 text-green-700" /> Review{mgrPendingReview.length > 0 ? ` (${mgrPendingReview.length})` : ''}</Link>
               </>
             ) : (
               <>
-                <Link href="/file/tasks" className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-900 text-sm font-semibold hover:bg-emerald-400"><ClipboardList className="w-4 h-4" /> Semua Tugas</Link>
-                <Link href="/file/drive" className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white text-sm font-medium hover:bg-white/15"><UploadCloud className="w-4 h-4" /> Drive Saya</Link>
+                <Link href="/file/tasks" className="btn-primary inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base"><ClipboardList className="w-5 h-5" /> Semua Tugas</Link>
+                <Link href="/file/drive" className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base bg-white/90 border border-green-900/15 text-green-900 hover:bg-white transition-colors shadow"><UploadCloud className="w-5 h-5 text-green-700" /> Drive Saya</Link>
               </>
             )}
           </div>
@@ -129,134 +163,125 @@ export default function FileHomePage() {
 
       {isMgr ? (
         <>
-          {/* Statistik manager */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Menunggu Review', value: mgrPendingReview.length, icon: FileCheck2, cls: 'text-amber-600 bg-amber-50' },
-              { label: 'Tugas Aktif', value: mgrActiveTasks.length, icon: ClipboardList, cls: 'text-blue-600 bg-blue-50' },
-              { label: 'Kerani Terdaftar', value: keraniCount, icon: Users, cls: 'text-emerald-600 bg-emerald-50' },
-              { label: 'Total Berkas Masuk', value: allFiles.length, icon: Files, cls: 'text-slate-600 bg-slate-100' },
-            ].map(s => (
-              <div key={s.label} className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-                <div className={`w-9 h-9 rounded-xl grid place-items-center ${s.cls}`}><s.icon className="w-4.5 h-4.5" /></div>
-                <p className="mt-3 text-2xl font-bold">{s.value}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
-              </div>
-            ))}
+          {/* ===== Statistik manager ===== */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
+            <StatCard label="Menunggu Review" value={mgrPendingReview.length} icon={FileCheck2} accent={{ chip: 'bg-amber-100 text-amber-700', blob: 'bg-amber-200', stripe: 'border-l-amber-400' }} />
+            <StatCard label="Tugas Aktif" value={mgrActiveTasks.length} icon={ClipboardList} accent={{ chip: 'bg-sky-100 text-sky-700', blob: 'bg-sky-200', stripe: 'border-l-sky-400' }} />
+            <StatCard label="Kerani Terdaftar" value={keraniCount} icon={Users} accent={{ chip: 'bg-green-100 text-green-700', blob: 'bg-green-200', stripe: 'border-l-green-500' }} />
+            <StatCard label="Total Berkas Masuk" value={allFiles.length} icon={Files} accent={{ chip: 'bg-violet-100 text-violet-700', blob: 'bg-violet-200', stripe: 'border-l-violet-400' }} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Submission terbaru */}
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="font-semibold text-sm">Submission Terbaru</h2>
-                <Link href="/file/review" className="text-xs font-medium text-emerald-700 hover:underline">Review semua</Link>
+            <div className="anim-fadeup d-2 card rounded-3xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="font-extrabold">Submission Terbaru</h2>
+                <Link href="/file/review" className="text-xs font-extrabold text-green-700 hover:text-green-600">Review semua →</Link>
               </div>
-              <div className="divide-y divide-slate-100">
-                {recentSubs.length === 0 ? <p className="p-5 text-sm text-slate-500">Belum ada berkas masuk.</p> : recentSubs.map((f: any) => (
-                  <Link key={f.revision_id} href="/file/review" className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${f.review_status === 'APPROVED' ? 'bg-emerald-500' : f.review_status === 'REJECTED_NEEDS_REVISION' ? 'bg-red-500' : 'bg-amber-500'}`} />
+              <div className="divide-y divide-slate-50">
+                {recentSubs.length === 0 ? <p className="p-6 text-sm text-slate-500">Belum ada berkas masuk.</p> : recentSubs.map((f: any) => (
+                  <Link key={f.revision_id} href="/file/review" className="flex items-center gap-3 px-6 py-3.5 hover:bg-green-50/50 transition-colors">
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 animate-pulse ${f.review_status === 'APPROVED' ? 'bg-green-500' : f.review_status === 'REJECTED_NEEDS_REVISION' ? 'bg-red-500' : 'bg-amber-400'}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{f.file_original_name}</p>
+                      <p className="font-bold truncate">{f.file_original_name}</p>
                       <p className="text-xs text-slate-500 truncate">{f.kerani_name || '—'} · {f.task_title || ''}</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
                   </Link>
                 ))}
               </div>
             </div>
 
-            {/* Deadline terdekat */}
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="font-semibold text-sm">Deadline Terdekat</h2>
-                <Link href="/file/tasks" className="text-xs font-medium text-emerald-700 hover:underline">Semua tugas</Link>
+            <div className="anim-fadeup d-3 card rounded-3xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="font-extrabold">Deadline Terdekat</h2>
+                <Link href="/file/tasks" className="text-xs font-extrabold text-green-700 hover:text-green-600">Semua tugas →</Link>
               </div>
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-50">
                 {[...mgrActiveTasks].filter(t => t.deadline).sort((a, b) => String(a.deadline).localeCompare(String(b.deadline))).slice(0, 6).map((t: any) => {
                   const cd = countdown(t.deadline)
                   return (
-                    <div key={t.task_id} className="flex items-center gap-3 px-5 py-3">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${priorityDot(t.priority)}`} />
+                    <div key={t.task_id} className="flex items-center gap-3 px-6 py-3.5">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${priorityColor(t.priority).dot}`} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{t.title}</p>
-                        <p className={`text-xs flex items-center gap-1 ${cd?.late ? 'text-red-600' : 'text-slate-500'}`}><Clock className="w-3 h-3" /> {cd ? `${cd.late ? 'Lewat' : ''} ${cd.txt}` : '-'}</p>
+                        <p className="font-bold truncate">{t.title}</p>
+                        <p className={`text-xs flex items-center gap-1 ${cd?.late ? 'text-red-600 font-extrabold' : 'text-slate-500'}`}><Clock className="w-3 h-3" /> {cd ? `${cd.late ? 'Lewat' : ''} ${cd.txt}` : '-'}</p>
                       </div>
                     </div>
                   )
                 })}
-                {mgrActiveTasks.length === 0 && <p className="p-5 text-sm text-slate-500">Belum ada tugas aktif.</p>}
+                {mgrActiveTasks.length === 0 && <p className="p-6 text-sm text-slate-500">Belum ada tugas aktif.</p>}
               </div>
             </div>
           </div>
         </>
       ) : (
         <>
-          {/* Ringkasan kerani */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: 'Harus Diupload', value: needUpload.length, icon: UploadCloud, cls: needUpload.length > 0 ? 'text-red-600 bg-red-50' : 'text-slate-500 bg-slate-100' },
-              { label: 'Menunggu Review', value: waiting.length, icon: Clock, cls: 'text-amber-600 bg-amber-50' },
-              { label: 'Disetujui', value: approved.length, icon: CheckCircle2, cls: 'text-emerald-600 bg-emerald-50' },
-            ].map(s => (
-              <div key={s.label} className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
-                <div className={`w-9 h-9 rounded-xl grid place-items-center ${s.cls}`}><s.icon className="w-4.5 h-4.5" /></div>
-                <p className="mt-3 text-2xl font-bold">{s.value}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
-              </div>
-            ))}
+          {/* ===== Ringkasan kerani ===== */}
+          <div className="grid grid-cols-3 gap-5">
+            <StatCard label="Harus Diupload" value={needUpload.length} icon={UploadCloud} accent={{ chip: needUpload.length > 0 ? 'bg-red-100 text-red-600  rounded-2xl' : 'bg-slate-100 text-slate-500 rounded-2xl', blob: 'bg-red-200', stripe: needUpload.length > 0 ? 'border-l-red-500' : 'border-l-slate-300' }} />
+            <StatCard label="Menunggu Review" value={waiting.length} icon={Clock} accent={{ chip: 'bg-amber-100 text-amber-700', blob: 'bg-amber-200', stripe: 'border-l-amber-400' }} />
+            <StatCard label="Disetujui" value={approved.length} icon={CheckCircle2} accent={{ chip: 'bg-green-100 text-green-700', blob: 'bg-green-200', stripe: 'border-l-green-500' }} />
           </div>
 
-          {/* Checklist upload */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-slate-900 flex items-center gap-2"><UploadCloud className="w-5 h-5 text-emerald-600" /> Yang Harus Diupload</h2>
-              <Link href="/file/tasks" className="text-sm font-medium text-emerald-700 hover:underline">Lihat semua tugas</Link>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-black tracking-tight flex items-center gap-2.5 text-green-950"><UploadCloud className="w-6 h-6 text-green-600" /> Yang Harus Diupload</h2>
+              <Link href="/file/tasks" className="text-sm font-extrabold text-green-700 hover:text-green-600">Lihat semua →</Link>
             </div>
             {keraniRows.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                <div className="w-12 h-12 rounded-full bg-slate-100 mx-auto flex items-center justify-center"><Inbox className="w-6 h-6 text-slate-400" /></div>
-                <p className="mt-3 font-medium text-slate-900">Belum ada penugasan</p>
-                <p className="text-sm text-slate-500 mt-1">Tugas dari atasan akan muncul di sini beserta berkas yang perlu diunggah.</p>
-              </div>
+              <StickyNote variant="green" rotate={-1} className="rounded-xl text-center py-8 px-6 max-w-xl">
+                <p className="text-lg font-black">Belum ada penugasan</p>
+                <p className="text-[13px] font-semibold opacity-80 mt-1">Tugas dari atasan akan ditempel di papan ini beserta berkas yang perlu diunggah.</p>
+              </StickyNote>
             ) : (
-              <div className="space-y-3">
-                {keraniRows.map((t: any) => {
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 gap-y-8 pb-3">
+                {keraniRows.map((t: any, i: number) => {
                   const status = t.current_status || 'ASSIGNED'
                   const cd = countdown(t.deadline)
                   const done = status === 'APPROVED'
+                  const tone = status === 'REVISION_NEEDED' ? 'red' : status === 'SUBMITTED' ? 'amber' : status === 'APPROVED' ? 'green' : 'sky'
                   return (
-                    <div key={`${t.task_id}-${t.assignment_id || 'x'}`} className={`rounded-2xl bg-white border p-5 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 ${status === 'REVISION_NEEDED' ? 'border-red-200' : 'border-slate-200'}`}>
-                      <div className="min-w-0 flex-1">
+                    <div key={`${t.task_id}-${t.assignment_id || 'x'}`} style={{ animationDelay: `${i * 60}ms` }} className={`anim-fadeup`}>
+                      <TicketCard tone={tone as any}
+                        stub={
+                          <Link href={`/file/tasks/${t.assignment_id || t.task_id}?taskId=${t.task_id}`}
+                            className={`w-full inline-flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 text-[10px] font-extrabold uppercase tracking-wider text-center leading-tight transition-all ${done
+                              ? 'bg-stone-200/80 text-stone-500 hover:bg-stone-300/80'
+                              : status === 'REVISION_NEEDED' ? 'bg-red-600 text-white hover:bg-red-500 shadow-md shadow-red-400/40 hover:-translate-y-0.5'
+                              : status === 'SUBMITTED' ? 'bg-white border border-amber-300 text-amber-800'
+                              : 'btn-primary hover:-translate-y-0.5'}`}>
+                            {done ? <><CheckCircle2 className="w-5 h-5" /> Lihat</> : status === 'SUBMITTED' ? <><Clock className="w-5 h-5" /> Lihat<br />Status</> : <><UploadCloud className="w-5 h-5" /> Upload<br />Sekarang</>}
+                          </Link>
+                        }>
+                        {/* kepala tiket: kategori + nomor + status */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`w-2 h-2 rounded-full ${priorityDot(t.priority)}`} />
-                          <span className="text-[11px] font-semibold tracking-widest text-slate-500">{t.priority || 'MEDIUM'}</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${badge(status)}`}>{STATUS_LABEL[status] || status}</span>
-                          {cd && !done && (
-                            <span className={`text-xs inline-flex items-center gap-1 ${cd.late ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
-                              <Clock className="w-3.5 h-3.5" /> {cd.late ? `Terlambat ${cd.txt}` : `${cd.txt} lagi`}
-                            </span>
-                          )}
+                          <span className={`w-2 h-2 rounded-full ${priorityColor(t.priority).dot}`} />
+                          <span className="text-[9px] font-extrabold tracking-[0.18em] uppercase text-stone-400">{t.priority || 'MEDIUM'}</span>
+                          <span className="text-[10px] font-mono text-stone-400">#{String(t.task_id).padStart(4, '0')}</span>
+                          <span className={`ml-auto px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_CLS[status]} ${status === 'REVISION_NEEDED' ? 'animate-pulse' : ''}`}>{STATUS_LABEL[status] || status}</span>
                         </div>
-                        <h3 className="mt-2 font-semibold text-slate-900 leading-snug">{t.title}</h3>
-                        <p className="text-sm text-slate-600 line-clamp-2 mt-0.5">{t.description}</p>
-                        {status === 'REVISION_NEEDED' && (
-                          t.latest_feedback ? (
-                            <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2">
-                              <p className="text-[11px] font-semibold text-red-800 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> Alasan revisi dari atasan:</p>
-                              <p className="text-xs text-red-900 mt-1 whitespace-pre-wrap line-clamp-3">{t.latest_feedback}</p>
-                            </div>
-                          ) : (
-                            <p className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 inline-flex items-start gap-1.5">
-                              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> Perbaiki sesuai catatan atasan, lalu upload ulang.
-                            </p>
-                          )
+
+                        {/* isi instruksi — rasa kertas memo mesin tik */}
+                        <h3 className="mt-2.5 text-lg font-black tracking-tight leading-snug text-green-950">{t.title}</h3>
+                        <p className="mt-1 text-[13px] text-slate-600 line-clamp-2">→ {t.description}</p>
+
+                        {status === 'REVISION_NEEDED' && t.latest_feedback && (
+                          <div className="mt-3 border-l-4 border-red-400 bg-red-50 rounded-r-lg px-3 py-2">
+                            <p className="text-[9px] font-extrabold text-red-700 uppercase tracking-widest flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Catatan atasan</p>
+                            <p className="text-xs text-red-900 mt-0.5 line-clamp-2">{t.latest_feedback}</p>
+                          </div>
                         )}
-                      </div>
-                      <Link href={`/file/tasks/${t.assignment_id || t.task_id}?taskId=${t.task_id}`}
-                        className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${done ? 'border border-slate-200 text-slate-500 hover:bg-slate-50' : status === 'REVISION_NEEDED' ? 'bg-red-600 text-white hover:bg-red-700' : status === 'ASSIGNED' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                        {done ? <><CheckCircle2 className="w-4 h-4" /> Lihat</> : status === 'SUBMITTED' ? 'Lihat Status' : <><UploadCloud className="w-4 h-4" /> Upload Sekarang</>}
-                      </Link>
+
+                        {/* dasar tiket: deadline seperti stempel tanggal */}
+                        {t.deadline && !done && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-1 border-2 rounded-md -rotate-1 ${cd?.late ? 'text-red-700 border-red-400 bg-red-50' : 'text-green-800 border-green-500 bg-green-50'}`}>
+                              <Clock className="w-3 h-3" /> {new Date(t.deadline).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }).toUpperCase()} · {new Date(t.deadline).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {cd && <span className={`text-[11px] font-extrabold ${cd.late ? 'text-red-600' : 'text-slate-400'}`}>{cd.late ? `+${cd.txt}` : cd.txt}</span>}
+                          </div>
+                        )}
+                      </TicketCard>
                     </div>
                   )
                 })}

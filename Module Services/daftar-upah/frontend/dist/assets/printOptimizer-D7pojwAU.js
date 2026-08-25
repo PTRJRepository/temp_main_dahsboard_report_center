@@ -1,0 +1,1 @@
+import"./vendor-react-Bsd05r8m.js";const o={COMPACT:"print-mode-compact",STANDARD:"print-mode-standard",LARGE:"print-mode-large"},n=o.STANDARD,r="payroll-print-mode";function d(){return localStorage.getItem(r)||n}function c(t){Object.values(o).forEach(e=>{document.body.classList.remove(e)}),document.body.classList.add(t)}function a(){const t=d();return c(t),t}export{a as i};

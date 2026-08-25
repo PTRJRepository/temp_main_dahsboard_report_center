@@ -1,0 +1,251 @@
+/* =====================================================================
+   Estate Ledger — global report theme override
+   Restyles the shared wsp-*/report-* classes used across all report pages.
+   Bahasa: masthead datar, hairline, satu aksen daun. Load once globally.
+   Spec: docs/superpowers/specs/2026-08-07-estate-ledger-redesign-design.md
+   ===================================================================== */
+
+:root {
+  --sw-leaf-dark: #143D28;
+  --sw-leaf-mid: #1F6F43;
+  --sw-leaf-light: #5E9C7B;
+  --sw-upah: #1F6F43;
+  --sw-upah-accent: #3D8B62;
+  --sw-premi: #0F766E;
+  --sw-lembur: #B45309;
+  --sw-potongan: #B3392E;
+  --sw-cost-ton: #7C5A2B;
+  --sw-text: #15211A;
+  --sw-text2: #3D4A41;
+  --sw-muted: #6E7A70;
+  --sw-border: #E0DED2;
+  --sw-surface: #FFFFFF;
+  --sw-surface2: #F5F3EC;
+  --sw-page-bg: #F0EEE6;
+  --sw-grid: #E8E6DB;
+  --sw-shadow: 0 1px 2px rgba(21,33,26,.04), 0 4px 14px rgba(21,33,26,.06);
+  --sw-shadow-hover: 0 10px 28px rgba(21,33,26,.10);
+  /* Aliases ke tokens.css */
+  --sw-display: var(--font-display);
+  --sw-body: var(--font-body);
+  --sw-mono: var(--font-mono);
+  --sw-radius-lg: var(--radius-lg);
+}
+
+/* ---------- Page canvas ---------- */
+.wsp-container,
+.tonase-report-page,
+.wages-summary-page,
+.report-page,
+.summary-report-page,
+.analysis-report-page,
+.productivity-report-page,
+.payroll-analysis-page,
+.impact-report-page {
+  background: var(--sw-page-bg) !important;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--sw-text);
+}
+
+/* ---------- Top web header -> masthead datar ---------- */
+.report-header-web {
+  background: var(--color-paper) !important;
+  color: var(--sw-text) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--sw-border) !important;
+  border-radius: 0;
+  padding: 1.4rem 1.8rem 1.4rem !important;
+  box-shadow: none;
+  position: relative;
+}
+.report-header-web h1,
+.report-header-web h2,
+.report-header-web .tonase-toolbar-title h1 {
+  color: var(--sw-text) !important;
+  font-family: var(--sw-display) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+}
+.report-header-web p,
+.report-header-web .report-header-info p {
+  color: var(--sw-text2) !important;
+}
+
+/* Title block layout */
+.tonase-toolbar-title,
+.report-header-info {
+  gap: 12px;
+}
+
+/* Back button pada masthead -> outline datar */
+.report-header-web .wsp-btn,
+.report-header-web .tonase-back-btn,
+.wsp-btn.tonase-back-btn {
+  background: var(--sw-surface) !important;
+  color: var(--sw-text2) !important;
+  border: 1px solid var(--sw-border) !important;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.report-header-web .wsp-btn:hover,
+.report-header-web .tonase-back-btn:hover {
+  border-color: var(--sw-leaf-mid) !important;
+  color: var(--sw-leaf-mid) !important;
+}
+
+/* ---------- Filter badges / selects pada masthead ---------- */
+.report-filter-badge,
+.report-header-web select,
+.tonase-detail-select {
+  background: var(--sw-surface) !important;
+  color: var(--sw-text) !important;
+  border: 1px solid var(--sw-border) !important;
+  border-radius: 8px !important;
+  font-weight: 600;
+}
+.report-filter-badge option,
+.report-header-web select option {
+  color: var(--sw-text);
+  background: #fff;
+}
+
+/* ---------- Primary / secondary buttons ---------- */
+.wsp-btn-primary,
+.report-header-actions .wsp-btn-primary {
+  background: var(--sw-leaf-mid) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 8px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.wsp-btn-primary:hover,
+.report-header-actions .wsp-btn-primary:hover {
+  background: var(--sw-leaf-dark) !important;
+}
+.wsp-btn-secondary,
+.report-header-actions .wsp-btn-secondary {
+  background: var(--sw-surface) !important;
+  color: var(--sw-leaf-mid) !important;
+  border: 1px solid var(--sw-border) !important;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* ---------- Cards / document panels ---------- */
+.wsp-document,
+.tonase-document,
+.wsp-section,
+.tonase-section,
+.wsp-card,
+.tonase-kpi-card,
+.wsp-panel {
+  background: var(--sw-surface) !important;
+  border: 1px solid var(--sw-border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--sw-shadow) !important;
+}
+
+/* Section headers -> judul tenang tanpa eyebrow border */
+.tonase-section-header h3,
+.wsp-section-header h3,
+.tonase-subsection-title {
+  color: var(--sw-text) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.78rem !important;
+}
+.tonase-section-header span,
+.wsp-section-header span {
+  color: var(--sw-muted) !important;
+}
+
+/* ---------- KPI cards ---------- */
+.tonase-kpi-card {
+  border-top: 2px solid var(--sw-leaf-mid) !important;
+  border-radius: 10px !important;
+}
+.tonase-kpi-label { color: var(--sw-muted) !important; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem !important; font-weight: 700 !important; }
+.tonase-kpi-value { color: var(--sw-text) !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; }
+.tonase-kpi-note { color: var(--sw-text2) !important; }
+
+/* ---------- Tables ---------- */
+.wsp-table,
+.tonase-detail-table,
+.division-breakdown-table,
+.premium-breakdown-table,
+.tonase-summary-table,
+.tonase-detail-mode-table {
+  border-collapse: separate !important;
+  border-spacing: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--sw-border) !important;
+}
+.wsp-table thead th,
+.tonase-detail-table thead th,
+.division-breakdown-table thead th,
+.premium-breakdown-table thead th,
+.tonase-summary-table thead th,
+.tonase-detail-mode-table thead th {
+  background: var(--sw-surface2) !important;
+  color: var(--sw-text2) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--sw-border) !important;
+}
+.wsp-table tbody tr,
+.tonase-detail-table tbody tr,
+.division-breakdown-table tbody tr,
+.premium-breakdown-table tbody tr {
+  border-bottom: 1px solid var(--sw-grid) !important;
+}
+.wsp-table tbody tr:hover,
+.tonase-detail-table tbody tr:hover,
+.tonase-clickable-row:hover {
+  background: var(--sw-surface2) !important;
+}
+.tonase-selected-row {
+  background: var(--color-accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--sw-leaf-mid);
+}
+
+/* ---------- Mode tabs ---------- */
+.tonase-mode-tabs button {
+  background: var(--sw-surface2) !important;
+  color: var(--sw-text2) !important;
+  border: 1px solid var(--sw-border) !important;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.tonase-mode-tabs button.active {
+  background: var(--sw-leaf-mid) !important;
+  color: #fff !important;
+  border-color: var(--sw-leaf-mid) !important;
+}
+
+/* ---------- Warning strip ---------- */
+.tonase-warning-strip {
+  background: var(--sw-warn-bg, #F7EBD9) !important;
+  border: 1px solid #E5CFA3 !important;
+  color: var(--sw-lembur) !important;
+  border-radius: 10px !important;
+}
+
+/* ---------- Active scope badge ---------- */
+.tonase-active-scope {
+  background: var(--sw-surface2) !important;
+  border: 1px solid var(--sw-border) !important;
+  border-radius: 10px !important;
+  color: var(--sw-text2) !important;
+}
+.tonase-active-scope strong { color: var(--sw-leaf-mid) !important; }
+
+/* ---------- Footer ---------- */
+.wsp-footer {
+  color: var(--sw-muted) !important;
+  border-top: 1px solid var(--sw-border) !important;
+}

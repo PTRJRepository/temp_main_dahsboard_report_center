@@ -26,6 +26,8 @@ const MODULES = {
   'report-center': { dir: 'Module Services/report-center', cmd: ['bun', ['run', 'dev']], route: 'report-center' },
   'server-monitor': { dir: 'Module Services/rebinmas-jaya-server', cmd: ['npm', ['run', 'dev']], route: 'server-monitor' },
   'rjfm': { dir: 'Module Services/rjfm', cmd: ['npx', ['tsx', 'src/server.ts']], route: 'rjfm' },
+  'ifess-server': { dir: 'Module Services/ifess-server', cmd: ['bun', ['run', 'src/index.js']], route: 'ifess-control' },
+  'daftar-upah': { dir: 'Module Services/daftar-upah', cwd: 'backend', cmd: ['bun', ['run', 'src/index.ts']], port: '3104' },
 };
 
 function portFor(name) {
@@ -67,7 +69,8 @@ function start(name) {
   const port = portFor(name);
   if (port && isUp(port)) { console.log(`[skip] ${name} already listening on :${port}`); return; }
   const log = fs.openSync(path.join(LOG_DIR, `module-${name}.log`), 'a');
-  const child = spawn(m.cmd[0], m.cmd[1], { cwd: path.join(ROOT, m.dir), detached: true, stdio: ['ignore', log, log] });
+  const cwd = m.cwd ? path.join(ROOT, m.dir, m.cwd) : path.join(ROOT, m.dir);
+  const child = spawn(m.cmd[0], m.cmd[1], { cwd, detached: true, stdio: ['ignore', log, log] });
   child.unref();
   console.log(`[start] ${name} (pid ${child.pid}) → logs/module-${name}.log`);
 }

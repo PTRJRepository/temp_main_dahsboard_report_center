@@ -1,0 +1,12 @@
+{
+  "name": "ifess-server",
+  "version": "1.0.0",
+  "description": "IFESS Control Server — standalone Bun HTTP service handling all IFESS SuperApp clients (registration, heartbeat, commands, query gateway)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "bun run src/index.js",
+    "dev": "bun --watch run src/index.js",
+    "test": "bun test"
+  }
+}

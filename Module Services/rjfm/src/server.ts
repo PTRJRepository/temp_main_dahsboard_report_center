@@ -10,11 +10,15 @@ import { reviewRouter } from './routes/review.js';
 import { filesRouter } from './routes/files.js';
 import { systemRouter } from './routes/system.js';
 import { metaRouter } from './routes/meta.js';
+import { sceneRouter } from './routes/scene.js';
 import { driveRouter } from './routes/drive.js';
 import { gatewayRouter } from './routes/gateway.js';
-import { mountUi } from './ui/serve.js';
+import { mountUi, mountApiRewriter } from './ui/serve.js';
 
 const app = express();
+
+// Rewriter UI /api/file/* → /api/v1/* — WAJIB sebelum semua route API.
+mountApiRewriter(app);
 
 app.use(cors({ origin: env.corsOrigin === '*' ? true : env.corsOrigin, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
@@ -37,6 +41,9 @@ for (const prefix of ['', '/rjfm', '/file']) {
   app.use(`${prefix}/api/v1/system`, systemRouter);
   app.use(`${prefix}/api/v1/drive`, driveRouter);
   app.use(`${prefix}/api/v1`, metaRouter);
+  // sceneRouter WAJIB sebelum metaRouter — metaRouter punya catch-all
+  // `app.use('/api/v1', ...)` yang menelan /meta/scene bila didahulukan.
+  app.use(`${prefix}/api/v1/meta`, sceneRouter);
   app.use(`${prefix}/api/auth`, authRouter);
   app.use(`${prefix}/api/tasks`, tasksRouter);
   app.use(`${prefix}/api/assignments`, assignmentsRouter);
@@ -58,7 +65,12 @@ app.use((err: any, _req: any, res: any, _next: any) => {
   res.status(err.status || 500).json({ status: 'error', message: err.message || 'Internal error' });
 });
 
-ensureStorageRoot();
+// Pastikan folder dasar tersedia di NAS (async, tidak menghalangi listen).
+// Kegagalan dicatat tapi server tetap hidup — operasi berkas akan melapor
+// dengan pesan jelas bila NAS belum terjangkau.
+ensureStorageRoot().catch((e) => {
+  console.warn('[rjfm] storage root belum siap:', e.message);
+});
 
 app.listen(env.port, '0.0.0.0', () => {
   console.log(`[rjfm] listening on :${env.port} env=${env.nodeEnv} db=${env.mssql.host}/${env.mssql.database}`);

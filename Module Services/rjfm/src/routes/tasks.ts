@@ -1,10 +1,10 @@
 import { Router } from 'express'
-import { auth, MANAGER_ROLES } from '../middleware/auth.js'
+import { auth, TASK_CREATOR_ROLES } from '../middleware/auth.js'
 import { store } from '../lib/store.js'
 
 export const tasksRouter = Router()
 
-tasksRouter.post('/', auth(MANAGER_ROLES), (req, res) => {
+tasksRouter.post('/', auth(TASK_CREATOR_ROLES), (req, res) => {
   const { category_id, title, description, target_kerani_ids, deadline, priority, allowed_types, max_file_size_mb, template_file_path } = req.body ?? {}
   if (!title || !description || !Array.isArray(target_kerani_ids) || target_kerani_ids.length === 0) {
     return res.status(400).json({ status: 'error', message: 'title, description, target_kerani_ids[] required' })

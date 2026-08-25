@@ -2,11 +2,11 @@
   {
     "id": "upah",
     "path": "/upah",
-    "target": "http://localhost:8002",
-    "description": "Sistem Penggajian/Payroll (Static dari dist folder)",
+    "target": "http://localhost:3104",
+    "description": "Sistem Penggajian/Payroll — module service daftar-upah (:3104, API + dist)",
     "enabled": true,
-    "rewriteContent": "html-only",
-    "spaIndex": "D:/Gawean Rebinmas/PORTAL_ESTATE/Plantware_Auto_Report/Daftar_Upah_baru/payroll_daftar_upah/refactor_production/frontend/dist/index.html",
+    "rewriteContent": false,
+    "spaIndex": "Module Services/daftar-upah/frontend/dist/index.html",
     "aliases": [
       "/auth",
       "/payroll",
@@ -33,32 +33,32 @@
     ],
     "textRewrites": [
       {
-        "from": "http://localhost:8002",
+        "from": "http://localhost:3104",
         "to": "/backend/upah"
       },
       {
-        "from": "http://127.0.0.1:8002",
+        "from": "http://127.0.0.1:3104",
         "to": "/backend/upah"
       }
     ],
     "staticRoots": [
       {
         "prefix": "/upah/assets",
-        "dir": "D:/Gawean Rebinmas/PORTAL_ESTATE/Plantware_Auto_Report/Daftar_Upah_baru/payroll_daftar_upah/refactor_production/frontend/dist/assets",
+        "dir": "Module Services/daftar-upah/frontend/dist/assets",
         "immutable": true
       },
       {
         "prefix": "/upah/images",
-        "dir": "D:/Gawean Rebinmas/PORTAL_ESTATE/Plantware_Auto_Report/Daftar_Upah_baru/payroll_daftar_upah/refactor_production/assets/images",
+        "dir": "Module Services/daftar-upah/assets/images",
         "immutable": false
       },
       {
         "prefix": "/upah/vite.svg",
-        "file": "D:/Gawean Rebinmas/PORTAL_ESTATE/Plantware_Auto_Report/Daftar_Upah_baru/payroll_daftar_upah/refactor_production/frontend/dist/vite.svg",
+        "file": "Module Services/daftar-upah/frontend/dist/vite.svg",
         "immutable": false
       }
     ],
-    "healthPath": "/",
+    "healthPath": "/health",
     "timeoutMs": 30000,
     "cachePolicy": "static",
     "image": "https://broadwayshr.com/wp-content/uploads/2024/02/upah-lembur-per-jam-cover.jpg"
@@ -66,8 +66,8 @@
   {
     "id": "backend-upah",
     "path": "/backend/upah",
-    "target": "http://localhost:8002",
-    "description": "Backend API untuk Sistem Penggajian",
+    "target": "http://localhost:3104",
+    "description": "Backend API untuk Sistem Penggajian → daftar-upah module (:3104)",
     "enabled": true,
     "rewriteContent": false,
     "changeOrigin": false,
@@ -175,6 +175,27 @@
     "description": "IFESS Client Gateway",
     "enabled": true,
     "rewriteContent": false,
+    "rewritePath": true,
+    "public": true
+  },
+  {
+    "id": "sql-gateway",
+    "path": "/sql-gateway",
+    "servicePath": "/sql-gateway",
+    "serviceUrl": "http://localhost:3001/sql-gateway",
+    "target": "http://127.0.0.1:8001",
+    "name": "SQL Gateway",
+    "description": "Internal SQL gateway — traffic monitoring & audit UI (portal SSO)",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": true
+  },
+  {
+    "id": "api-sql-gateway",
+    "path": "/api/sql-gateway",
+    "target": "http://127.0.0.1:8001",
+    "description": "SQL Gateway internal API — x-api-key (m2m) or portal SSO via gateway headers",
+    "enabled": true,
     "rewritePath": true,
     "public": true
   }

@@ -1,0 +1,1 @@
+function n({comparisonMode:e=!1,thrMode:r=!1}={}){return r?"THR":e?"Perbandingan":"Standar"}function i({useHistory:e=!1,sourceMode:r=""}={}){const t=String(r||"").trim();return t||(e?"History DB":"Origin DB")}function a(e="all"){const r=String(e||"").trim().toLowerCase();return r==="real"?"Real Only":r==="virtual"?"Virtual Only":"Real + Virtual"}export{i as a,n as b,a as g};

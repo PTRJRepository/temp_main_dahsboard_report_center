@@ -59,9 +59,15 @@ export default function PreviewModal({ target, onClose }: { target: PreviewTarge
     setLoading(true); setErr(null)
     ;(async () => {
       try {
-        if (kind === 'pdf' || kind === 'image' || kind === 'video') { setLoading(false); return }
+        if (kind === 'pdf' || kind === 'image' || kind === 'video') {
+          // validasi dulu bahwa URL merespons 200 — jika file fisik hilang,
+          // tampilkan pesan jelas alih-alih iframe/gambar rusak
+          const head = await fetch(target.url, { method: 'HEAD' }).catch(() => null)
+          if (head && !head.ok) throw new Error(head.status === 403 ? 'Akses ditolak ke berkas ini.' : `Berkas tidak dapat dibuka (${head.status}). File fisik mungkin terhapus atau belum tersinkron di NAS.`)
+          setLoading(false); return
+        }
         const r = await fetch(target.url)
-        if (!r.ok) throw new Error(`Gagal memuat (${r.status})`)
+        if (!r.ok) throw new Error(r.status === 403 ? 'Akses ditolak ke berkas ini.' : `Berkas tidak dapat dibuka (${r.status}). File fisik mungkin terhapus atau belum tersinkron di NAS.`)
         if (kind === 'sheet') {
           const buf = await r.arrayBuffer()
           const wb = XLSX.read(buf, { type: 'array' })
@@ -72,6 +78,9 @@ export default function PreviewModal({ target, onClose }: { target: PreviewTarge
           if (alive) setRows({ head, body, sheetNames: wb.SheetNames, active: 0 })
         } else if (kind === 'doc') {
           const buf = await r.arrayBuffer()
+          if (target.name.toLowerCase().endsWith('.doc')) {
+            throw new Error('Format Word lama (.doc) tidak didukung pratinjau — unduh dan buka dengan Microsoft Word.')
+          }
           const res = await mammoth.convertToHtml({ arrayBuffer: buf })
           if (alive) setHtml(res.value)
         } else if (kind === 'kml') {
