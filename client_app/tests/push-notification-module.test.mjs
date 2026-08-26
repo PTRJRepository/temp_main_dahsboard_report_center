@@ -17,10 +17,12 @@ import {
   PushNotificationModule,
   SHOW_NOTIFICATION_COMMAND,
   PUSH_NOTIFICATION_MODULE,
+  computeNotificationSignature,
 } from '../src/modules/push-notification.js';
 
 // Folder aset branding asli proyek (untuk test resolusi hero/logo).
 const REAL_ASSETS_DIR = fileURLToPath(new URL('../assets/notifications', import.meta.url));
+const SECRET = 'rahasia-estate-2026';
 
 function makeLoggerStub() {
   return {
@@ -98,6 +100,14 @@ test('handle menampilkan notifikasi, menyimpan seen, dan menulis riwayat', async
   assert.ok(notifier.calls[0].heroPath, 'hero image tema harus terisi bila aset ada');
   assert.match(notifier.calls[0].heroPath, /banner-update\.png$/);
   assert.ok(fs.existsSync(path.join(testDir, 'data', 'notifications', 'seen.json')));
+  // INDEX REMDATA: inbox widget berisi entri notifikasi yang tampil.
+  const inboxPath = path.join(testDir, 'data', 'notifications', 'inbox.jsonl');
+  const inboxLines = fs.readFileSync(inboxPath, 'utf8').trim().split('\n');
+  assert.equal(inboxLines.length, 1);
+  const inboxEntry = JSON.parse(inboxLines[0]);
+  assert.equal(inboxEntry.id, 'NTF-A1');
+  assert.equal(inboxEntry.title, 'Panen Blok C Siap');
+  assert.equal(inboxEntry.category, 'instruction');
   const files = fs.readdirSync(path.join(testDir, 'data', 'notifications')).filter(name => name.startsWith('history-'));
   assert.equal(files.length, 1);
 });
@@ -163,6 +173,51 @@ test('payload tidak valid menghasilkan result Failed dengan alasan', async t => 
 
   assert.equal(result.success, false);
   assert.match(result.message, /Payload tidak valid/);
+});
+
+test('verifyToken aktif: payload tanpa signature ditolak', async t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ifess-pushdata-'));
+  t.after(() => fs.rmSync(testDir, { recursive: true, force: true }));
+
+  const moduleInstance = await makeModule(testDir, {
+    notifier: makeNotifierStub(),
+    customConfig: { verifyToken: SECRET },
+  });
+
+  const result = await moduleInstance.handle(COMMAND({ notificationId: 'NTF-NOSIG', title: 'T', message: 'M' }));
+
+  assert.equal(result.success, false);
+  assert.match(result.message, /Verifikasi gagal/);
+});
+
+test('verifyToken aktif: payload bertanda tangan benar diterima; token salah ditolak', async t => {
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ifess-pushdata-'));
+  t.after(() => fs.rmSync(testDir, { recursive: true, force: true }));
+
+  const notifier = makeNotifierStub();
+  const moduleInstance = await makeModule(testDir, {
+    notifier,
+    customConfig: { verifyToken: SECRET },
+  });
+
+  const signed = {
+    ...{ notificationId: 'NTF-SIGNED', title: 'T', message: 'M' },
+    signature: computeNotificationSignature(
+      { notificationId: 'NTF-SIGNED', title: 'T', message: 'M' }, SECRET),
+  };
+  const goodResult = await moduleInstance.handle(COMMAND(signed));
+
+  const wrongSecret = {
+    notificationId: 'NTF-WRONG', title: 'T2', message: 'M2',
+    signature: computeNotificationSignature(
+      { notificationId: 'NTF-WRONG', title: 'T2', message: 'M2' }, 'token-lain'),
+  };
+  const badResult = await moduleInstance.handle(COMMAND(wrongSecret));
+
+  assert.equal(goodResult.success, true);
+  assert.match(goodResult.message, /ditampilkan \(toast\)/);
+  assert.equal(badResult.success, false);
+  assert.match(badResult.message, /Verifikasi gagal/);
 });
 
 test('kegagalan display menjadi Failed dengan pesan penyebab', async t => {

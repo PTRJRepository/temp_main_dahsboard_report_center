@@ -117,6 +117,45 @@ export function PalmAccent({ className = '', tone = '#166534' }: { className?: s
 }
 
 /**
+ * Foto ilustrasi untuk kartu tugas — dicari via backend memakai judul tugas
+ * sebagai kata kunci (shared/google-image-search). Hasil di-cache per query.
+ * Fallback: gradient hijau lembut saat foto belum siap / gagal.
+ */
+export function TaskScenePhoto({ title, className = '' }: { title: string; className?: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+  const key = title.slice(0, 60)
+
+  useEffect(() => {
+    let alive = true
+    const qs = encodeURIComponent(key)
+    fetch(`/api/file/meta/scene/task?q=${qs}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { if (alive && j?.data?.url) setUrl(j.data.url) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [key])
+
+  return (
+    <div className={`relative overflow-hidden ${className}`} aria-hidden>
+      {!ready && (
+        <div className="absolute inset-0 bg-gradient-to-br from-green-100 via-lime-50 to-emerald-200" />
+      )}
+      {url && (
+        <img
+          src={url}
+          alt=""
+          onLoad={() => setReady(true)}
+          onError={() => setReady(false)}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${ready ? 'opacity-100' : 'opacity-0'}`}
+          loading="lazy"
+        />
+      )}
+    </div>
+  )
+}
+
+/**
  * Foto scene asli (dari Google/Bing Images via backend, tersimpan di NAS).
  * Render <img> dengan fallback halus ke gradien hijau bila foto belum siap.
  */

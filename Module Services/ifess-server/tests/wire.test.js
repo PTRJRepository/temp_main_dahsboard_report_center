@@ -4,7 +4,18 @@
  * Exercises handleRequest() directly against the real service layer.
  * Covers auth gating, the .NET SuperApp wire protocol, the legacy
  * /api/ifess dispatcher, and the unified frontend routes.
+ *
+ * ISOLATION: the core service resolves its JSON store from IFESS_DATA_DIR.
+ * Tests must NEVER touch the live repo-root data/ifess store — run via
+ * `bun test` with a temp dir (set here before the first import of the
+ * service chain; bun test loads this file before spawning other imports).
  */
+
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+process.env.IFESS_DATA_DIR ??= mkdtempSync(join(tmpdir(), 'ifess-wire-test-'));
 
 import { describe, test, expect } from 'bun:test';
 import { handleRequest } from '../src/handler.js';

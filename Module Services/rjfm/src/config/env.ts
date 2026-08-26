@@ -32,5 +32,5 @@ export const env = {
   // Tool pencari gambar (shared/google-image-search) untuk foto ilustrasi scene
   googleImageSearchPath:
     process.env.RJFM_IMAGE_SEARCH_PATH ||
-    '../../../../shared/google-image-search/index.js',
+    '../../../../../shared/google-image-search/index.js',
 } as const;

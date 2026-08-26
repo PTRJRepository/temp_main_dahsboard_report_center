@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   UploadCloud, AlertTriangle, CheckCircle2, Clock, ChevronRight,
-  ClipboardList, Plus, FileCheck2, Users, Files, Inbox, Zap,
+  ClipboardList, Plus, FileCheck2, Users, Files,
 } from 'lucide-react'
-import { ScenePhoto, TicketCard, StickyNote } from '../decor'
+import { TicketCard, StickyNote, PalmAccent } from '../decor'
 
 type Row = any
 
@@ -111,53 +111,55 @@ export default function FileHomePage() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="card rounded-3xl p-12 text-center text-sm text-slate-500 animate-pulse">Memuat beranda...</div>
+        <div className="card rounded-2xl p-12 text-center text-sm text-slate-500 animate-pulse">Memuat beranda...</div>
       </div>
     )
   }
 
   const StatCard = ({ label, value, icon: Icon, accent }: any) => (
-    <div className={`anim-fadeup card card-hover rounded-3xl p-6 relative overflow-hidden border-l-4 ${accent.stripe}`}>
-      <div className={`absolute -right-8 -top-8 w-28 h-28 rounded-full blur-2xl opacity-25 ${accent.blob}`} />
-      <div className={`w-11 h-11 rounded-2xl grid place-items-center ${accent.chip}`}><Icon className="w-5 h-5" /></div>
-      <p className="mt-4 text-5xl font-black tracking-tight tabular-nums text-green-950"><CountUp value={value} /></p>
-      <p className="text-sm font-bold text-slate-600 mt-1">{label}</p>
+    <div className={`anim-fadeup card rounded-2xl p-5 border-l-4 ${accent.stripe}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-500">{label}</p>
+        <div className={`w-9 h-9 rounded-lg grid place-items-center ${accent.chip}`}><Icon className="w-[18px] h-[18px]" /></div>
+      </div>
+      <p className="mt-3 text-4xl font-bold tracking-tight tabular-nums text-green-950"><CountUp value={value} /></p>
     </div>
   )
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* ===== Hero perkebunan ===== */}
-      <div className="anim-fadeup rounded-[2rem] overflow-hidden relative border border-green-900/10 shadow-lg shadow-green-900/10 min-h-[290px] flex flex-col justify-between">
-        <ScenePhoto theme="estate" className="absolute inset-0" />
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/80 via-white/40 to-transparent" />
-        <div className="relative p-8 sm:p-12 pb-4">
-          <p className="text-green-700 font-extrabold uppercase tracking-[0.25em] text-xs flex items-center gap-2"><Zap className="w-4 h-4" /> {greet}</p>
-          <h1 className="mt-2 text-4xl sm:text-6xl font-black tracking-tight leading-none text-green-950 drop-shadow-sm">{me?.full_name || me?.username || 'Pengguna'}</h1>
+      {/* ===== Hero — panel gelap korporat ===== */}
+      <div className="anim-fadeup rounded-2xl overflow-hidden relative bg-gradient-to-br from-green-900 via-green-800 to-green-900 border border-green-900/20 shadow-xl shadow-green-900/15 min-h-[220px] flex flex-col justify-between">
+        <PalmAccent tone="#1e5c38" className="absolute -right-6 -bottom-10 w-72 h-72 opacity-40 pointer-events-none" />
+        <div className="relative p-8 sm:p-10 pb-3 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-lime-300 font-semibold uppercase tracking-[0.22em] text-[11px]">{greet}</p>
+            <h1 className="mt-1.5 text-3xl sm:text-4xl font-bold tracking-tight leading-tight text-white">{me?.full_name || me?.username || 'Pengguna'}</h1>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {isMgr ? (
+              <>
+                {isCreator && (
+                  <Link href="/file/manage" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-lime-400 text-green-950 hover:bg-lime-300 transition-colors"><Plus className="w-4 h-4" /> Buat Tugas</Link>
+                )}
+                <Link href="/file/review" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-white/10 border border-white/20 text-white hover:bg-white/15 transition-colors"><FileCheck2 className="w-4 h-4 text-lime-300" /> Review{mgrPendingReview.length > 0 ? ` (${mgrPendingReview.length})` : ''}</Link>
+              </>
+            ) : (
+              <>
+                <Link href="/file/tasks" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-lime-400 text-green-950 hover:bg-lime-300 transition-colors"><ClipboardList className="w-4 h-4" /> Semua Tugas</Link>
+                <Link href="/file/drive" className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-white/10 border border-white/20 text-white hover:bg-white/15 transition-colors"><UploadCloud className="w-4 h-4 text-lime-300" /> Drive Saya</Link>
+              </>
+            )}
+          </div>
         </div>
-        <div className="relative p-8 sm:p-12 pt-2 flex flex-col lg:flex-row lg:items-end gap-5">
-          <p className="text-base sm:text-lg font-semibold text-green-950/85 max-w-xl bg-white/70 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/60">
+        <div className="relative px-8 sm:p-10 pt-0 pb-8">
+          <p className="text-sm sm:text-base font-medium text-emerald-100/85 max-w-2xl">
             {isMgr
               ? 'Pantau submission kerani, review berkas masuk, dan kelola penugasan estate.'
               : needUpload.length > 0
                 ? `Ada ${needUpload.length} berkas yang harus Anda kumpulkan — urut sesuai deadline.`
                 : 'Semua berkas sudah terkumpul. Tugas baru dari atasan akan muncul di sini.'}
           </p>
-          <div className="flex flex-wrap gap-3 lg:ml-auto">
-            {isMgr ? (
-              <>
-                {isCreator && (
-                  <Link href="/file/manage" className="btn-primary inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base"><Plus className="w-5 h-5" /> Buat Tugas</Link>
-                )}
-                <Link href="/file/review" className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base bg-white/90 border border-green-900/15 text-green-900 hover:bg-white transition-colors shadow"><FileCheck2 className="w-5 h-5 text-green-700" /> Review{mgrPendingReview.length > 0 ? ` (${mgrPendingReview.length})` : ''}</Link>
-              </>
-            ) : (
-              <>
-                <Link href="/file/tasks" className="btn-primary inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base"><ClipboardList className="w-5 h-5" /> Semua Tugas</Link>
-                <Link href="/file/drive" className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-extrabold text-base bg-white/90 border border-green-900/15 text-green-900 hover:bg-white transition-colors shadow"><UploadCloud className="w-5 h-5 text-green-700" /> Drive Saya</Link>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
@@ -172,7 +174,7 @@ export default function FileHomePage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="anim-fadeup d-2 card rounded-3xl overflow-hidden">
+            <div className="anim-fadeup d-2 card rounded-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="font-extrabold">Submission Terbaru</h2>
                 <Link href="/file/review" className="text-xs font-extrabold text-green-700 hover:text-green-600">Review semua →</Link>
@@ -191,7 +193,7 @@ export default function FileHomePage() {
               </div>
             </div>
 
-            <div className="anim-fadeup d-3 card rounded-3xl overflow-hidden">
+            <div className="anim-fadeup d-3 card rounded-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="font-extrabold">Deadline Terdekat</h2>
                 <Link href="/file/tasks" className="text-xs font-extrabold text-green-700 hover:text-green-600">Semua tugas →</Link>

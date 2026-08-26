@@ -12,9 +12,11 @@
  *   4. EXECUTE_FIREBIRD_QUERY INSERT      -> queryResult Rejected + command Failed
  *   5. EXECUTE_FIREBIRD_QUERY SELECT tanpa DB -> queryResult Failed
  *   6. STOP_MODULE / START_MODULE         -> command Success + heartbeat snapshot berubah
- *   7. EXECUTE_SHOW_NOTIFICATION valid    -> command Success "(dry-run)" + riwayat lokal
- *   8. Notifikasi dengan ID sama (dedupe) -> command Success "Duplikat dilewati"
- *   9. Payload tanpa title                -> command Failed "Payload tidak valid"
+ *   7. Payload TANPA signature            -> command Failed "Verifikasi gagal"
+ *   8. Notifikasi BERTANDA TANGAN         -> command Success "(dry-run)"
+ *   9. Inbox widget (inbox.jsonl)         -> berisi id notifikasi yang tampil
+ *  10. Dedupe: ID sama dikirim ulang      -> command Success "Duplikat dilewati"
+ *  11. Payload tanpa title                -> command Failed "Payload tidak valid"
  *
  * Jalankan:  npm run test:e2e   (atau: node scripts/e2e-test.mjs)
  * Exit code 0 = semua assertion lolos.
@@ -25,6 +27,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { computeNotificationSignature } from '../src/modules/push-notification.js';
 
 const BASE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.E2E_PORT || 8199);
@@ -132,6 +136,8 @@ async function main() {
         customConfig: {
           // dry-run agar e2e tidak memunculkan toast sungguhan di mesin uji.
           dryRun: true,
+          // INDEX VERIFY diuji di e2e: kirim tanpa signature harus ditolak.
+          verifyToken: 'e2e-secret',
           dataPath: NOTIF_DATA_DIR,
           footerText: 'PT. Rebinmas Jaya • E2E',
         },
@@ -255,30 +261,54 @@ async function main() {
       return heartbeat?.modules?.includes('IFESS_AUTO_TASK_KILL=Running');
     }, 'START_MODULE mengembalikan modul ke Running');
 
-    // 7. Push notification valid (modul berjalan dry-run di config e2e).
-    const notificationId = `NTF-E2E-${RUN_TAG}`;
+    // 7. INDEX VERIFY: payload TANPA signature harus ditolak saat verifyToken aktif.
     await sendCommand({
       commandType: 'EXECUTE_SHOW_NOTIFICATION',
       moduleCode: 'IFESS_PUSH_NOTIFICATION',
-      payload: {
-        notificationId,
-        category: 'update',
-        priority: 'high',
-        title: 'Pembaruan E2E',
-        message: 'Notifikasi uji dari harness e2e.',
-      },
+      payload: { notificationId: `NTF-NOSIG-${RUN_TAG}`, title: 'Tanpa Tanda Tangan', message: 'harus ditolak' },
     });
+    await waitFor(async () => {
+      const event = await findEvent(e => e.type === 'commandResult' && e.status === 'Failed'
+        && String(e.message ?? '').includes('Verifikasi gagal'));
+      return !!event;
+    }, 'payload tanpa signature ditolak (Verifikasi gagal)');
+
+    // 8. Push notification BERTANDA TANGAN (modul berjalan dry-run di config e2e).
+    const notificationBase = {
+      notificationId: `NTF-E2E-${RUN_TAG}`,
+      category: 'update',
+      priority: 'high',
+      title: 'Pembaruan E2E',
+      message: 'Notifikasi uji dari harness e2e.',
+    };
+    const signedPayload = {
+      ...notificationBase,
+      signature: computeNotificationSignature(notificationBase, 'e2e-secret'),
+    };
+    await sendCommand({
+      commandType: 'EXECUTE_SHOW_NOTIFICATION',
+      moduleCode: 'IFESS_PUSH_NOTIFICATION',
+      payload: signedPayload,
+    });
+    let displayedSeen = false;
     await waitFor(async () => {
       const event = await findEvent(e => e.type === 'commandResult' && e.status === 'Success'
         && String(e.message ?? '').includes("'Pembaruan E2E' ditampilkan (dry-run)"));
       return !!event;
-    }, 'push notification valid dieksekusi (dry-run) dan result terlapor');
+    }, 'push notification bertanda tangan dieksekusi (dry-run) dan result terlapor');
+    displayedSeen = true;
 
-    // 8. Dedupe: ID yang sama dikirim ulang -> dilewati tanpa tampil kedua kali.
+    // 9. Inbox widget (INDEX REMDATA) berisi entri notifikasi yang tampil.
+    const inboxPath = path.join(NOTIF_DATA_DIR, 'inbox.jsonl');
+    assert(displayedSeen && fs.existsSync(inboxPath)
+      && fs.readFileSync(inboxPath, 'utf8').includes(`NTF-E2E-${RUN_TAG}`),
+      'inbox widget berisi notifikasi bertanda tangan');
+
+    // 10. Dedupe: ID sama dikirim ulang -> dilewati tanpa tampil kedua kali.
     await sendCommand({
       commandType: 'EXECUTE_SHOW_NOTIFICATION',
       moduleCode: 'IFESS_PUSH_NOTIFICATION',
-      payload: { notificationId, title: 'Pembaruan E2E', message: 'upah duplikat' },
+      payload: { ...signedPayload },
     });
     await waitFor(async () => {
       const event = await findEvent(e => e.type === 'commandResult' && e.status === 'Success'
@@ -286,11 +316,14 @@ async function main() {
       return !!event;
     }, 'notifikasi duplikat dilewati dedupe persisten');
 
-    // 9. Payload tidak valid -> Failed dengan alasan yang jelas.
+    // 11. Payload BERTANDA TANGAN tapi tidak valid -> Failed oleh validator.
+    //     (Urutan client: verifikasi dulu baru validasi; karena verifyToken
+    //      aktif di e2e, payload harus sah signature-nya agar sampai ke validasi.)
+    const invalidBase = { notificationId: `NTF-BAD-${RUN_TAG}`, title: '', message: '' };
     await sendCommand({
       commandType: 'EXECUTE_SHOW_NOTIFICATION',
       moduleCode: 'IFESS_PUSH_NOTIFICATION',
-      payload: { title: '', message: '' },
+      payload: { ...invalidBase, signature: computeNotificationSignature(invalidBase, 'e2e-secret') },
     });
     await waitFor(async () => {
       const event = await findEvent(e => e.type === 'commandResult' && e.status === 'Failed'
@@ -298,6 +331,7 @@ async function main() {
       return !!event;
     }, 'payload notifikasi tidak valid dilaporkan Failed');
   } finally {
+    try { fs.rmSync(NOTIF_DATA_DIR, { recursive: true, force: true }); } catch { /* best effort */ }
     // ── Cleanup ─────────────────────────────────────────────────────────────
     clientProcess?.kill();
     mockProcess?.kill();

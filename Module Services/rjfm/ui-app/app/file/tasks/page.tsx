@@ -140,7 +140,7 @@ export default function FileTasksPage() {
                         <span className={`w-2 h-2 rounded-full ${priorityColor(t.priority).dot}`} />
                         <span className="text-[9px] font-extrabold tracking-[0.18em] uppercase text-stone-400">{t.priority || 'MEDIUM'}</span>
                         <span className="text-[10px] font-mono text-stone-400">#{String(t.task_id).padStart(4, '0')}</span>
-                        <span className={`ml-auto px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_CLS[status]} ${status === 'REVISION_NEEDED' ? 'animate-pulse' : ''}`}>{status}</span>
+                        <span className={`ml-auto px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_CLS[status]}`}>{status}</span>
                       </div>
                       <h3 className="mt-2.5 text-lg font-black tracking-tight leading-snug text-green-950 line-clamp-2">{t.title}</h3>
                       <p className="mt-1 text-[13px] text-slate-600 line-clamp-2">→ {t.description}</p>

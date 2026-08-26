@@ -401,19 +401,23 @@ export async function handleRequest(req, path) {
 
         // ── Unified frontend (portal-authenticated browsers) ─────────────────
         if (method === 'GET') {
-            const isUiPage = path === '/' || path === '/app' || path === '/app/' ||
-                path === '/simple' || path === '/simple/';
-            const isUiAsset = path.startsWith('/assets/') || path.startsWith('/ifess-assets/');
+            // Gateway proxy forwards the FULL path (/ifess-control, /ifess-control/app,
+            // …/simple); direct access uses bare (/ , /app, /simple).
+            const bare = path.replace(/^\/ifess-control/, '') || '/';
+            const isUiPage = bare === '/' || bare === '/app' || bare === '/app/' ||
+                bare === '/simple' || bare === '/simple/';
+            const isUiAsset = bare.startsWith('/assets/') || bare.startsWith('/ifess-assets/');
             if (isUiPage || isUiAsset) {
                 const user = resolvePortalIdentity(req);
                 if (!user) return unauthorizedResponse();
                 if (isUiPage) {
-                    const rel = path.startsWith('/simple') ? 'simple/index.html' : 'app/index.html';
+                    const rel = bare.startsWith('/simple') ? 'simple/index.html' : 'app/index.html';
                     const ui = serveUi(rel);
                     if (ui) return ui;
                 } else {
-                    // /assets/x → assets/x ; /ifess-assets/x → assets/x (UI's canonical prefix)
-                    const rel = ('assets/' + path.replace(/^\/(ifess-)?assets\//, '')).replace(/\/+$/, '');
+                    // /assets/x and /ifess-assets/x → ui/assets/x (UI's canonical
+                    // asset prefix, also forwarded verbatim by the gateway route)
+                    const rel = ('assets/' + bare.replace(/^\/(ifess-)?assets\//, '')).replace(/\/+$/, '');
                     const ui = serveUi(rel);
                     if (ui) return ui;
                 }
@@ -434,6 +438,11 @@ export async function handleRequest(req, path) {
             return qg ?? json(404, { error: 'Not Found', path });
         }
 
+        // ── /api/ifess/sync/* aliases (protected; dispatcher handles the rest of sync) ──
+        if (path.startsWith('/api/ifess/sync/')) {
+            if (!isAuthorized(req)) return unauthorizedResponse();
+        }
+
         // ── Everything below requires the API key ────────────────────────────
         const isClientApi =
             path.startsWith('/api/clients/') ||
@@ -442,6 +451,7 @@ export async function handleRequest(req, path) {
             path === '/api/commands' ||
             path === '/api/dashboard' ||
             path.startsWith('/api/query-gateway/') ||
+            /^\/api\/sync\/jobs\//.test(path) ||
             path.startsWith('/api/ifess/clients') ||
             path === '/api/ifess/dashboard' ||
             path === '/api/ifess/client-groups' ||
@@ -456,6 +466,14 @@ export async function handleRequest(req, path) {
         if (path.startsWith('/api/query-gateway/')) {
             const qg = await handleQueryGateway(req, path);
             return qg ?? json(404, { error: 'Not Found', path });
+        }
+
+        // ── Sync job status (gateway-compat REST; bootstrap polling) ─────────
+        // GET /api/ifess/sync/jobs/:id and /api/sync/jobs/:id
+        if (method === 'GET' && /^\/api(?:\/ifess)?\/sync\/jobs\/[^/]+$/.test(path)) {
+            const jobId = path.split('/').pop();
+            const job = svc.getSyncJob(decodeURIComponent(jobId));
+            return job ? json(200, job) : json(404, { error: 'Sync job not found' });
         }
 
         // ── Dashboard ────────────────────────────────────────────────────────

@@ -2,8 +2,10 @@
 
 /**
  * Modul Push Notification satu arah (Server -> Client).
- * Alur: command EXECUTE_SHOW_NOTIFICATION dari control server -> validasi ->
- * dedupe persisten -> tampilkan Windows Toast -> catat riwayat lokal.
+ * Alur: command EXECUTE_SHOW_NOTIFICATION dari control server -> verifikasi
+ * token (opsional) -> validasi -> dedupe persisten -> tampilkan Windows Toast
+ * -> tulis inbox widget -> catat riwayat lokal.
+ *
  * Isi notifikasi TIDAK dibalas ke server; yang dilaporkan hanya status sukses/
  * gagal eksekusi command melalui kanal command result standar yang sudah ada.
  *
@@ -14,13 +16,30 @@
  *   DEFAULT_OPTIONS               : konfigurasi default modul
  *   CATEGORIES / THEMES           : daftar kategori & tema yang dikenal
  *   CATEGORY_BANNER               : kategori -> file hero image default
+ *   canonicalNotificationString() : bentuk kanonik untuk tanda tangan (v1)
+ *   computeNotificationSignature(): HMAC-SHA256 hex atas bentuk kanonik
+ *   verifyNotificationSignature() : cek signature payload (timing-safe)
  *   validateNotificationPayload() : validasi + normalisasi payload (pure)
  *   loadSeenState()/saveSeenState(): persistensi ID ter-tampil untuk dedupe
- *   class PushNotificationModule  : handler command + riwayat + dedupe
+ *   class PushNotificationModule  : handler command + riwayat + dedupe +
+ *                                   penulis inbox widget + auto-launch widget
+ *
+ * INDEX VERIFY — verifikasi payload (grep hint: "INDEX VERIFY")
+ * ----------------------------------------------------------------------------
+ * Jika customConfig.verifyToken diisi (mis. dari client.config.local.json),
+ * SETIAP command wajib menyertakan payload.signature = HMAC-SHA256 hex yang
+ * dihitung dari bentuk kanonik:
+ *     v1 | notificationId | category | priority | title | message |
+ *     details | expiresAt(raw string)
+ * Field kosong ditulis '' (details/footer null -> ''). Signature sendiri
+ * TIDAK ikut kanonik. Tanpa verifyToken, payload tanpa signature tetap
+ * diterima (mode kompatibel); dengan verifyToken, unsigned/tamper -> Failed.
  */
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { WindowsToastNotifier, normalizePriority } from '../notifications/toast-notifier.js';
 
 export const PUSH_NOTIFICATION_MODULE = 'IFESS_PUSH_NOTIFICATION';
@@ -48,8 +67,8 @@ const DEFAULT_OPTIONS = {
   appName: 'IFESS Klien',
   footerText: 'PT. Rebinmas Jaya • Divisi IT',
   soundByDefault: true,
-  // dryRun=true: validasi+dedupe+riwayat jalan, tapi TIDAK memanggil
-  // PowerShell (dipakai e2e/server CI supaya tidak muncul toast sungguhan).
+  // dryRun=true: validasi+dedupe+riwayat+inbox jalan, tapi TIDAK memanggil
+  // PowerShell toast DAN tidak meluncurkan widget (dipakai e2e/CI).
   dryRun: false,
   maxTitleLength: 120,
   maxMessageLength: 600,
@@ -57,7 +76,50 @@ const DEFAULT_OPTIONS = {
   seenCapacity: 1000,
   historyRetainDays: 30,
   displayTimeoutSeconds: 10,
+
+  // INDEX VERIFY: shared secret HMAC. Kosong = verifikasi dinonaktifkan.
+  // Simpan nilai aslinya di client.config.local.json (gitignored).
+  verifyToken: '',
+
+  // Widget pengingat terpin: tulis inbox untuk widget dan/atau luncurkan.
+  widgetInbox: true,
+  autoLaunchWidget: true,
 };
+
+/** Bentuk kanonik v1 untuk tanda tangan; deterministik dua sisi. */
+export function canonicalNotificationString(payload) {
+  const field = value => {
+    if (value instanceof Date) return value.toISOString();
+    return String(value ?? '').trim();
+  };
+  return [
+    'v1',
+    field(payload?.notificationId),
+    field(payload?.category),
+    field(payload?.priority),
+    field(payload?.title),
+    field(payload?.message),
+    field(payload?.details),
+    field(payload?.expiresAt),
+  ].join('|');
+}
+
+/** HMAC-SHA256 (hex) atas bentuk kanonik; dipakai pengirim & penerima. */
+export function computeNotificationSignature(payload, secret) {
+  if (!secret) throw new Error('Secret token tidak boleh kosong.');
+  return crypto.createHmac('sha256', String(secret)).update(canonicalNotificationString(payload)).digest('hex');
+}
+
+/** Verifikasi timing-safe; aman terhadap payload tanpa signature. */
+export function verifyNotificationSignature(payload, secret) {
+  if (!secret || !payload?.signature) return false;
+  const provided = String(payload.signature).toLowerCase();
+  const expected = computeNotificationSignature(payload, secret);
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 
 /**
  * Validasi & normalisasi payload notifikasi.
@@ -139,7 +201,8 @@ export function saveSeenState(filePath, ids) {
 /**
  * Worker Push Notification. Interface mengikuti modul lain:
  * start(moduleOptions) / stop() / canHandle(command) / handle(command).
- * Notifier dapat di-inject (parameter constructor) untuk unit test.
+ * Notifier dapat di-inject (parameter constructor) untuk unit test; ketika
+ * notifier di-inject, auto-launch widget sengaja dilewati (konteks test).
  */
 export class PushNotificationModule {
   constructor(baseDirectory, logger, notifier = null) {
@@ -149,6 +212,7 @@ export class PushNotificationModule {
     this.options = { ...DEFAULT_OPTIONS };
     this.dataDirectory = '';
     this.seenStorePath = '';
+    this.widgetScriptPath = '';
     /** Set<string> urutan insertion: terlama di depan untuk eviction FIFO. */
     this.seenIds = new Set();
     this.running = false;
@@ -160,19 +224,29 @@ export class PushNotificationModule {
     this.options = { ...DEFAULT_OPTIONS, ...(moduleOptions?.customConfig ?? {}) };
     this.dataDirectory = path.resolve(this.baseDirectory, this.options.dataPath);
     this.seenStorePath = path.join(this.dataDirectory, 'seen.json');
+    this.widgetScriptPath = path.resolve(this.baseDirectory, 'widget', 'reminder-widget.ps1');
     fs.mkdirSync(this.dataDirectory, { recursive: true });
     this.seenIds = new Set(loadSeenState(this.seenStorePath).slice(-this.options.seenCapacity));
     this.cleanupOldHistory();
-    if (!this.notifierInstance && !this.options.dryRun) {
+
+    const internalNotifierNeeded = !this.notifierInstance && !this.options.dryRun;
+    if (internalNotifierNeeded) {
       this.notifierInstance = new WindowsToastNotifier({
         appUserModelId: this.options.appUserModelId,
         assetsDirectory: path.resolve(this.baseDirectory, this.options.themesPath),
         displayTimeoutSeconds: this.options.displayTimeoutSeconds,
       });
     }
+
     this.running = true;
     this.logger.info(`Push Notification worker started. dryRun=${!!this.options.dryRun}`
+      + `, verifyToken=${this.options.verifyToken ? 'AKTIF' : 'nonaktif'}`
       + `, seen=${this.seenIds.size}, data=${this.dataDirectory}`);
+
+    // Auto-launch hanya saat benar-benar runtime produksi (bukan dry-run/test).
+    if (internalNotifierNeeded && this.options.autoLaunchWidget && process.platform === 'win32') {
+      this.launchReminderWidget();
+    }
   }
 
   async stop() {
@@ -188,7 +262,16 @@ export class PushNotificationModule {
   async handle(command) {
     if (!this.running) return failed('IFESS_PUSH_NOTIFICATION is not running.');
 
-    // INDEX PUSHMOD: 1) validasi payload
+    // INDEX PUSHMOD: 0) verifikasi token bila diaktifkan di config.
+    if (this.options.verifyToken && !verifyNotificationSignature(command?.payload, this.options.verifyToken)) {
+      this.appendHistory({
+        notificationId: String(command?.payload?.notificationId ?? '?'),
+        category: '?', priority: '?', title: String(command?.payload?.title ?? '(tanpa judul)'),
+      }, { displayed: false, method: 'rejected', note: 'invalid-signature' });
+      return failed('Verifikasi gagal: signature hilang atau tidak cocok untuk payload ini.');
+    }
+
+    // 1) Validasi payload.
     const validation = validateNotificationPayload(command?.payload ?? {}, this.options);
     if (!validation.ok) return failed(validation.error);
     const notification = validation.value;
@@ -209,7 +292,7 @@ export class PushNotificationModule {
       return ok(`Duplikat dilewati: ${notification.notificationId} sudah ditampilkan sebelumnya.`);
     }
 
-    // 4) Tampilkan (atau dry-run) lalu 5) catat seen + riwayat.
+    // 4) Tampilkan (atau dry-run) lalu 5) catat seen + inbox widget + riwayat.
     let outcome;
     if (this.options.dryRun) {
       outcome = { displayed: true, method: 'dry-run', message: 'dry-run aktif, tampilan fisik dilewati.' };
@@ -222,6 +305,7 @@ export class PushNotificationModule {
     }
 
     this.rememberSeen(notification.notificationId);
+    if (outcome.displayed && this.options.widgetInbox) this.appendInbox(notification);
     this.appendHistory(notification, {
       displayed: outcome.displayed,
       method: outcome.method,
@@ -238,6 +322,53 @@ export class PushNotificationModule {
       throw new Error('Notifier belum tersedia (dryRun=false tetapi notifier gagal dibuat).');
     }
     return this.notifierInstance;
+  }
+
+  /**
+   * Inbox untuk widget pengingat terpin (INDEX REMDATA): file APPEND-ONLY
+   * yang hanya ditulis client; widget membaca dengan byte-offset sendiri.
+   */
+  appendInbox(notification) {
+    try {
+      fs.mkdirSync(this.dataDirectory, { recursive: true });
+      const entry = JSON.stringify({
+        id: notification.notificationId,
+        at: new Date().toISOString(),
+        category: notification.category,
+        priority: notification.priority,
+        title: notification.title,
+        message: notification.message,
+        details: notification.details,
+        footer: notification.footer,
+      });
+      fs.appendFileSync(path.join(this.dataDirectory, 'inbox.jsonl'), `${entry}\n`, 'utf8');
+    } catch (err) {
+      this.logger.errorException('Gagal menulis inbox widget.', err);
+    }
+  }
+
+  /** Luncurkan widget WPF sebagai proses terpisah (mutex mencegah ganda). */
+  launchReminderWidget() {
+    try {
+      if (!fs.existsSync(this.widgetScriptPath)) {
+        this.logger.warning(`Widget script tidak ditemukan: ${this.widgetScriptPath}`);
+        return;
+      }
+      const child = spawn('powershell.exe', [
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+        '-File', this.widgetScriptPath,
+        '-DataDir', this.dataDirectory,
+        '-AssetsDir', path.resolve(this.baseDirectory, this.options.themesPath),
+      ], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      child.unref();
+      this.logger.info('Reminder widget diluncurkan.');
+    } catch (err) {
+      this.logger.errorException('Gagal meluncurkan reminder widget.', err);
+    }
   }
 
   /** Susun permintaan display: teks + path branding yang benar-benar ada. */

@@ -111,7 +111,7 @@ export default function TaskDetailPage() {
             <p className="text-slate-300 mt-2 whitespace-pre-wrap">{a?.description}</p>
             <p className="text-xs text-slate-400 mt-3 inline-flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Deadline: <b>{a?.deadline ? new Date(a.deadline).toLocaleString('id-ID') : '-'}</b></p>
           </div>
-          <span className={`px-4 py-2 rounded-full text-xs font-extrabold border ${STATUS_CLS[status]} ${status === 'REVISION_NEEDED' ? 'animate-pulse' : ''}`}>{status}</span>
+          <span className={`px-4 py-2 rounded-full text-xs font-extrabold border ${STATUS_CLS[status]}`}>{status}</span>
         </div>
 
         {latest?.review_status === 'REJECTED_NEEDS_REVISION' && latest?.manager_feedback && (

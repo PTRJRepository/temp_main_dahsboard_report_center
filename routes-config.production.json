@@ -174,34 +174,57 @@
     "servicePath": "/ifess-control/app",
     "serviceUrl": "http://localhost:3001/ifess-control/app",
     "target": "http://127.0.0.1:8003",
-    "description": "Firebird query gateway + iFESS client management — served by the ifess-server module (:8003, unified frontend + API; legacy ControlServer port)",
+    "description": "Firebird query gateway + iFESS client management — served by the ifess-server module (:8003, unified frontend + API; legacy ControlServer port). Full path forwarded; module enforces portal identity.",
     "enabled": true,
     "rewriteContent": false,
+    "rewritePath": false,
     "public": true
   },
   {
     "id": "api-ifess",
     "path": "/api/ifess",
     "target": "http://127.0.0.1:8003",
-    "description": "IFESS control-plane API → ifess-server module (:8003)",
+    "description": "IFESS control-plane API → ifess-server module (:8003). Module enforces X-API-Key / portal identity.",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": false
+    "rewritePath": false,
+    "public": true
   },
   {
     "id": "api-clients",
     "path": "/api/clients",
     "target": "http://127.0.0.1:8003",
-    "description": "SuperApp bare wire protocol (Kerani clients hardcode /api/clients/*) → ifess-server module (:8003)",
+    "description": "SuperApp bare wire protocol (Kerani clients hardcode /api/clients/*) → ifess-server module (:8003). Module enforces X-API-Key.",
     "enabled": true,
     "rewriteContent": false,
-    "rewritePath": false
+    "rewritePath": false,
+    "public": true
+  },
+  {
+    "id": "api-query-gateway",
+    "path": "/api/query-gateway",
+    "target": "http://127.0.0.1:8003",
+    "description": "Firebird query job/template management → ifess-server module (:8003). Module enforces X-API-Key / portal identity.",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false,
+    "public": true
+  },
+  {
+    "id": "ifess-assets",
+    "path": "/ifess-assets",
+    "target": "http://127.0.0.1:8003",
+    "description": "iFESS UI static assets (absolute /ifess-assets/* refs) → ifess-server module (:8003, maps to its ui/assets). Full path forwarded.",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false,
+    "public": true
   },
   {
     "id": "ifess",
     "path": "/ifess",
     "target": "http://127.0.0.1:8003",
-    "description": "IFESS Client Gateway (legacy alias, same ifess-server module)",
+    "description": "IFESS Client Gateway legacy alias (same ifess-server module). Module enforces X-API-Key.",
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": true,

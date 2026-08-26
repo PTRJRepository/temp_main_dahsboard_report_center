@@ -162,7 +162,7 @@ function DriveInner() {
 
       {items.length === 0 ? (
         <div className="mt-10 flex flex-wrap gap-6 justify-center items-start anim-fadeup">
-          <StickyNote variant="yellow" rotate={-2} className="w-64 rounded-lg py-8 px-5 text-center">
+          <StickyNote variant="yellow" className="w-64 rounded-lg py-8 px-5 text-center">
             <UploadCloud className="w-9 h-9 mx-auto opacity-70" />
             <p className="mt-3 text-base font-black">Kosong</p>
             <p className="text-[12px] font-semibold opacity-80 mt-1">Tarik &amp; lepas berkas ke area halaman ini.</p>
@@ -172,7 +172,7 @@ function DriveInner() {
             <p className="mt-3 text-base font-black">Buat Folder</p>
             <p className="text-[12px] font-semibold opacity-80 mt-1">Rapikan berkas per blok / per laporan.</p>
           </StickyNote>
-          <StickyNote variant="blue" rotate={-1} className="w-64 rounded-lg py-8 px-5 text-center">
+          <StickyNote variant="blue" className="w-64 rounded-lg py-8 px-5 text-center">
             <FileText className="w-9 h-9 mx-auto opacity-70" />
             <p className="mt-3 text-base font-black">Dari Tugas?</p>
             <p className="text-[12px] font-semibold opacity-80 mt-1">Hasil tugas kerani otomatis masuk folder “Tugas” lengkap dengan jejak pengirim.</p>

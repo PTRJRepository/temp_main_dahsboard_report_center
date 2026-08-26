@@ -13,6 +13,7 @@
     "dev": "node --watch src/index.js",
     "test": "node --test tests/validator.test.mjs tests/materializer.test.mjs tests/isql-parser.test.mjs tests/auto-task-schedule.test.mjs tests/retry.test.mjs tests/toast-xml.test.mjs tests/notification-payload.test.mjs tests/push-notification-module.test.mjs",
     "test:e2e": "node scripts/e2e-test.mjs",
-    "mock:server": "node scripts/mock-control-server.mjs"
+    "mock:server": "node scripts/mock-control-server.mjs",
+    "widget": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"widget\\reminder-widget.ps1\""
   }
 }

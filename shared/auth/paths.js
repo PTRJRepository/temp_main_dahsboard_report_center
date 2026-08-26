@@ -8,7 +8,10 @@ const DASHBOARD_PUBLIC_PREFIXES = ['/_next', '/assets', '/api/auth'];
 // modules (Module Services/report-center :3101 and Module Services/file-manager
 // :3103) via routes-config.json — NOT by the Dashboard_Utama app. Keep them out
 // of DASHBOARD_PATHS so the gateway proxies them through the route table.
-const DASHBOARD_PATHS = ['/admin', '/dashboard', '/dashboard-user', '/modules', '/api/services', '/ifess-control', '/api/ifess', '/api/query-gateway', '/config-path'];
+// Same applies to iFESS (2026-08-26 cut-over): /ifess-control, /api/ifess,
+// /api/clients and /api/query-gateway belong to Module Services/ifess-server
+// (:8003) via the route table — removed from DASHBOARD_PATHS.
+const DASHBOARD_PATHS = ['/admin', '/dashboard', '/dashboard-user', '/modules', '/api/services', '/config-path'];
 const PROTECTED_PATHS = ['/config-path', ...DASHBOARD_PATHS];
 
 export function isProtectedPath(pathname) {

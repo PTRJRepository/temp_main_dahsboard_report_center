@@ -3,6 +3,7 @@
 // Cache per query: pencarian hanya terjadi sekali per kata kunci.
 import { Router } from 'express'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { auth, MANAGER_ROLES } from '../middleware/auth.js'
 import { saveBuffer, statRemote, downloadBuffer } from '../lib/storage.js'
@@ -54,8 +55,11 @@ const THEME_QUERIES: Record<string, string> = {
 }
 
 async function searchAndStore(query: string): Promise<SceneEntry> {
-  // import dinamis — tool zero-dependency di shared/
-  const mod: any = await import(/* webpackIgnore: true */ env.googleImageSearchPath)
+  // import dinamis — tool zero-dependency di shared/ (di luar folder modul).
+  // Path relatif env.googleImageSearchPath dihitung dari file ini.
+  const here = path.dirname(fileURLToPath(import.meta.url))
+  const toolPath = path.resolve(here, env.googleImageSearchPath)
+  const mod: any = await import(/* webpackIgnore: true */ 'file:///' + toolPath.replace(/\\/g, '/'))
   const res = await mod.searchGoogleImages(query, { count: 6 })
   const candidates = (res.results || []).filter((r: any) => r.imageUrl)
   let lastErr: Error | null = null
@@ -122,6 +126,40 @@ sceneRouter.get('/scene', auth(), async (req, res) => {
     })
   } catch (e: any) {
     res.status(502).json({ status: 'error', message: e.message || 'Gagal mengambil foto scene' })
+  }
+})
+
+/**
+ * GET /api/v1/meta/scene/task?q=<judul tugas>
+ * Cari gambar relevan berdasarkan judul/teks bebas — dipakai kartu tugas
+ * agar tiap penugasan punya ilustrasi kontekstual (mis. "LHP Blok C" → foto sawit).
+ * Hasil di-cache per query di scene/index.json.
+ */
+sceneRouter.get('/scene/task', auth(), async (req, res) => {
+  try {
+    const raw = String(req.query.q || '').trim()
+    if (!raw) return res.status(400).json({ status: 'error', message: 'query ?q= wajib' })
+    // rapikan jadi kata kunci pencarian: potong ke ~6 kata pertama
+    const query = raw.split(/\s+/).slice(0, 6).join(' ').toLowerCase()
+    const cache = await loadIndex()
+    let entry = cache.get(query)
+    if (!entry) {
+      entry = await searchAndStore(query)
+    } else {
+      const st = await statRemote(entry.storagePath).catch(() => null)
+      if (!st) entry = await searchAndStore(query)
+    }
+    res.json({
+      status: 'success',
+      data: {
+        url: `/api/file/meta/scene/image?path=${encodeURIComponent(entry.storagePath)}&v=${Date.now()}`,
+        credit: entry.credit,
+        source: entry.source,
+        query,
+      },
+    })
+  } catch (e: any) {
+    res.status(502).json({ status: 'error', message: e.message || 'Gagal mengambil foto untuk judul ini' })
   }
 })
 

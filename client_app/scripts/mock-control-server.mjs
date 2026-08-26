@@ -66,6 +66,19 @@ function queueCommand(clientId, command) {
   pendingByClient.get(clientId).push(command);
 }
 
+// Pabrik command EXECUTE_SHOW_NOTIFICATION untuk /admin/notify (INDEX MAP admin).
+function makeCommand(clientId, payload) {
+  return {
+    commandId: `CMD-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    clientId,
+    commandType: 'EXECUTE_SHOW_NOTIFICATION',
+    moduleCode: 'IFESS_PUSH_NOTIFICATION',
+    payload,
+    status: 'Pending',
+    createdAt: new Date().toISOString(),
+  };
+}
+
 // ============================================================================
 // INDEX MAP — segments[] untuk path /api/* (hasil split('/').filter(Boolean))
 // ----------------------------------------------------------------------------
@@ -127,37 +140,49 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === 'POST' && segments[1] === 'notify') {
         // INDEX MAP admin: /admin/notify -> bungkus payload menjadi command
-        // EXECUTE_SHOW_NOTIFICATION lalu antrikan ke satu client atau broadcast.
+        // EXECUTE_SHOW_NOTIFICATION. Pemilihan target (komunikasi server->client):
+        //   clientId          -> satu client
+        //   clientIds [..]    -> beberapa client
+        //   tanpa keduanya    -> broadcast ke semua client yang dikenal
         const body = await readBody(req);
-        const command = {
-          commandId: body.commandId ?? `CMD-${Date.now()}`,
-          clientId: body.clientId ?? '*',
-          commandType: 'EXECUTE_SHOW_NOTIFICATION',
-          moduleCode: 'IFESS_PUSH_NOTIFICATION',
-          payload: {
-            notificationId: body.notificationId ?? `NTF-${Date.now()}`,
-            category: body.category,
-            priority: body.priority,
-            title: body.title,
-            message: body.message,
-            details: body.details,
-            footer: body.footer,
-            theme: body.theme,
-            expiresAt: body.expiresAt,
-            sound: body.sound,
-          },
-          status: 'Pending',
-          createdAt: new Date().toISOString(),
+        const payload = {
+          notificationId: body.notificationId ?? `NTF-${Date.now()}`,
+          category: body.category,
+          priority: body.priority,
+          title: body.title,
+          message: body.message,
+          details: body.details,
+          footer: body.footer,
+          theme: body.theme,
+          expiresAt: body.expiresAt,
+          sound: body.sound,
         };
-        if (command.clientId !== '*' && command.clientId) {
-          queueCommand(command.clientId, command);
+        if (body.signature) payload.signature = body.signature;
+
+        const targets = [];
+        if (body.clientId) targets.push(body.clientId);
+        for (const extra of Array.isArray(body.clientIds) ? body.clientIds : []) targets.push(extra);
+
+        const commands = [];
+        if (targets.length > 0) {
+          for (const clientId of [...new Set(targets)]) {
+            const command = makeCommand(clientId, payload);
+            queueCommand(clientId, command);
+            commands.push(command);
+          }
         } else if (pendingByClient.size === 0) {
+          const command = makeCommand('*', payload);
           queueCommand('*', command);
+          commands.push(command);
         } else {
-          for (const clientId of pendingByClient.keys()) queueCommand(clientId, { ...command });
+          for (const clientId of pendingByClient.keys()) {
+            const command = makeCommand(clientId, payload);
+            queueCommand(clientId, command);
+            commands.push(command);
+          }
         }
-        pushEvent({ type: 'queuedNotification', clientId: command.clientId, notificationId: command.payload.notificationId, title: command.payload.title });
-        return json(res, 200, { success: true, command });
+        pushEvent({ type: 'queuedNotification', targets: targets.length > 0 ? [...new Set(targets)] : '*', notificationId: payload.notificationId, title: payload.title });
+        return json(res, 200, { success: true, command: commands[0], count: commands.length, targetDescription: targets.length > 0 ? [...new Set(targets)].join(', ') : '*' });
       }
       if (req.method === 'GET' && segments[1] === 'events') {
         return json(res, 200, events);

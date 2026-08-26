@@ -3,27 +3,30 @@
 
 /**
  * INDEX SENDNOTIF — CLI kirim Push Notification (EXECUTE_SHOW_NOTIFICATION)
- * dari aplikasi lain/operator menuju client tertentu atau broadcast.
+ * dari aplikasi lain/operator menuju client tertentu atau broadcast, lengkap
+ * dengan verifikasi token HMAC opsional (INDEX VERIFY di push-notification.js).
  *
  * Contoh pemakaian:
  *
- *   // Server asli (js-server Kerani SuperApp), satu client:
+ *   // Lihat daftar client terdaftar untuk memilih target:
+ *   node scripts/send-notification.mjs --server http://localhost:8003 ^
+ *     --api-key ptrj-... --list-clients
+ *
+ *   // Server asli (js-server Kerani), satu client:
  *   node scripts/send-notification.mjs --server http://localhost:8003 ^
  *     --api-key ptrj-rebinmas-air-ruak-parit-gunung-darul ^
  *     --client CLIENT-PTRJ-ARE-A ^
- *     --category update --priority high ^
+ *     --category update --priority high --token <NOTIFY_TOKEN> ^
  *     --title "Pembaruan Sistem Tersedia" ^
  *     --message "Hubungi Divisi IT untuk penjadwalan pembaruan."
  *
- *   // Broadcast ke semua client yang terdaftar di server asli:
- *   ... tambahkan --all (menggantikan --client)
+ *   // Banyak client / broadcast:
+ *   --client CLIENT-PTRJ-ARE-A,CLIENT-PTRJ-PAB-01     (atau ulangi --client)
+ *   ... --all                                          (semua client terdaftar)
  *
- *   // Beberapa client sekaligus (ulangi --client atau pisah dengan koma):
- *   --client CLIENT-PTRJ-ARE-A,CLIENT-PTRJ-ARE-B
- *
- *   // Mode mock untuk uji lokal (tanpa server asli):
+ *   // Mode mock uji lokal (tanpa server asli):
  *   node scripts/send-notification.mjs --mock http://localhost:8100 \
- *     --title "Uji Notifikasi" --message "Halo dari operator."
+ *     --title "Uji Notifikasi" --message "Halo dari operator." [--token rahasia]
  *
  * Flag lain: --details, --footer, --theme harvest|maintenance|safety|default,
  *            --id NTF-ABC123 (default otomatis), --expires-minutes 60,
@@ -31,7 +34,10 @@
  */
 
 import process from 'node:process';
-import { validateNotificationPayload } from '../src/modules/push-notification.js';
+import {
+  validateNotificationPayload,
+  computeNotificationSignature,
+} from '../src/modules/push-notification.js';
 
 const COMMAND_TYPE = 'EXECUTE_SHOW_NOTIFICATION';
 const MODULE_CODE = 'IFESS_PUSH_NOTIFICATION';
@@ -40,12 +46,15 @@ function printUsage() {
   console.log(`Kirim push notification satu arah ke IFESS client.
 
 Pemakaian:
-  send-notification.mjs --server URL [--api-key KEY]
-      (--client ID[,ID...] | --all)
+  send-notification.mjs --server URL [--api-key KEY] [--token SECRET]
+      (--client ID[,ID...] | --all | --list-clients)
       --title "..." --message "..." [--category c] [--priority p]
       [--details t] [--footer t] [--theme t] [--id id] [--expires-minutes n] [--silent]
 
-  send-notification.mjs --mock URL --title "..." --message "..." [--client ID]
+  send-notification.mjs --mock URL --title "..." --message "..." [--client ID] [--token SECRET]
+
+--list-clients : hanya menampilkan clientId terdaftar lalu keluar.
+--token        : HMAC-SHA256 payload; WAJIB bila client mengaktifkan verifyToken.
 
 Kategori : announcement | update | instruction | alert | maintenance | reminder
 Prioritas: low | normal | high | critical`);
@@ -53,9 +62,9 @@ Prioritas: low | normal | high | critical`);
 
 function parseArgs(argv) {
   const options = {
-    clients: [], all: false, server: '', mock: '', apiKey: '',
-    category: 'announcement', priority: 'normal', theme: '',
-    title: '', message: '', details: '', footer: '',
+    clients: [], all: false, listClients: false, server: '', mock: '',
+    apiKey: '', token: '', category: 'announcement', priority: 'normal',
+    theme: '', title: '', message: '', details: '', footer: '',
     id: '', expiresMinutes: null, sound: true,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -68,8 +77,10 @@ function parseArgs(argv) {
       case '--server': options.server = next(); break;
       case '--mock': options.mock = next(); break;
       case '--api-key': options.apiKey = next(); break;
+      case '--token': options.token = next(); break;
       case '--client': options.clients.push(...String(next()).split(',').map(item => item.trim()).filter(Boolean)); break;
       case '--all': options.all = true; break;
+      case '--list-clients': options.listClients = true; break;
       case '--title': options.title = next(); break;
       case '--message': options.message = next(); break;
       case '--details': options.details = next(); break;
@@ -131,6 +142,18 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+
+  const headers = { 'X-API-Key': options.apiKey, 'Content-Type': 'application/json' };
+
+  // ── Mode daftar client: bantu operator memilih target ─────────────────────
+  if (options.listClients) {
+    if (!options.server) { console.error('--list-clients butuh --server.'); process.exitCode = 1; return; }
+    const listing = await fetchJson(new URL('/api/clients', options.server), { headers });
+    const ids = extractClientIds(listing);
+    console.log(ids.length === 0 ? '(tidak ada client terdaftar)' : ids.join('\n'));
+    return;
+  }
+
   if (!options.title.trim() || !options.message.trim()) {
     console.error('--title dan --message wajib diisi.');
     process.exitCode = 1;
@@ -161,21 +184,33 @@ async function main() {
   }
   const payload = validation.value;
 
+  // INDEX VERIFY: tandatangani setelah normalisasi; client memverifikasi
+  // bentuk kanonik yang identik (lihat canonicalNotificationString).
+  if (options.token) {
+    payload.signature = computeNotificationSignature(payload, options.token);
+  }
+
   // ── Mode mock: antrikan lewat endpoint admin mock ─────────────────────────
   if (options.mock) {
-    const body = { ...payload, clientId: options.clients[0] ?? null };
+    const body = {
+      ...payload,
+      clientId: options.clients[0] ?? null,
+      clientIds: options.clients.length > 1 ? options.clients.slice(1) : undefined,
+      broadcast: options.all,
+    };
     const result = await fetchJson(new URL('/admin/notify', options.mock), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    console.log(`OK (mock): command ${result.command.commandId} diantrikan`
-      + `${body.clientId ? ` untuk ${body.clientId}` : ' (broadcast semua client)'}.`);
+    const targetLabel = options.all ? 'broadcast semua client'
+      : options.clients.length > 0 ? `target ${result.command.targetDescription ?? options.clients.join(', ')}`
+        : 'broadcast semua client';
+    console.log(`OK (mock): command ${result.command.commandId} diantrikan (${targetLabel}).`);
     return;
   }
 
   // ── Mode server asli: POST /api/clients/{id}/commands per target ──────────
-  const headers = { 'X-API-Key': options.apiKey, 'Content-Type': 'application/json' };
   let targets = options.clients;
   if (options.all) {
     const listing = await fetchJson(new URL('/api/clients', options.server), { headers });

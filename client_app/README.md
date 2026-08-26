@@ -182,6 +182,42 @@ powershell -NoProfile -ExecutionPolicy Bypass -File assets\notifications\scripts
 > Saat dikompilasi jadi exe (mis. `pkg`) pastikan folder `assets/` ikut dipaketkan —
 > toast membaca gambar dan skrip `.ps1` dari path tersebut.
 
+### Widget Pengingat Terpin (UI untuk kerani)
+
+Jendela kecil **always-on-top** di sudut desktop: pil bulat berlogo dengan badge
+jumlah pengingat belum dibaca. **Diklik → jendela membesar** menjadi panel kartu
+berisi semua reminder/notifikasi (chip kategori, garis prioritas, waktu relatif,
+footer). Kerani dapat menghapus tiap kartu (`Hapus`) atau `Bersihkan semua`;
+penghapusan bersifat lokal. Panel dapat diseret lewat header dan posisinya
+diingat (`inbox-state.json`). Esc / tombol `-` mengecilkan kembali.
+
+```powershell
+npm run widget        # jalankan manual; auto-launch juga terjadi saat client start
+```
+
+- Sumber data: `data/notifications/inbox.jsonl` ditulis client (append-only),
+  widget membaca dengan byte-offset dan memiliki `inbox-state.json` sendiri —
+  pola *single-writer per file*, bebas konflik tulis.
+- Instance ganda dicegah mutex global; widget tetap hidup walau client di-restart.
+- Config modul: `widgetInbox` (tulis inbox) dan `autoLaunchWidget`
+  (luncurkan widget saat start; otomatis nonaktif pada `dryRun`).
+
+### Verifikasi Token Payload (INDEX VERIFY)
+
+Supaya hanya aplikasi tepercaya yang bisa memunculkan notifikasi, payload dapat
+ditandatangani HMAC-SHA256. Aktifkan di sisi client:
+
+```jsonc
+// client.config.local.json (gitignored)
+{ "modules": [ { "Code": "IFESS_PUSH_NOTIFICATION",
+                 "customConfig": { "verifyToken": "<NOTIFY_TOKEN>" } } ] }
+```
+
+Lalu setiap pengirim menyertakan `payload.signature` — CLI helper tinggal tambah
+flag `--token <NOTIFY_TOKEN>`. Payload tanpa/tanda tangan salah → command `Failed`
+"Verifikasi gagal". Rumus kanonik, contoh PowerShell/Node, dan seluruh aturan
+pemanggilan task dibahas lengkap di **[`docs/PUSH-TASK-API.md`](docs/PUSH-TASK-API.md)**.
+
 ## Operasional
 
 - **Log**: `logs/host/YYYY-MM-DD.log` dan `logs/modules/<CODE>/YYYY-MM-DD.log`; retensi default 14 hari.
@@ -196,13 +232,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File assets\notifications\scripts
 
 ```powershell
 npm test           # unit test: validator SQL, materializer, parser isql, jadwal ATK,
-                   #   backoff, XML toast, payload notifikasi, perilaku modul notifikasi
-npm run test:e2e   # end-to-end penuh: mock server + client asli + 12 assertion protokol
+                   #   backoff, XML toast, payload notifikasi, verifikasi HMAC,
+                   #   perilaku modul notifikasi
+npm run test:e2e   # end-to-end penuh: mock server + client asli + 14 assertion protokol
 ```
 
 Harness e2e memverifikasi siklus nyata: register → heartbeat → PING → Auto Task Kill →
 penolakan INSERT oleh validator → failure report → STOP/START module → push notification
-(valid dry-run, dedupe duplikat, penolakan payload tidak valid).
+(penolakan tanpa signature, valid bertanda tangan, inbox widget, dedupe duplikat,
+penolakan payload tidak valid).
 
 ## Catatan debugging (untuk pengelola)
 

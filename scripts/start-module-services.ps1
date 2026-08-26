@@ -67,7 +67,10 @@ $MODULES = @(
   @{ Name = 'daftar-upah';          Dir = 'Module Services/daftar-upah';          Port = 3104;
     Runner = $BUN; Dev = @('run','dev'); Prod = @('run','start');
     Build = @('run','build:frontend'); Marker = 'frontend/dist/index.html';
-    Env = @{ PORT = '3104' } }   # default internal 8002, tapi gateway route menunjuk 3104
+    Env = @{ PORT = '3104' } },   # default internal 8002, tapi gateway route menunjuk 3104
+  @{ Name = 'ifess-server';         Dir = 'Module Services/ifess-server';         Port = 8003;
+    Runner = $BUN; Dev = @('run','dev'); Prod = @('run','start');
+    Env = @{ IFESS_PORT = '8003' } }   # legacy ControlServer port; routes ifess-control/api-ifess/api-clients → 127.0.0.1:8003
 )
 if ($IncludeDashboard) {
   $MODULES += @{ Name = 'dashboard-portal'; Dir = 'Dashboard_Utama'; Port = 3100;
