@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IFESS Query Console</title>
+<link rel="icon" href="/ifess-assets/logo-ifess.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ifess-assets/css/tokens.css?v=1">
+<style>
+/* Hallmark · macrostructure: Workbench Control-Room (compact) · theme: Midnight Ops (custom) */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { overflow-x: clip; }
+body { font-family: var(--font-body); background: var(--color-paper); color: var(--color-ink); font-size: var(--text-base); height: 100vh; display: flex; flex-direction: column; }
+::selection { background: var(--color-accent-dim); color: var(--color-accent); }
+
+.header { background: var(--color-paper-2); border-bottom: var(--rule-hairline); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; gap: 12px; }
+.header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logo { font-size: var(--text-base); font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.logo img { width: 24px; height: 24px; }
+.logo .tag { font-family: var(--font-data); font-size: 9.5px; color: var(--color-accent); text-transform: uppercase; letter-spacing: .1em; border: 1px solid oklch(80% .125 184 / 40%); padding: 2px 7px; border-radius: 999px; background: var(--color-accent-dim); }
+.conn { display: flex; align-items: center; gap: 7px; font-family: var(--font-data); font-size: var(--text-xs); color: var(--color-ink-muted); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ink-muted); }
+.dot.live { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
+
+.container { flex: 1; display: grid; grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr); gap: 14px; padding: 14px; overflow: hidden; min-height: 0; }
+.panel { background: var(--color-paper-2); border: var(--rule-hairline); border-radius: var(--radius-md); display: flex; flex-direction: column; overflow: clip; min-height: 0; }
+.panel-head { padding: 10px 16px; border-bottom: var(--rule-hairline); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.panel-head h2 { font-size: var(--text-sm); font-weight: 700; margin-right: auto; }
+.panel-body { flex: 1; padding: 14px; overflow-y: auto; min-height: 0; }
+
+.field label { display: block; font-size: 9.5px; font-family: var(--font-data); color: var(--color-ink-muted); text-transform: uppercase; letter-spacing: .09em; margin-bottom: 3px; }
+.field input, .field select, .field textarea { background: var(--color-paper); border: var(--rule-strong); color: var(--color-ink); border-radius: var(--radius-xs); padding: 7px 10px; font-size: var(--text-sm); width: 100%; font-family: inherit; }
+.field textarea { font-family: var(--font-data); line-height: 1.55; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--color-focus); outline: none; }
+.field-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
+
+.btn { font-family: inherit; font-weight: 700; font-size: var(--text-sm); cursor: pointer; border: var(--rule-strong); border-radius: var(--radius-xs); padding: 7px 14px; background: var(--color-paper-3); color: var(--color-ink); transition: all var(--dur-fast) var(--ease-out); }
+.btn:hover { background: var(--color-paper-raised); border-color: var(--color-ink-muted); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.btn:disabled, .btn[data-state="loading"] { opacity: .45; cursor: not-allowed; transform: none; }
+.btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: #04121f; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.sm { padding: 4px 10px; font-size: var(--text-xs); }
+
+.checks { display: flex; flex-wrap: wrap; gap: 6px; max-height: 110px; overflow-y: auto; padding: 8px; border: var(--rule-hairline); border-radius: var(--radius-xs); }
+.checks label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-family: var(--font-data); padding: 3px 8px; border-radius: var(--radius-xs); cursor: pointer; color: var(--color-ink-soft); }
+.checks label:hover { background: oklch(100% 0 0 / 5%); }
+.checks input { accent-color: var(--color-accent); width: auto; }
+
+.table-wrap { overflow: auto; max-height: calc(100vh - 220px); }
+table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+thead th { position: sticky; top: 0; background: var(--color-paper-3); text-align: left; z-index: 1; font-family: var(--font-data); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--color-ink-muted); padding: 8px 12px; border-bottom: var(--rule-strong); white-space: nowrap; }
+tbody td { padding: 7px 12px; border-bottom: var(--rule-hairline); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tbody tr:hover { background: oklch(100% 0 0 / 3.5%); }
+.empty { padding: 40px 20px; text-align: center; color: var(--color-ink-muted); font-size: var(--text-sm); }
+
+.meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-family: var(--font-data); font-size: var(--text-xs); color: var(--color-ink-muted); }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-data); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid; }
+.b-ok { color: var(--color-success); border-color: oklch(76% .16 155 / 40%); background: oklch(76% .16 155 / 9%); }
+.b-bad { color: var(--color-danger); border-color: oklch(66% .19 15 / 40%); background: oklch(66% .19 15 / 9%); }
+.b-info { color: var(--color-info); border-color: oklch(70% .14 245 / 40%); background: oklch(70% .14 245 / 9%); }
+.progress { height: 4px; border-radius: 999px; background: var(--color-paper-raised); overflow: clip; margin-bottom: 10px; }
+.progress > i { display: block; height: 100%; background: var(--color-accent); transition: width var(--dur-slow) var(--ease-in-out); }
+
+.me-chip { display: flex; align-items: center; gap: 8px; padding: 4px 11px; border: var(--rule-hairline); border-radius: 999px; background: var(--color-paper-3); }
+.me-chip b { font-size: var(--text-xs); } .me-chip span { font-family: var(--font-data); font-size: 9px; color: var(--color-ink-muted); text-transform: uppercase; }
+.gate { margin: 18vh auto 0; max-width: 520px; text-align: center; padding: 0 20px; }
+.gate p { color: var(--color-ink-muted); line-height: 1.6; margin: 10px 0 18px; }
+.gate a { color: var(--color-accent); font-weight: 700; }
+
+@media (max-width: 900px) {
+  .container { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .panel { min-height: 300px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="logo"><img src="/ifess-assets/logo-ifess.svg" alt=""> IFESS <span class="tag">Query</span></div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="conn-txt">connecting…</span></div>
+  </div>
+  <div class="me-chip" id="me" hidden><b id="me-name">…</b><span id="me-src"></span></div>
+</header>
+
+<div class="container" id="app">
+  <!-- EDITOR PANEL -->
+  <section class="panel">
+    <div class="panel-head"><h2>Editor</h2><span class="badge b-ok" id="valid-badge" hidden>read-only ✓</span><span class="badge b-bad" id="invalid-badge" hidden>rejected</span></div>
+    <div class="panel-body">
+      <div class="field-row">
+        <div class="field" style="flex:1;min-width:150px;">
+          <label>Name</label>
+          <input id="q-name" placeholder="Ad-hoc query">
+        </div>
+        <div class="field" style="max-width:105px;">
+          <label>Max rows</label>
+          <input id="q-maxrows" type="number" value="1000" min="1" max="100000">
+        </div>
+        <div class="field" style="max-width:105px;">
+          <label>Timeout s</label>
+          <input id="q-timeout" type="number" value="30" min="5" max="300">
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>SQL — read-only (SELECT / WITH…SELECT)</label>
+        <textarea id="q-text" rows="9" spellcheck="false">SELECT FIRST 10 * FROM RDB$RELATIONS;</textarea>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Targets</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;" id="mode-row"></div>
+        <select id="t-group" style="display:none;margin-bottom:6px;"></select>
+        <div class="checks" id="t-clients" style="display:none;"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn primary" id="run-btn" style="flex:1;">▶ Run on targets</button>
+        <button class="btn" id="tpl-btn">Templates</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS PANEL -->
+  <section class="panel">
+    <div class="panel-head"><h2>Results</h2><span class="meta" style="margin:0;" id="r-meta"></span><button class="btn sm" id="csv-btn" hidden>⭳ CSV</button></div>
+    <div class="panel-body" id="results"><div class="empty">Run a query to see results per client</div></div>
+  </section>
+</div>
+
+<div class="gate" id="gate" hidden>
+  <img src="/ifess-assets/logo-ifess.svg" alt="" style="width:52px;height:52px;opacity:.9;">
+  <h1 style="margin-top:14px;">Portal sign-in required</h1>
+  <p>This console is protected by the portal identity layer. Open it through the dashboard portal.</p>
+  <a href="/">Go to portal →</a>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+let ME = null, TARGET_MODE = 'All', POLL = null, LAST = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (r.status === 401) throw Object.assign(new Error('unauthorized'), { code: 401 });
+  const b = await r.json().catch(() => null);
+  if (!r.ok) throw Object.assign(new Error(b && (b.error || b.message) || ('HTTP ' + r.status)), { status: r.status });
+  return b;
+}
+const rpc = (action, params = {}) => api('/api/ifess', { method: 'POST', body: JSON.stringify({ action, params }) });
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+(async function boot() {
+  try {
+    ME = await api('/api/ifess/me');
+    $('me').hidden = false;
+    $('me-name').textContent = ME.name || ME.userId || '?';
+    $('me-src').textContent = ME.source;
+  } catch (e) {
+    if (e.code === 401) { $('gate').hidden = false; $('app').style.display = 'none'; return; }
+  }
+  try { await api('/health'); $('dot').className = 'dot live'; $('conn-txt').textContent = 'online'; } catch { $('dot').className = 'dot dead'; $('conn-txt').textContent = 'offline'; }
+  buildModes();
+  await refreshTargets();
+  wire();
+})();
+
+function buildModes() {
+  const row = $('mode-row');
+  ['All', 'Group', 'Selected'].forEach(m => {
+    const b = document.createElement('button');
+    b.className = 'btn sm' + (m === TARGET_MODE ? ' primary' : '');
+    b.textContent = m;
+    b.addEventListener('click', () => {
+      TARGET_MODE = m;
+      [...row.children].forEach(c => c.classList.toggle('primary', c.textContent === m));
+      $('t-group').style.display = m === 'Group' ? '' : 'none';
+      $('t-clients').style.display = m === 'Selected' ? '' : 'none';
+    });
+    row.appendChild(b);
+  });
+}
+
+async function refreshTargets() {
+  try {
+    const clients = await rpc('listClients');
+    const box = $('t-clients');
+    while (box.firstChild) box.removeChild(box.firstChild);
+    for (const c of clients) {
+      const l = document.createElement('label');
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = c.clientId;
+      l.appendChild(cb);
+      l.appendChild(document.createTextNode(c.clientName || c.clientId));
+      box.appendChild(l);
+    }
+    const groups = await rpc('listClientGroups').catch(() => []);
+    const gsel = $('t-group');
+    while (gsel.firstChild) gsel.removeChild(gsel.firstChild);
+    for (const g of groups) {
+      const o = document.createElement('option');
+      o.value = g.groupCode; o.textContent = g.groupName || g.groupCode;
+      gsel.appendChild(o);
+    }
+  } catch (e) { /* targets optional */ }
+}
+
+function setBusy(btn, on) {
+  if (!on) { delete btn.dataset.state; btn.disabled = false; return; }
+  btn.dataset.state = 'loading'; btn.disabled = true;
+}
+
+function wire() {
+  $('run-btn').addEventListener('click', run);
+  $('tpl-btn').addEventListener('click', showTemplates);
+  $('csv-btn').addEventListener('click', () => {
+    if (!LAST) return;
+    const blob = new Blob(['﻿' + toCSV(LAST.headers, LAST.rows)], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'query-' + Date.now() + '.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 300);
+  });
+}
+
+function toCSV(headers, rows) {
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  return [headers.map(q).join(',')].concat(rows.map(r => r.map(q).join(','))).join('\n');
+}
+
+async function run() {
+  const btn = $('run-btn'); setBusy(btn, true);
+  $('valid-badge').hidden = true; $('invalid-badge').hidden = true;
+  try {
+    const v = await fetch('/api/query-gateway/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ queryText: $('q-text').value }) }).then(r => r.json());
+    if (v.valid === false) {
+      $('invalid-badge').hidden = false;
+      $('results').innerHTML = '<div class="empty">' + esc((v.errors || ['validation failed']).join('; ')) + '</div>';
+      setBusy(btn, false);
+      return;
+    }
+    $('valid-badge').hidden = false;
+
+    const params = {
+      queryName: $('q-name').value.trim() || 'Quick Query',
+      queryText: $('q-text').value,
+      targetMode: TARGET_MODE,
+      targetGroup: TARGET_MODE === 'Group' ? ($('t-group').value || null) : null,
+      targetClientIds: TARGET_MODE === 'Selected' ? [...$('t-clients').querySelectorAll('input:checked')].map(i => i.value) : undefined,
+      maxRows: parseInt($('q-maxrows').value, 10) || 1000,
+      timeoutSeconds: parseInt($('q-timeout').value, 10) || 30,
+      requestedBy: (ME && ME.name) || 'simple-console',
+    };
+    const batch = await rpc('dispatch', params);
+    poll(batch.queryBatchId);
+  } catch (e) {
+    $('results').innerHTML = '<div class="empty">' + esc(e.message) + '</div>';
+  }
+  setBusy(btn, false);
+}
+
+function poll(batchId) {
+  clearInterval(POLL);
+  $('r-meta').innerHTML = '<span class="badge b-info">running…</span>';
+  const tick = async () => {
+    try {
+      const batch = await api('/api/query-gateway/batches/' + encodeURIComponent(batchId));
+      const jobs = batch.jobs || [];
+      const done = jobs.filter(j => ['Success', 'Failed', 'Rejected', 'Timeout'].includes(j.status)).length;
+      $('r-meta').textContent = done + '/' + jobs.length + ' · ' + (batch.successCount || 0) + ' ok · ' + (batch.failedCount || 0) + ' failed';
+      renderProgress(done, jobs.length);
+      if (jobs.length && done === jobs.length) { clearInterval(POLL); renderResults(batch); }
+    } catch (e) { clearInterval(POLL); $('results').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+  };
+  tick();
+  POLL = setInterval(tick, 1200);
+}
+
+function renderProgress(done, total) {
+  let p = $('prog');
+  if (!p) {
+    p = document.createElement('div'); p.className = 'progress'; p.id = 'prog';
+    p.appendChild(document.createElement('i'));
+    const box = $('results');
+    while (box.firstChild) box.removeChild(box.firstChild);
+    box.appendChild(p);
+  }
+  p.firstChild.style.width = (total ? Math.round(done / total * 100) : 0) + '%';
+}
+
+function renderResults(batch) {
+  const box = $('results');
+  const prog = $('prog'); if (prog) prog.remove();
+  while (box.firstChild) box.removeChild(box.firstChild);
+  const resultsByJob = new Map((batch.results || []).map(r => [r.queryJobId, r]));
+  for (const job of batch.jobs || []) {
+    const head = document.createElement('div'); head.className = 'meta';
+    const st = job.status === 'Success' ? 'b-ok' : 'b-bad';
+    const badge = document.createElement('span'); badge.className = 'badge ' + st; badge.textContent = job.targetClientId;
+    head.appendChild(badge);
+    head.appendChild(document.createTextNode((job.executionTimeMs != null ? job.executionTimeMs + ' ms · ' : '') + (job.rowCount || 0) + ' rows' + (job.isTruncated ? ' (truncated)' : '')));
+    box.appendChild(head);
+    if (job.errorMessage) {
+      const em = document.createElement('div'); em.className = 'empty'; em.textContent = job.errorMessage;
+      box.appendChild(em); continue;
+    }
+    const res = resultsByJob.get(job.queryJobId);
+    if (!res || !(res.rows || []).length) {
+      const nr = document.createElement('div'); nr.className = 'empty'; nr.textContent = 'No rows returned';
+      box.appendChild(nr); continue;
+    }
+    LAST = res;
+    $('csv-btn').hidden = false;
+    const wrap = document.createElement('div'); wrap.className = 'table-wrap';
+    const tbl = document.createElement('table');
+    const thead = document.createElement('thead'); const hr = document.createElement('tr');
+    res.headers.forEach(h => { const th = document.createElement('th'); th.textContent = String(h); hr.appendChild(th); });
+    thead.appendChild(hr); tbl.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    res.rows.slice(0, 500).forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach(c => { const td = document.createElement('td'); td.textContent = c == null ? '' : String(c); td.title = td.textContent; tr.appendChild(td); });
+      tbody.appendChild(tr);
+    });
+    if (res.rows.length > 500) {
+      const tr = document.createElement('tr'); const td = document.createElement('td');
+      td.colSpan = res.headers.length; td.className = 'empty';
+      td.textContent = 'first 500 of ' + res.rows.length + ' rows — export CSV for all';
+      tr.appendChild(td); tbody.appendChild(tr);
+    }
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    box.appendChild(wrap);
+  }
+}
+
+async function showTemplates() {
+  try {
+    const templates = await api('/api/query-gateway/templates');
+    const names = templates.map(t => '· ' + t.templateCode + ' — ' + (t.templateName || '')).join('\n');
+    const pick = prompt('Template code?\n' + names);
+    if (!pick) return;
+    const t = templates.find(x => x.templateCode.toLowerCase() === pick.trim().toLowerCase());
+    if (!t) { alert('Template not found'); return; }
+    $('q-text').value = t.queryText || '';
+    if (t.defaultMaxRows) $('q-maxrows').value = t.defaultMaxRows;
+    if (t.defaultTimeoutSeconds) $('q-timeout').value = t.defaultTimeoutSeconds;
+  } catch (e) { alert(e.message); }
+}
+</script>
+</body>
+</html>

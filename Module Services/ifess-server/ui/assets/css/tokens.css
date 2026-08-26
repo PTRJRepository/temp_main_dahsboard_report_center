@@ -1,0 +1,66 @@
+/* Hallmark · macrostructure: Workbench Control-Room · tone: technical-atmospheric · anchor hue: 184
+ * theme: Midnight Ops (custom, brand-locked) · axes: dark / grotesk-sans / cool-teal
+ * fonts: Manrope (display+body) + JetBrains Mono (data)
+ * states: default · hover · focus-visible · active · disabled · loading · error · success
+ * contrast: pass (46–50)
+ */
+/* Hallmark · pre-emit critique: P4 H5 E5 S4 R5 V4 */
+
+:root {
+    /* Paper band — deep navy, one step lighter than the old #071426 for depth cues */
+    --color-paper:        oklch(21% 0.042 250);
+    --color-paper-2:      oklch(24% 0.046 250);
+    --color-paper-3:      oklch(27% 0.05 249);
+    --color-paper-raised: oklch(30% 0.055 248);
+
+    /* Ink */
+    --color-ink:       oklch(96% 0.012 240);
+    --color-ink-soft:  oklch(80% 0.03 235);
+    --color-ink-muted: oklch(62% 0.035 235);
+
+    /* Accents — teal anchor, functional hues for status semantics */
+    --color-accent:      oklch(80% 0.125 184);  /* teal   #20d9cb */
+    --color-accent-dim:  oklch(80% 0.125 184 / 14%);
+    --color-info:        oklch(70% 0.14 245);   /* cyan-blue */
+    --color-success:     oklch(76% 0.16 155);   /* green  */
+    --color-warn:        oklch(82% 0.14 85);    /* amber  */
+    --color-danger:      oklch(66% 0.19 15);    /* red    */
+    --color-purple:      oklch(70% 0.16 300);
+
+    /* Focus ring ≥3:1 */
+    --color-focus: oklch(85% 0.11 184);
+
+    /* Rules & radius */
+    --rule-hairline: 1px solid oklch(35% 0.05 245);
+    --rule-strong:   1px solid oklch(45% 0.06 243);
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+
+    /* 4pt spacing scale */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 24px;
+    --space-2xl: 32px;
+
+    /* Type scale */
+    --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    --font-data: "JetBrains Mono", Cascadia Code, Consolas, monospace;
+    --text-xs: 11px;
+    --text-sm: 12.5px;
+    --text-base: 14px;
+    --text-lg: 17px;
+    --text-xl: 21px;
+    --text-display: 28px;
+
+    /* Motion */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --dur-fast: 120ms;
+    --dur-base: 200ms;
+    --dur-slow: 320ms;
+}

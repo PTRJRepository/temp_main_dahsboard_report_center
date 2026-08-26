@@ -55,6 +55,10 @@ Multiple local services and databases historically required separate ports and t
 
 ## Quick start
 
+> 🆕 Komputer baru / instalasi dari nol? Ikuti panduan lengkap:
+> **[docs/SETUP.md](docs/SETUP.md)** — prasyarat, kunci JWT, `.env`, symlink,
+> build, sampai verifikasi akhir.
+
 ```bash
 # root
 npm install

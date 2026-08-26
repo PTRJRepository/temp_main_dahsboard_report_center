@@ -127,89 +127,70 @@ body {
 }
 
 /* ============================================================
-   SKEUOMORPH — kartu fisik: tiket kertas & sticky note
+   CORPORATE PANEL — pengganti skeuomorph tiket/sticky.
+   Bahasa visual: panel putih bersih, aksen garis status kiri,
+   divider halus, radius konsisten 14px, shadow sangat lembut.
    ============================================================ */
 
-/* ---- Tiket kertas dengan lubang sobekan + garis perforasi ---- */
+/* ---- Panel tugas: kartu korporat dengan strip status kiri ---- */
 .ticket {
   position: relative;
-  background:
-    repeating-linear-gradient(-45deg, rgba(27,45,34,.022) 0 8px, transparent 8px 16px),
-    linear-gradient(180deg, #ffffff, #fdfcf6);
-  border: 1px solid rgba(27, 45, 34, .12);
-  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(27, 45, 34, .10);
+  border-radius: 14px;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.9),
-    0 1px 2px rgba(27,45,34,.08),
-    0 14px 30px -18px rgba(27,45,34,.35);
+    0 1px 2px rgba(27,45,34,.05),
+    0 12px 28px -18px rgba(27,45,34,.22);
+  overflow: hidden;
 }
-.ticket::before,
-.ticket::after {
+.ticket::before {
+  /* strip status vertikal kiri — satu-satunya ornamen */
   content: '';
   position: absolute;
-  width: 22px; height: 22px;
-  border-radius: 999px;
-  background: var(--paper);
-  border: 1px solid rgba(27, 45, 34, .12);
-  top: 50%;
-  transform: translateY(-50%);
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--ticket-accent, #16a34a);
 }
-.ticket::before { left: -12px; clip-path: inset(0 0 0 50%); }
-.ticket::after  { right: -12px; clip-path: inset(0 50% 0 0); }
 .ticket-perf {
-  border-left: 2px dashed rgba(27, 45, 34, .25);
+  border-left: 1px solid rgba(27, 45, 34, .08);
+  background: rgba(243, 245, 236, .55); /* kolom aksen abu-hijau netral */
 }
 .ticket-stub {
-  background: repeating-linear-gradient(-45deg, rgba(21,128,61,.05) 0 10px, transparent 10px 20px);
+  background: transparent;
 }
 
-/* ---- Sticky note kuning dengan pita selotip & lipatan sudut ---- */
-/* Nama kelas RJ-note (bukan "sticky") agar tidak bentrok dengan utility
-   Tailwind `sticky` (position: sticky) yang dipakai header navigasi. */
+/* ---- Callout korporat (pengganti sticky note) ----
+   Panel informasi berlatar tint lembut + garis aksen kiri.
+   Tanpa selotip, tanpa lipatan sudut, tanpa rotasi. */
 .rj-note {
   position: relative;
-  background: linear-gradient(180deg, #fef9c3, #fef08a);
+  background: #fefce8;
   color: #713f12;
-  border-radius: 4px 14px 4px 4px;
-  box-shadow:
-    inset 0 -14px 24px -14px rgba(161, 98, 7, .28),
-    0 2px 4px rgba(27,45,34,.08),
-    0 16px 28px -16px rgba(161, 98, 7, .45);
+  border-radius: 12px;
+  box-shadow: none;
 }
 .rj-note::before {
-  /* selotip di atas */
   content: '';
   position: absolute;
-  top: -12px; left: 50%;
-  width: 96px; height: 26px;
-  transform: translateX(-50%) rotate(-2deg);
-  background: rgba(22, 163, 74, .18);
-  border-left: 1px dashed rgba(255,255,255,.6);
-  border-right: 1px dashed rgba(255,255,255,.6);
-  backdrop-filter: blur(1px);
+  left: 0; top: 10px; bottom: 10px;
+  width: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .35;
 }
-.rj-note::after {
-  /* lipatan pojok kanan-atas */
-  content: '';
-  position: absolute;
-  top: 0; right: 0;
-  width: 0; height: 0;
-  border-top: 34px solid rgba(202, 138, 4, .30);
-  border-left: 34px solid transparent;
-  filter: drop-shadow(-1px 1px 1px rgba(0,0,0,.06));
-}
-.rj-note-green { background: linear-gradient(180deg, #ecfccb, #d9f99d); color: #3f6212; }
-.rj-note-blue  { background: linear-gradient(180deg, #e0f2fe, #bae6fd); color: #075985; }
-.rj-note-red   { background: linear-gradient(180deg, #fee2e2, #fecaca); color: #7f1d1d; }
+.rj-note::after { content: none; }
+.rj-note-green { background: #f0fdf4; color: #166534; }
+.rj-note-blue  { background: #f0f9ff; color: #075985; }
+.rj-note-red   { background: #fef2f2; color: #991b1b; }
 
-/* garis buku tulis untuk sticky note */
-.ruled {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0 23px,
-    rgba(113, 63, 18, .14) 23px 24px
-  );
-  line-height: 24px;
+/* ruled tidak dipakai lagi — biarkan no-op agar class lama tak error */
+.ruled { background-image: none; line-height: inherit; }
+
+/* ---- Papan kayu / clipboard header ---- */
+.clipboard-strip {
+  background:
+    linear-gradient(90deg, rgba(120,72,20,.15) 0 2px, transparent 2px 26px),
+    linear-gradient(180deg, #a16207, #854d0e);
 }
 
 /* ---- Papan kayu / clipboard header ---- */

@@ -1,17 +1,27 @@
 /**
  * IFESS Server — Unified Frontend Serving
  *
- * Serves the ifess-control UI directly from this backend (no separate
- * frontend process): app console at /, query console at /simple, and
- * /assets/* static files. File contents are cached after first read;
- * restart the service to pick up edits.
+ * Serves the module-OWNED UI (ui/ — copy of ifess-control) directly from this
+ * backend (no separate frontend process): app console at /, query console at
+ * /simple, and /assets/* static files. Buffers are cached with mtime
+ * validation so edits on disk are picked up without a restart.
  */
 
 import fs from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { UI_DIR } from './config.js';
 
-const cache = new Map(); // absolute path -> Buffer
+const cache = new Map(); // absolute path -> { buf: Buffer, mtimeMs }
+
+// Trailing separator so "ifess-control-evil" can never pass the prefix test
+// below ("…/ifess-control-evil/x".startsWith("…/ifess-control/") is false,
+// but without the separator "…/ifess-control".startsWith would also match).
+const UI_ROOT = resolve(UI_DIR) + '/'.replace(/\//g, __dirname_sep());
+
+function __dirname_sep() {
+    // Windows accepts both separators; normalize to what resolve() emits.
+    return resolve(UI_DIR).includes('\\') ? '\\' : '/';
+}
 
 const MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -38,13 +48,15 @@ export function serveUi(relPath) {
     try {
         const full = resolve(UI_DIR, relPath);
         // Path-traversal guard: resolved path must stay inside UI_DIR.
-        if (!full.startsWith(UI_DIR)) return null;
+        if (!full.startsWith(UI_ROOT)) return null;
 
-        let content = cache.get(full);
-        if (content === undefined) {
-            content = fs.readFileSync(full);
-            cache.set(full, content);
+        const stat = fs.statSync(full);
+        let entry = cache.get(full);
+        if (!entry || entry.mtimeMs !== stat.mtimeMs) {
+            entry = { buf: fs.readFileSync(full), mtimeMs: stat.mtimeMs };
+            cache.set(full, entry);
         }
+        const content = entry.buf;
 
         const type = MIME[extname(full).toLowerCase()] || 'application/octet-stream';
         return new Response(content, {

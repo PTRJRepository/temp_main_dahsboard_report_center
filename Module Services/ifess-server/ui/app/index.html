@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IFESS Control — Ops Console</title>
+<link rel="icon" href="/ifess-assets/logo-ifess.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ifess-assets/css/tokens.css?v=1">
+<link rel="stylesheet" href="/ifess-assets/css/console.css?v=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+</head>
+<body>
+
+<div class="shell">
+  <!-- ── Rail ─────────────────────────────────────────── -->
+  <aside class="rail">
+    <div class="rail-brand">
+      <img src="/ifess-assets/logo-ifess.svg" alt="IFESS">
+      <div>
+        <span class="name">IFESS Control</span>
+        <span class="sub">Ops Console</span>
+      </div>
+    </div>
+    <nav class="rail-nav" id="rail-nav">
+      <div class="nav-group">Fleet</div>
+      <button class="nav-item is-active" data-page="overview"><span class="ico">◉</span><span class="lbl">Overview</span></button>
+      <button class="nav-item" data-page="clients"><span class="ico">▣</span><span class="lbl">Clients</span></button>
+      <button class="nav-item" data-page="modules"><span class="ico">⧉</span><span class="lbl">Modules</span></button>
+      <button class="nav-item" data-page="commands"><span class="ico">⌘</span><span class="lbl">Commands</span></button>
+      <div class="nav-group">Query</div>
+      <button class="nav-item" data-page="query"><span class="ico">❯</span><span class="lbl">Console</span></button>
+      <button class="nav-item" data-page="templates"><span class="ico">≡</span><span class="lbl">Templates</span></button>
+      <button class="nav-item" data-page="batches"><span class="ico">≣</span><span class="lbl">Batches</span></button>
+      <div class="nav-group">Governance</div>
+      <button class="nav-item" data-page="groups"><span class="ico">⊞</span><span class="lbl">Groups</span></button>
+      <button class="nav-item" data-page="audit"><span class="ico">☰</span><span class="lbl">Audit</span></button>
+      <button class="nav-item" data-page="sync"><span class="ico">⇄</span><span class="lbl">Sync</span></button>
+    </nav>
+    <div class="rail-foot"><span id="rail-ver">ifess-server</span></div>
+  </aside>
+
+  <!-- ── Column ───────────────────────────────────────── -->
+  <div style="display:flex;flex-direction:column;min-width:0;min-height:0;">
+    <header class="topbar">
+      <h1 id="page-title">Overview</h1>
+      <div class="conn"><span class="dot" id="gw-dot"></span><span id="gw-txt">connecting…</span></div>
+      <div class="me-chip" id="me-chip" hidden>
+        <div class="avatar" id="me-av">?</div>
+        <div class="who"><b id="me-name">…</b><span id="me-role"></span></div>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- BODY_PART -->
+    </main>
+  </div>
+</div>
+
+<!-- Drawer -->
+<div class="drawer-veil" id="veil"></div>
+<aside class="drawer" id="drawer" aria-label="Detail panel">
+  <div class="drawer-head">
+    <h2 id="drawer-title">Detail</h2>
+    <button class="btn sm" id="drawer-close">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js" integrity="sha384-EXEWBzNFePzO3Gr9erGRkSiVqVYCUKygQIt+ZfXJXCQjP7OR5J0hmiEyCkEpIZ3L" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js" integrity="sha384-kGGB3IuBcmbgUfKakBn6fSQmWaYasWiaKokskc0Y1aIyLB4/Wj2zLHb/RlgogpXN" crossorigin="anonymous"></script>
+<script src="/ifess-assets/app.js?v=1"></script>
+<script src="/ifess-assets/views.js?v=1"></script>
+<script src="/ifess-assets/query.js?v=1"></script>
+<script src="/ifess-assets/boot.js?v=1"></script>
+</body>
+</html>

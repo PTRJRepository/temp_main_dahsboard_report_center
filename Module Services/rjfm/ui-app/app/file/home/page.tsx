@@ -180,7 +180,7 @@ export default function FileHomePage() {
               <div className="divide-y divide-slate-50">
                 {recentSubs.length === 0 ? <p className="p-6 text-sm text-slate-500">Belum ada berkas masuk.</p> : recentSubs.map((f: any) => (
                   <Link key={f.revision_id} href="/file/review" className="flex items-center gap-3 px-6 py-3.5 hover:bg-green-50/50 transition-colors">
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 animate-pulse ${f.review_status === 'APPROVED' ? 'bg-green-500' : f.review_status === 'REJECTED_NEEDS_REVISION' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${f.review_status === 'APPROVED' ? 'bg-green-500' : f.review_status === 'REJECTED_NEEDS_REVISION' ? 'bg-red-500' : 'bg-amber-400'}`} />
                     <div className="min-w-0 flex-1">
                       <p className="font-bold truncate">{f.file_original_name}</p>
                       <p className="text-xs text-slate-500 truncate">{f.kerani_name || '—'} · {f.task_title || ''}</p>
@@ -229,9 +229,9 @@ export default function FileHomePage() {
               <Link href="/file/tasks" className="text-sm font-extrabold text-green-700 hover:text-green-600">Lihat semua →</Link>
             </div>
             {keraniRows.length === 0 ? (
-              <StickyNote variant="green" rotate={-1} className="rounded-xl text-center py-8 px-6 max-w-xl">
+              <StickyNote variant="green" className="rounded-xl text-center py-8 px-6 max-w-xl">
                 <p className="text-lg font-black">Belum ada penugasan</p>
-                <p className="text-[13px] font-semibold opacity-80 mt-1">Tugas dari atasan akan ditempel di papan ini beserta berkas yang perlu diunggah.</p>
+                <p className="text-[13px] font-semibold opacity-80 mt-1">Tugas dari atasan akan muncul di panel ini beserta berkas yang perlu diunggah.</p>
               </StickyNote>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 gap-y-8 pb-3">
@@ -253,17 +253,17 @@ export default function FileHomePage() {
                             {done ? <><CheckCircle2 className="w-5 h-5" /> Lihat</> : status === 'SUBMITTED' ? <><Clock className="w-5 h-5" /> Lihat<br />Status</> : <><UploadCloud className="w-5 h-5" /> Upload<br />Sekarang</>}
                           </Link>
                         }>
-                        {/* kepala tiket: kategori + nomor + status */}
+                        {/* kepala panel: prioritas + nomor + status */}
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`w-2 h-2 rounded-full ${priorityColor(t.priority).dot}`} />
                           <span className="text-[9px] font-extrabold tracking-[0.18em] uppercase text-stone-400">{t.priority || 'MEDIUM'}</span>
                           <span className="text-[10px] font-mono text-stone-400">#{String(t.task_id).padStart(4, '0')}</span>
-                          <span className={`ml-auto px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_CLS[status]} ${status === 'REVISION_NEEDED' ? 'animate-pulse' : ''}`}>{STATUS_LABEL[status] || status}</span>
+                          <span className={`ml-auto px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_CLS[status]}`}>{STATUS_LABEL[status] || status}</span>
                         </div>
 
-                        {/* isi instruksi — rasa kertas memo mesin tik */}
+                        {/* isi instruksi */}
                         <h3 className="mt-2.5 text-lg font-black tracking-tight leading-snug text-green-950">{t.title}</h3>
-                        <p className="mt-1 text-[13px] text-slate-600 line-clamp-2">→ {t.description}</p>
+                        <p className="mt-1 text-[13px] text-slate-600 line-clamp-2">{t.description}</p>
 
                         {status === 'REVISION_NEEDED' && t.latest_feedback && (
                           <div className="mt-3 border-l-4 border-red-400 bg-red-50 rounded-r-lg px-3 py-2">
@@ -272,10 +272,10 @@ export default function FileHomePage() {
                           </div>
                         )}
 
-                        {/* dasar tiket: deadline seperti stempel tanggal */}
+                        {/* deadline */}
                         {t.deadline && !done && (
                           <div className="mt-3 flex items-center justify-between">
-                            <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-1 border-2 rounded-md -rotate-1 ${cd?.late ? 'text-red-700 border-red-400 bg-red-50' : 'text-green-800 border-green-500 bg-green-50'}`}>
+                            <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-1 rounded-md border ${cd?.late ? 'text-red-700 border-red-300 bg-red-50' : 'text-green-800 border-green-200 bg-green-50'}`}>
                               <Clock className="w-3 h-3" /> {new Date(t.deadline).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }).toUpperCase()} · {new Date(t.deadline).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {cd && <span className={`text-[11px] font-extrabold ${cd.late ? 'text-red-600' : 'text-slate-400'}`}>{cd.late ? `+${cd.txt}` : cd.txt}</span>}

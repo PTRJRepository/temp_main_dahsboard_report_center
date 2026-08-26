@@ -154,7 +154,7 @@ export default function FileReviewPage() {
                     <span className={`block text-[10px] uppercase tracking-wider font-bold ${on ? 'text-green-50' : 'text-slate-400'}`}>{k.total} tugas</span>
                   </span>
                   {k.pending > 0 && (
-                    <span className={`min-w-[22px] h-[22px] px-1.5 rounded-full grid place-items-center text-[11px] font-black animate-pulse ${on ? 'bg-white text-green-800' : 'bg-red-500 text-white'}`}>{k.pending}</span>
+                    <span className={`min-w-[22px] h-[22px] px-1.5 rounded-full grid place-items-center text-[11px] font-black ${on ? 'bg-white text-green-800' : 'bg-red-500 text-white'}`}>{k.pending}</span>
                   )}
                 </button>
               )
@@ -247,13 +247,13 @@ export default function FileReviewPage() {
                           <p className="text-xs text-slate-700 mt-1.5 italic bg-white border border-slate-200 rounded-xl px-3 py-2">Catatan kerani: “{r.notes_from_kerani}”</p>
                         )}
                         {r.notes_from_kerani === null && r.revision_number > 1 && (
-                          <StickyNote variant="yellow" rotate={0.7} ruled={false} className="mt-2 rounded-lg px-3 py-2 text-xs">
+                          <StickyNote variant="yellow" ruled={false} className="mt-2 rounded-lg px-3 py-2 text-xs">
                             <span className="font-black uppercase tracking-wider text-[9px] opacity-70">Memo kerani</span>
                             <p>Tanpa catatan tambahan pada revisi ini.</p>
                           </StickyNote>
                         )}
                         {r.manager_feedback && (
-                          <StickyNote variant="red" rotate={-0.8} ruled={false} className="mt-2 rounded-lg px-3 py-2 text-xs leading-snug">
+                          <StickyNote variant="red" ruled={false} className="mt-2 rounded-lg px-3 py-2 text-xs leading-snug">
                             <span className="font-black uppercase tracking-wider text-[9px] opacity-80">Instruksi atasan</span>
                             <p className="font-semibold">“{r.manager_feedback}”</p>
                           </StickyNote>

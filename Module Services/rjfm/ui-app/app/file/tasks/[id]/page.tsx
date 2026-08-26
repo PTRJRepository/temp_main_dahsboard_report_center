@@ -116,7 +116,7 @@ export default function TaskDetailPage() {
 
         {latest?.review_status === 'REJECTED_NEEDS_REVISION' && latest?.manager_feedback && (
           <div className="relative mt-5 max-w-2xl">
-            <StickyNote variant="red" rotate={-1} className="rounded-lg px-5 py-4">
+            <StickyNote variant="red" className="rounded-lg px-5 py-4">
               <p className="text-[10px] font-black uppercase tracking-widest opacity-80 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> Perlu revisi — catatan atasan</p>
               <p className="mt-1 whitespace-pre-wrap font-semibold">{latest.manager_feedback}</p>
             </StickyNote>

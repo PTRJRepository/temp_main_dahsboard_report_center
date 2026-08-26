@@ -112,7 +112,7 @@ export default function FileTasksPage() {
           ) : err ? (
             <div className="rounded-3xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">Gagal memuat: {err}</div>
           ) : filtered.length === 0 ? (
-            <StickyNote variant="blue" rotate={0.8} className="rounded-xl text-center py-8 px-6 max-w-xl mx-auto mt-4">
+            <StickyNote variant="blue" className="rounded-xl text-center py-8 px-6 max-w-xl mx-auto mt-4">
               <Filter className="w-7 h-7 mx-auto opacity-60" />
               <p className="mt-2 text-lg font-black">Belum ada tugas</p>
               <p className="text-[13px] font-semibold opacity-80 mt-1">Tugas akan ditempel di sini setelah Manager/Admin membuat penugasan untuk akun Anda.</p>
@@ -152,7 +152,7 @@ export default function FileTasksPage() {
                       )}
                       <div className="mt-3 flex items-center justify-between gap-2">
                         {due ? (
-                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-1 border-2 rounded-md -rotate-1 ${overdue ? 'text-red-700 border-red-400 bg-red-50' : 'text-green-800 border-green-500 bg-green-50'}`}>
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-1 rounded-md border ${overdue ? 'text-red-700 border-red-400 bg-red-50' : 'text-green-800 border-green-500 bg-green-50'}`}>
                             <Clock className="w-3 h-3" /> {due.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }).toUpperCase()}
                             {overdue && <AlertTriangle className="w-3 h-3" />}
                           </span>

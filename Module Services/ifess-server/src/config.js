@@ -46,5 +46,8 @@ export const IFESS_API_KEY = process.env.IFESS_API_KEY || fileEnv.IFESS_API_KEY 
 /** Secondary key used when clients reach us through the gateway proxy flow. */
 export const IFESS_CLIENT_API_KEY = process.env.IFESS_CLIENT_API_KEY || fileEnv.IFESS_CLIENT_API_KEY || '';
 
-/** Directory holding the unified frontend (app/, simple/, assets/). */
-export const UI_DIR = process.env.IFESS_UI_DIR || resolve(REPO_ROOT, 'Module Services/ifess-control');
+/** Directory holding the unified frontend (app/, simple/, assets/).
+ * Module-OWNED copy under ui/ — the sibling `Module Services/ifess-control`
+ * folder is the legacy copy still disk-served by the gateway until cut-over
+ * completes; this module serves its own. */
+export const UI_DIR = process.env.IFESS_UI_DIR || resolve(import.meta.dirname, '../ui');

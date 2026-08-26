@@ -120,7 +120,7 @@ export default function FileShell({ children }: { children: React.ReactNode }) {
                   : 'text-emerald-50 hover:bg-white/10 hover:text-white hover:translate-x-1'}`}>
                 <n.icon className={`w-[18px] h-[18px] ${on ? 'text-green-700' : 'text-lime-200 group-hover:text-white'} transition-colors`} />
                 {n.label}
-                {on && <ChevronRight className="w-4 h-4 ml-auto animate-pulse" />}
+                {on && <ChevronRight className="w-4 h-4 ml-auto" />}
               </Link>
             )
           })}
@@ -179,7 +179,7 @@ export default function FileShell({ children }: { children: React.ReactNode }) {
                   {notifs.length === 0 ? <p className="text-sm text-slate-500 p-4">Tidak ada notifikasi</p> : notifs.map((n: any) => (
                     <button key={n.notification_id} onClick={() => markRead(n)}
                       className={`w-full text-left p-3 rounded-2xl text-sm transition-colors ${n.is_read ? 'text-slate-500 hover:bg-green-50/60' : 'bg-green-50 hover:bg-green-100'}`}>
-                      <p className="font-bold text-green-950 flex items-center gap-2">{!n.is_read && <span className="w-2 h-2 rounded-full bg-green-600 shrink-0 animate-pulse" />}{n.title}</p>
+                      <p className="font-bold text-green-950 flex items-center gap-2">{!n.is_read && <span className="w-2 h-2 rounded-full bg-green-600 shrink-0" />}{n.title}</p>
                       <p className="text-xs line-clamp-2 mt-1 text-slate-600">{n.message}</p>
                     </button>
                   ))}

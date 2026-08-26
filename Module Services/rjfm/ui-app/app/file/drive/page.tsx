@@ -209,11 +209,10 @@ function DriveInner() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {files.map((it, i) => (
                   <div key={it.file_id} style={{ animationDelay: `${Math.min(i, 9) * 40}ms` }}
-                    className={`anim-fadeup ticket group relative transition-transform hover:-translate-y-1`}>
+                    className={`anim-fadeup ticket group relative transition-all hover:-translate-y-[2px] hover:shadow-[0_16px_36px_-18px_rgba(27,45,34,.35)]`}>
                     {it.source === 'task_submission' && (
-                      <span className="absolute -top-2.5 left-5 z-10 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-green-700 to-lime-500 text-[9px] font-black uppercase tracking-widest text-white shadow-md shadow-green-700/30">Dari Tugas</span>
+                      <span className="absolute -top-2.5 left-5 z-10 px-2.5 py-0.5 rounded-full bg-green-700 text-[9px] font-black uppercase tracking-widest text-white shadow-sm">Dari Tugas</span>
                     )}
-                    <div className="h-2 rounded-t-[17px] bg-gradient-to-r from-green-600 to-lime-400 opacity-80" />
                     <button className="w-full text-left p-5"
                       onClick={() => it.kind === 'folder' ? router.push(`/file/drive?parent=${it.file_id}`) : setPreview({ url: `/api/file/drive/${it.file_id}/stream`, name: it.name, mime: it.mime_type })}>
                       <div className="flex items-start gap-4">

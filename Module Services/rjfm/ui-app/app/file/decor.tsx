@@ -184,33 +184,32 @@ export function FrondCorner({ className = '' }: { className?: string }) {
 }
 
 /**
- * Tiket kertas skeuomorph — kartu dengan lubang sobekan di kiri-kanan,
- * garis perforasi memisahkan "stub" (tangkai) di sisi kanan.
- * Stub dipakai untuk aksi/status (mis. tombol Upload).
+ * TaskPanel — kartu tugas bergaya korporat: panel putih bersih dengan
+ * strip status vertikal di kiri (satu-satunya ornamen) + kolom aksi kanan.
+ * `tone` menentukan warna strip status.
  */
 export function TicketCard({ children, stub, onClick, className = '', tone = 'green' }: {
-  children: React.ReactNode            // bagian utama tiket
-  stub?: React.ReactNode               // tangkai kanan (aksi/status)
-  onClick?: () => void                 // seluruh tiket bisa diklik
+  children: React.ReactNode            // bagian utama panel
+  stub?: React.ReactNode               // kolom aksi/status di kanan
+  onClick?: () => void                 // seluruh panel bisa diklik
   className?: string
-  tone?: 'green' | 'amber' | 'red' | 'sky'   // warna pita atas tiket
+  tone?: 'green' | 'amber' | 'red' | 'sky'   // warna strip status kiri
 }) {
-  const band = {
-    green: 'from-green-600 to-lime-500',
-    amber: 'from-amber-500 to-yellow-400',
-    red: 'from-red-600 to-orange-400',
-    sky: 'from-sky-600 to-cyan-400',
+  const accent = {
+    green: '#16a34a',
+    amber: '#d97706',
+    red: '#dc2626',
+    sky: '#0284c7',
   }[tone]
   const Comp: any = onClick ? 'button' : 'div'
   return (
     <Comp onClick={onClick}
-      className={`ticket text-left w-full group transition-transform duration-200 hover:-translate-y-[2px] ${className}`}>
-      {/* pita atas tiket */}
-      <div className={`h-2 rounded-t-[17px] bg-gradient-to-r ${band}`} />
+      style={{ ['--ticket-accent' as any]: accent }}
+      className={`ticket text-left w-full group transition-all duration-200 hover:-translate-y-[2px] hover:shadow-[0_16px_36px_-18px_rgba(27,45,34,.35)] ${className}`}>
       <div className="flex items-stretch">
-        <div className="min-w-0 flex-1 p-5">{children}</div>
+        <div className="min-w-0 flex-1 p-5 pl-6">{children}</div>
         {stub && (
-          <div className="ticket-perf ticket-stub shrink-0 w-[104px] flex flex-col items-center justify-center gap-1.5 px-3 py-4 rounded-br-[18px]">
+          <div className="ticket-perf ticket-stub shrink-0 w-[104px] flex flex-col items-center justify-center gap-1.5 px-3 py-4">
             {stub}
           </div>
         )}
@@ -220,10 +219,10 @@ export function TicketCard({ children, stub, onClick, className = '', tone = 'gr
 }
 
 /**
- * Sticky note skeuomorph — kertas memo dengan selotip & lipatan sudut,
- * garis buku tulis opsional. `rotate` memberi kesan ditempel asal.
+ * Callout korporat — pengganti sticky note. Panel tint lembut dengan garis
+ * aksen kiri; tanpa selotip, lipatan sudut, rotasi, atau garis buku tulis.
  */
-export function StickyNote({ children, className = '', variant = 'yellow', rotate = -1.2, ruled = true }: {
+export function StickyNote({ children, className = '', variant = 'yellow', rotate = 0, ruled = false }: {
   children: React.ReactNode
   className?: string
   variant?: 'yellow' | 'green' | 'blue' | 'red'
@@ -232,8 +231,8 @@ export function StickyNote({ children, className = '', variant = 'yellow', rotat
 }) {
   const v = variant === 'green' ? 'rj-note-green' : variant === 'blue' ? 'rj-note-blue' : variant === 'red' ? 'rj-note-red' : ''
   return (
-    <div style={{ transform: `rotate(${rotate}deg)` }}
-      className={`rj-note ${v} ${ruled ? 'ruled' : ''} px-5 py-4 text-sm font-semibold ${className}`}>
+    <div
+      className={`rj-note ${v} px-5 py-4 text-sm font-semibold ${className}`}>
       {children}
     </div>
   )
