@@ -18,6 +18,7 @@ ditempatkan di dalam repo Main Dashboard supaya gampang di-maintain di satu temp
 | `EXECUTE_AUTO_TASK_KILL` | Kill proses (taskkill /T /F), mode `KillNow` / `Schedule` (Once/Daily) / `RemoveSchedule`; jadwal persisten di `data/auto-task-kill-schedules.json` |
 | `EXECUTE_FIREBIRD_QUERY` | Validasi ulang read-only di client, materialisasi parameter (`:name` / `{{name}}`), eksekusi via `isql.exe`, hasil inline/chunked |
 | Result outbox | Hasil query yang gagal terkirim disimpan lokal (`data/query-gateway-outbox`) dan dikirim ulang otomatis saat server hidup |
+| `EXECUTE_SHOW_NOTIFICATION` | **Push notification satu arah** (server→client): Windows Toast korporat ber-branding perkebunan, logo + banner tema per kategori, prioritas critical = sticky + bunyi alarm berulang, dedupe persisten, riwayat harian |
 
 Tidak didukung (jelas ditolak, bukan diam): `EXECUTE_GDRIVE_BACKUP` (backup Google Drive tidak ikut dipaketkan di client Node ini).
 
@@ -28,12 +29,22 @@ client_app/
 ├── client.config.json          # Konfigurasi utama (JSONC, boleh komentar //)
 ├── client.config.local.json    # Override lokal opsional (gitignored) - kredensial mesin ini
 ├── package.json
+├── assets/
+│   └── notifications/          # Branding push notification
+│       ├── logo.png            #   Emblem palem bulat (appLogo toast)
+│       ├── banner-*.png        #   Hero image per tema/kategori (720x360)
+│       └── scripts/
+│           ├── generate-branding.ps1  # Generator ulang aset (INDEX BRANDGEN)
+│           ├── show-toast.ps1         # Pemanggil WinRT Toast (INDEX TOAST-PS1)
+│           └── show-balloon.ps1       # Fallback balloon tip (INDEX BALLOON-PS1)
 ├── src/
 │   ├── index.js                # Entrypoint: wiring config, registry, loop heartbeat/polling
 │   ├── config.js               # Loader JSONC + deep merge + override *.local.json
 │   ├── logger.js               # Log harian logs/host & logs/modules/<CODE>, redaksi secret
 │   ├── retry.js                # Backoff eksponensial+jitter, sleep, interruptibleSleep
 │   ├── control-client.js       # HTTP client kontrak Control Server
+│   ├── notifications/
+│   │   └── toast-notifier.js   # Windows Toast via PowerShell, XML builder (INDEX NOTIF)
 │   ├── firebird/
 │   │   ├── validator.js        # Port ReadOnlyQueryValidator.cs (SELECT/WITH SELECT saja)
 │   │   ├── materializer.js     # Port QueryParameterMaterializer.cs (:name, {{name}})
@@ -46,6 +57,7 @@ client_app/
 │       ├── registry.js         # Status modul ala ModuleRegistry.cs
 │       ├── auto-task-kill.js   # Worker jadwal + handler EXECUTE_AUTO_TASK_KILL
 │       ├── query-gateway.js    # Worker pool + handler EXECUTE_FIREBIRD_QUERY
+│       ├── push-notification.js# Handler EXECUTE_SHOW_NOTIFICATION (INDEX PUSHMOD)
 │       ├── module-control.js   # Handler PING / START/STOP_MODULE dll.
 │       ├── command-executor.js # Router command -> handler pertama yang cocok
 │       ├── heartbeat.js        # Loop register+heartbeat
@@ -53,6 +65,7 @@ client_app/
 ├── scripts/
 │   ├── mock-control-server.mjs # Mock server kontrak penuh (untuk dev/test)
 │   ├── e2e-test.mjs            # Harness regresi end-to-end otomatis
+│   ├── send-notification.mjs   # CLI kirim notifikasi ke client/broadcast (INDEX SENDNOTIF)
 │   └── test.config.json        # Config contoh untuk mock
 └── tests/                      # Unit test (node --test)
 ```
@@ -100,6 +113,75 @@ Cukup isi bagian yang mau dioverride:
 - **Protected processes**: daftar proses Windows kritiss + diri sendiri tidak akan pernah dikenai kill.
   Untuk production gunakan user Firebird read-only (mis. `PTRJ_IFESS_GATEWAY`), bukan SYSDBA.
 
+## Push Notification Satu Arah (server → client)
+
+Modul `IFESS_PUSH_NOTIFICATION` menerima command `EXECUTE_SHOW_NOTIFICATION` lewat kanal
+command polling yang sudah ada (tidak ada protokol/koneksi baru), lalu menampilkan
+**Windows Toast** bergaya korporat perkebunan: judul, pesan, footer/attribution,
+logo bulat, dan hero image sesuai kategori/tema. Aplikasi **tanpa UI** — tampilan
+notifikasi dikerjakan PowerShell bawaan Windows (WinRT), tanpa dependency tambahan.
+
+### Payload
+
+| Field | Wajib | Keterangan |
+|---|---|---|
+| `notificationId` | tidak | Kunci dedupe; kosong = dibuat dari commandId |
+| `title` / `message` | **ya** | Teks utama (default maks 120 / 600 karakter) |
+| `category` | tidak | `announcement` `update` `instruction` `alert` `maintenance` `reminder` (menentukan banner default) |
+| `priority` | tidak | `low` `normal` `high` (`Reminder`, sticky) `critical` (`Alarm`, sticky + bunyi berulang) |
+| `details` | tidak | Baris tambahan di balloon fallback |
+| `footer` | tidak | Attribution; default dari config `footerText` |
+| `theme` | tidak | `harvest` `maintenance` `safety` `default` → override banner |
+| `expiresAt` | tidak | ISO date; dilewati jika sudah lewat saat command diproses |
+| `sound` | tidak | `false` = toast bisu |
+
+Isi notifikasi **tidak dibalas** ke server; yang terlapor hanya status eksekusi command
+(Success/Failed) via kanal result standar.
+
+### Cara mengirim dari aplikasi lain
+
+```powershell
+# Lewat CLI helper (rekomendasi):
+node scripts/send-notification.mjs --server http://10.0.0.128:8003 `
+  --api-key <IFESS_API_KEY> --client CLIENT-PTRJ-ARE-A `
+  --category update --priority high `
+  --title "Pembaruan Sistem Tersedia" `
+  --message "Hubungi Divisi IT untuk penjadwalan pembaruan."   # + --all untuk broadcast
+
+# Atau langsung HTTP ke server asli:
+$body = @{
+  commandType = 'EXECUTE_SHOW_NOTIFICATION'; moduleCode = 'IFESS_PUSH_NOTIFICATION'
+  payload = @{ notificationId = 'NTF-001'; category = 'update'; priority = 'high'
+               title = 'Pembaruan Sistem Tersedia'; message = 'Hubungi Divisi IT.' }
+} | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post -Uri "http://10.0.0.128:8003/api/clients/CLIENT-PTRJ-ARE-A/commands" `
+  -Headers @{ 'X-API-Key' = '<IFESS_API_KEY>' } -ContentType 'application/json' -Body $body
+```
+
+Mock server juga menyediakan `POST /admin/notify` (body payload + `clientId` opsional)
+untuk uji lokal, plus route kontrak `POST /api/clients/{id}/commands`.
+
+### Perilaku lokal
+
+- **Dedupe persisten**: ID yang pernah tampil disimpan di `data/notifications/seen.json`
+  (kapasitas FIFO default 1000); re-delivery server tidak membuat toast dobel.
+- **Riwayat harian**: `data/notifications/history-YYYY-MM-DD.jsonl` (retensi default 30 hari).
+- **Fallback**: toast gagal (Windows lama/policy/Focus Assist) → balloon tip tray →
+  kalau dua-duanya gagal baru Failed dengan alasan lengkap di command result.
+- **dryRun**: config `customConfig.dryRun: true` menjalankan validasi+dedupe+riwayat
+  tanpa memunculkan toast fisik (dipakai e2e/CI).
+
+### Branding
+
+Aset di `assets/notifications/` (logo + 6 banner). Regenerate/kustomisasi:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File assets\notifications\scripts\generate-branding.ps1
+```
+
+> Saat dikompilasi jadi exe (mis. `pkg`) pastikan folder `assets/` ikut dipaketkan —
+> toast membaca gambar dan skrip `.ps1` dari path tersebut.
+
 ## Operasional
 
 - **Log**: `logs/host/YYYY-MM-DD.log` dan `logs/modules/<CODE>/YYYY-MM-DD.log`; retensi default 14 hari.
@@ -113,12 +195,14 @@ Cukup isi bagian yang mau dioverride:
 ## Testing
 
 ```powershell
-npm test           # unit test (validator, materializer, parser isql, jadwal ATK, backoff)
-npm run test:e2e   # end-to-end penuh: mock server + client asli + 9 assertion protokol
+npm test           # unit test: validator SQL, materializer, parser isql, jadwal ATK,
+                   #   backoff, XML toast, payload notifikasi, perilaku modul notifikasi
+npm run test:e2e   # end-to-end penuh: mock server + client asli + 12 assertion protokol
 ```
 
 Harness e2e memverifikasi siklus nyata: register → heartbeat → PING → Auto Task Kill →
-penolakan INSERT oleh validator → failure report → STOP/START module.
+penolakan INSERT oleh validator → failure report → STOP/START module → push notification
+(valid dry-run, dedupe duplikat, penolakan payload tidak valid).
 
 ## Catatan debugging (untuk pengelola)
 

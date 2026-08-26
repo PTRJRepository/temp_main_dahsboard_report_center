@@ -1,17 +1,14 @@
 /**
  * IFESS Server — Business Logic Bridge
  *
- * Re-exports the canonical CommonJS service module at
- * `<repo>/Services/ifess-control-server/service.js` (1996 lines: clients,
- * heartbeats, commands, groups, audit logs, query gateway, sync).
- *
- * The bridge exists so the HTTP layer (ESM) can import the CJS core without
- * duplicating logic, and so DATA_DIR resolves to the same `data/ifess` used
- * by server_bun.js — both processes read/write the identical JSON store.
- *
- * NOTE: service.js resolves DATA_DIR relative to its own __dirname
- * (`Services/ifess-control-server/../../data/ifess`), so no override is
- * needed as long as this module lives inside the Main Dashboard repo.
+ * Re-exports the module-OWNED copy of the canonical CommonJS core at
+ * `src/core/service.cjs` (1995 lines: clients, heartbeats, commands, groups,
+ * audit logs, query gateway, sync). Copied per the monorepo isolation rule —
+ * modules never import outside their folder (docs/MONOREPO.md §2;
+ * docs/independence-research.md G2). The original still lives at
+ * Services/ifess-control-server/service.js for the legacy in-gateway path
+ * until the cut-over removes it; both resolve DATA_DIR to the same shared
+ * repo-root `data/ifess` store (env override: IFESS_DATA_DIR).
  */
 
 import { createRequire } from 'node:module';
@@ -21,10 +18,10 @@ import { fileURLToPath } from 'node:url';
 // getServerInfo() inside the CJS core advertises this host:port to browsers
 // and clients; default there is the gateway (:3001). When we are the direct
 // endpoint, advertise our own port unless explicitly overridden.
-process.env.IFESS_SERVER_PORT ||= process.env.IFESS_PORT || '8012';
+process.env.IFESS_SERVER_PORT ||= process.env.IFESS_PORT || '8003';
 
 const here = fileURLToPath(new URL('.', import.meta.url)); // Module Services/ifess-server/src/
-const SERVICE_PATH = resolve(here, '../../../Services/ifess-control-server/service.js');
+const SERVICE_PATH = resolve(here, './core/service.cjs');
 
 const require = createRequire(import.meta.url);
 const ifessService = require(SERVICE_PATH);

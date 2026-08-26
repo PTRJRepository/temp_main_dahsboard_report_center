@@ -82,6 +82,41 @@
       }
     },
     {
+      "Code": "IFESS_PUSH_NOTIFICATION",
+      "Name": "IFESS Push Notification",
+      "Enabled": true,
+      "AutoStart": true,
+      "customConfig": {
+        // Nama aplikasi yang tampil pada Windows Toast.
+        "appUserModelId": "PT.Rebinmas.IFESS.ClientApp",
+        "appName": "IFESS Klien",
+
+        // Footer/attribution default bila payload tidak menyertakan 'footer'.
+        "footerText": "PT. Rebinmas Jaya • Divisi IT",
+
+        // true = validasi+dedupe+riwayat tetap jalan TANPA memunculkan toast
+        // fisik (dipakai e2e/CI). Produksi wajib false.
+        "dryRun": false,
+
+        // Batas panjang teks dari server (karakter).
+        "maxTitleLength": 120,
+        "maxMessageLength": 600,
+        "maxDetailsLength": 1200,
+
+        // Kapasitas dedupe persisten (seen.json) dan retensi riwayat harian.
+        "seenCapacity": 1000,
+        "historyRetainDays": 30,
+
+        // Timeout tiap panggilan PowerShell (toast/balloon fallback).
+        "displayTimeoutSeconds": 10,
+
+        // Aset branding & data lokal (relatif terhadap folder client_app).
+        "themesPath": "assets\\notifications",
+        "logoPath": "assets\\notifications\\logo.png",
+        "dataPath": "data\\notifications"
+      }
+    },
+    {
       "Code": "IFESS_QUERY_GATEWAY",
       "Name": "IFESS Query Gateway",
       "Enabled": true,

@@ -12,6 +12,9 @@
  *   4. EXECUTE_FIREBIRD_QUERY INSERT      -> queryResult Rejected + command Failed
  *   5. EXECUTE_FIREBIRD_QUERY SELECT tanpa DB -> queryResult Failed
  *   6. STOP_MODULE / START_MODULE         -> command Success + heartbeat snapshot berubah
+ *   7. EXECUTE_SHOW_NOTIFICATION valid    -> command Success "(dry-run)" + riwayat lokal
+ *   8. Notifikasi dengan ID sama (dedupe) -> command Success "Duplikat dilewati"
+ *   9. Payload tanpa title                -> command Failed "Payload tidak valid"
  *
  * Jalankan:  npm run test:e2e   (atau: node scripts/e2e-test.mjs)
  * Exit code 0 = semua assertion lolos.
@@ -30,6 +33,8 @@ const CLIENT_ID = 'CLIENT-E2E-01';
 // JobId unik per run supaya assertion tidak tertukar dengan envelope lama
 // yang mungkin masih tersisa di outbox dari run sebelumnya.
 const RUN_TAG = `${Date.now().toString(36)}`;
+// Folder data notifikasi khusus run ini (dedupe/history) agar bebas tabrakan.
+const NOTIF_DATA_DIR = path.join(os.tmpdir(), `ifess-e2e-notif-${process.pid}`);
 
 let mockProcess = null;
 let clientProcess = null;
@@ -117,6 +122,18 @@ async function main() {
           defaultTargets: ['definitely-not-running-target'],
           matchMode: 'Exact',
           scheduleCheckIntervalSeconds: 2,
+        },
+      },
+      {
+        Code: 'IFESS_PUSH_NOTIFICATION',
+        Name: 'IFESS Push Notification',
+        Enabled: true,
+        AutoStart: true,
+        customConfig: {
+          // dry-run agar e2e tidak memunculkan toast sungguhan di mesin uji.
+          dryRun: true,
+          dataPath: NOTIF_DATA_DIR,
+          footerText: 'PT. Rebinmas Jaya • E2E',
         },
       },
       {
@@ -237,6 +254,49 @@ async function main() {
       const heartbeat = [...(await getEvents())].reverse().find(e => e.type === 'heartbeat');
       return heartbeat?.modules?.includes('IFESS_AUTO_TASK_KILL=Running');
     }, 'START_MODULE mengembalikan modul ke Running');
+
+    // 7. Push notification valid (modul berjalan dry-run di config e2e).
+    const notificationId = `NTF-E2E-${RUN_TAG}`;
+    await sendCommand({
+      commandType: 'EXECUTE_SHOW_NOTIFICATION',
+      moduleCode: 'IFESS_PUSH_NOTIFICATION',
+      payload: {
+        notificationId,
+        category: 'update',
+        priority: 'high',
+        title: 'Pembaruan E2E',
+        message: 'Notifikasi uji dari harness e2e.',
+      },
+    });
+    await waitFor(async () => {
+      const event = await findEvent(e => e.type === 'commandResult' && e.status === 'Success'
+        && String(e.message ?? '').includes("'Pembaruan E2E' ditampilkan (dry-run)"));
+      return !!event;
+    }, 'push notification valid dieksekusi (dry-run) dan result terlapor');
+
+    // 8. Dedupe: ID yang sama dikirim ulang -> dilewati tanpa tampil kedua kali.
+    await sendCommand({
+      commandType: 'EXECUTE_SHOW_NOTIFICATION',
+      moduleCode: 'IFESS_PUSH_NOTIFICATION',
+      payload: { notificationId, title: 'Pembaruan E2E', message: 'upah duplikat' },
+    });
+    await waitFor(async () => {
+      const event = await findEvent(e => e.type === 'commandResult' && e.status === 'Success'
+        && String(e.message ?? '').includes('Duplikat dilewati'));
+      return !!event;
+    }, 'notifikasi duplikat dilewati dedupe persisten');
+
+    // 9. Payload tidak valid -> Failed dengan alasan yang jelas.
+    await sendCommand({
+      commandType: 'EXECUTE_SHOW_NOTIFICATION',
+      moduleCode: 'IFESS_PUSH_NOTIFICATION',
+      payload: { title: '', message: '' },
+    });
+    await waitFor(async () => {
+      const event = await findEvent(e => e.type === 'commandResult' && e.status === 'Failed'
+        && String(e.message ?? '').includes('Payload tidak valid'));
+      return !!event;
+    }, 'payload notifikasi tidak valid dilaporkan Failed');
   } finally {
     // ── Cleanup ─────────────────────────────────────────────────────────────
     clientProcess?.kill();

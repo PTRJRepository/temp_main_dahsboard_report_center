@@ -17,6 +17,9 @@
  * Endpoint admin (tanpa auth, khusus testing):
  *   POST /admin/command   body = command lengkap {commandId?, commandType, moduleCode?, payload}
  *                         -> diantrikan ke SEMUA client yang poll
+ *   POST /admin/notify    body = payload notifikasi {clientId?, title, message, ...}
+ *                         -> diantrikan sebagai EXECUTE_SHOW_NOTIFICATION
+ *                            (clientId kosong/null = broadcast)
  *   GET  /admin/events    -> daftar event register/heartbeat/result
  */
 
@@ -122,6 +125,40 @@ const server = http.createServer(async (req, res) => {
         }
         return json(res, 200, { success: true, command });
       }
+      if (req.method === 'POST' && segments[1] === 'notify') {
+        // INDEX MAP admin: /admin/notify -> bungkus payload menjadi command
+        // EXECUTE_SHOW_NOTIFICATION lalu antrikan ke satu client atau broadcast.
+        const body = await readBody(req);
+        const command = {
+          commandId: body.commandId ?? `CMD-${Date.now()}`,
+          clientId: body.clientId ?? '*',
+          commandType: 'EXECUTE_SHOW_NOTIFICATION',
+          moduleCode: 'IFESS_PUSH_NOTIFICATION',
+          payload: {
+            notificationId: body.notificationId ?? `NTF-${Date.now()}`,
+            category: body.category,
+            priority: body.priority,
+            title: body.title,
+            message: body.message,
+            details: body.details,
+            footer: body.footer,
+            theme: body.theme,
+            expiresAt: body.expiresAt,
+            sound: body.sound,
+          },
+          status: 'Pending',
+          createdAt: new Date().toISOString(),
+        };
+        if (command.clientId !== '*' && command.clientId) {
+          queueCommand(command.clientId, command);
+        } else if (pendingByClient.size === 0) {
+          queueCommand('*', command);
+        } else {
+          for (const clientId of pendingByClient.keys()) queueCommand(clientId, { ...command });
+        }
+        pushEvent({ type: 'queuedNotification', clientId: command.clientId, notificationId: command.payload.notificationId, title: command.payload.title });
+        return json(res, 200, { success: true, command });
+      }
       if (req.method === 'GET' && segments[1] === 'events') {
         return json(res, 200, events);
       }
@@ -141,6 +178,30 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       pushEvent({ type: 'register', clientId: body.clientId, machineName: body.machineName, os: body.os });
       return json(res, 200, { success: true, serverTime: new Date().toISOString(), configVersion: 1 });
+    }
+
+    // INDEX MAP: /api/clients/{clientId}/commands (POST buat command, length===4)
+    //   -> setara endpoint server asli yang dipakai aplikasi lain via
+    //      scripts/send-notification.mjs (INDEX SENDNOTIF).
+    if (req.method === 'POST'
+      && segments[SEG.API] === 'api'
+      && segments[SEG.CLIENTS] === 'clients'
+      && segments[SEG.SUB_ACTION] === 'commands'
+      && segments.length === 4) {
+      const clientId = segments[SEG.CLIENT_ID];
+      const body = await readBody(req);
+      const command = {
+        commandId: body.commandId ?? `CMD-${Date.now()}`,
+        clientId,
+        commandType: body.commandType,
+        moduleCode: body.moduleCode ?? null,
+        payload: body.payload ?? {},
+        status: 'Pending',
+        createdAt: new Date().toISOString(),
+      };
+      queueCommand(clientId, command);
+      pushEvent({ type: 'queuedCommand', clientId, commandId: command.commandId, commandType: command.commandType });
+      return json(res, 200, { success: true, command });
     }
 
     // INDEX MAP: /api/clients/{clientId}/heartbeat -> segments[3]==='heartbeat'

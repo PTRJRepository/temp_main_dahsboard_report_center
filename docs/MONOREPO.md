@@ -125,9 +125,9 @@ cd "Module Services" && node -e "require('fs').symlinkSync('../Dashboard_Utama/n
 | sql-gateway | `/sql-gateway` + `/api/sql-gateway` | 8001 (legacy port takeover) | Fastify TS API + static UI | `cd "Module Services/sql-gateway" && bun start` |
 | daftar-upah | `/upah` + `/backend/upah` | 3104 | Bun/Elysia API + built Vite SPA (one process) | `cd "Module Services/daftar-upah" && npm start` |
 | Wifi_LAN_Monitor | `/network-monitor` | — | static site | served by gateway (`staticSiteDir`) |
-| ifess-control UI | `/ifess-control` | — | static HTML | served by gateway from `Module Services/ifess-control/` |
-| IFESS control server | `/api/ifess/*` | embedded | JS lib | `require()`d into gateway process (`Services/ifess-control-server/service.js`) |
-| Firebird query gateway | `/api/query-gateway/*` | embedded | Bun handler | inside `server_bun.js` (`execLocalQuery` → isql.exe) |
+| ifess-server (iFESS Control Server + UI) | `/ifess-control` + `/api/ifess/*` (+ `/api/clients` bare SuperApp wire) | 8003 (legacy ControlServer port takeover — NOT 8012, that is rjfm's private UI) | Bun HTTP: unified frontend + control-plane API, owns `src/core/service.cjs` + `src/lib/authkit/` copies | `cd "Module Services/ifess-server" && bun start` |
+| ifess-control UI (legacy static copy) | `/ifess-control` | — | static HTML | until cut-over completes the gateway still disk-serves `Module Services/ifess-control/`; canonical serving = ifess-server :8003 |
+| Firebird query gateway | `/api/query-gateway/*` | embedded | Bun handler | inside `server_bun.js` (`execLocalQuery` → isql.exe); job/command bookkeeping also mirrored in ifess-server |
 
 ### Registered external services (source outside this repo — do NOT move)
 

@@ -754,3 +754,36 @@ JWT-cookie-authenticated; TCP-probes (500 ms cap, `checkTcpPort` :1237-1243) eve
 2. **Portal/Dashboard** — child process supervised by the gateway (`startDashboardIfNeeded`/`spawnPortalChild` :1055-1131).
 3. **Other module services** — never started by the gateway (:1133-1138); proxied via `routes-config.json`.
 4. **Delegated-in-name-only**: `routes-config.json:134-141` declares `/api/ifess → :8012` and `scripts/module.js:29` registers the `ifess-server` module (which fully reimplements the same API surface over the same service core), but `matchRoute`'s hard return-null (:853) plus the early intercept (:1580) keep all `/api/ifess*` traffic inside the gateway process. Realizing the :8012 delegation requires deleting the gateway-local handlers, not just the route entry.
+
+
+## VERIFICATION VERDICTS (workflow-complete)
+
+Wrong count: 0
+
+1. CONFIRMED — server_bun.js:29-30: line 30 is exactly `const ifessService = require('./Services/ifess-control-server/service');` (comment above: "IFESS shared service"). The full ~1996-line CJS control-plane module (clients/heartbeats/commands/groups/audit/query jobs/sync) loads into the gateway process.
+
+2. CONFIRMED — server_bun.js:851-853: matchRoute() opens with `if (urlPath.startsWith('/api/ifess')) return null;` (line 853). The api-ifess route exists at routes-config.json:134-141 (target http://localhost:8012) but is unreachable: the fetch handler intercepts /api/ifess* at server_bun.js:1580-1590 (plus legacy /api/clients at :1576-1578), before route resolution at :1692. Dead config.
+
+3. CONFIRMED — routes-config.production.json has NO ifess-control/api-ifess/:8012 entries (full scan of all entries). Only ifess-related entry is {"id":"ifess","path":"/ifess","target":"http://localhost:8003"} spanning lines 172-180 (content at :171-179 as claimed) — stale legacy.
+
+4. CONFIRMED — ifess-server/src/config.js:38 defaults IFESS_PORT||'8012'; bound on hostname '0.0.0.0' at src/index.js:30. rjfm/src/ui/serve.ts:72 defaults RJFM_UI_PORT||'8012' (HOSTNAME='127.0.0.1' set at line 74, just past the cited 71-73 window). Both default 8012 → collision when run together.
+
+5. CONFIRMED — Module Services/ifess-server/src/service.js:27-30 uses createRequire to load <repo>/Services/ifess-control-server/service.js (header comments document the shared-store design); Services/ifess-control-server/service.js:22: DATA_DIR = path.join(__dirname,'../../data/ifess') → shared repo-root store (no env override exists).
+
+6. CONFIRMED — handler.js:43 imports resolveIdentity from '../../../shared/authkit/index.js' (repo-root shared original), violating docs/MONOREPO.md:176-179 ("copy the file into your module — isolation rule: no cross-module imports"). Contrast: rjfm copied its kit to Module Services/rjfm/src/lib/authkit/ (verified present).
+
+7. CONFIRMED — handler.js:218 resolves '../../../FB_Migration/src/migrate.js' → Main Dashboard/FB_Migration/src/migrate.js which does NOT exist (verified); the real project is at D:/Gawean Rebinmas/FB_Migration/src/migrate.js (verified present). handler.js:225 spawns with no env option ({stdio:'ignore',detached:false}), while the gateway's spawnFbMigration (server_bun.js:646-656) explicitly propagates env incl. DB_NAME/DB_SERVER/DB_PORT/DB_USER/DB_PASSWORD.
+
+8. CONFIRMED — config.js:47 defaults UI_DIR to REPO_ROOT/'Module Services/ifess-control'. Gateway disk-serves the same folder: server_bun.js:66 (IFESS_CONTROL_DIR), :1767-1774 (app/simple HTML), :895 ('/ifess-assets' static root), with process-lifetime HTML caches at :50-51 ("read once, cached for the process lifetime").
+
+9. CONFIRMED — gateway setInterval runs ifessService.reapStaleCommands(120) every 30000ms (server_bun.js:685-688); module setInterval runs svc.reapStaleCommands() every 60_000 (index.js:61-67). Both processes hold separate in-memory caches over the identical data/ifess JSON store → concurrent mutation of the same files.
+
+10. CONFIRMED — server_bun.js:1677-1678 filters status probes to !hidden && isHttpTarget && target.startsWith('http://127.0.0.1'). The ifess routes target 'http://localhost:8012' (routes-config.json:127 and :136) → excluded from /api/services/status portal health cards.
+
+11. CONFIRMED — scripts/module.js:29 registers 'ifess-server' with route:'ifess-control'; port auto-derived from route target via new URL(r.target).port (module.js:37-40). start-module-services.ps1 $MODULES (:54-71, optional dashboard-portal appended :72-79) contains only report-center, rebinmas-jaya-server, rjfm, sql-gateway, daftar-upah — no ifess entry.
+
+12. CONFIRMED — shared/auth/paths.js:11 lists exactly ['/admin','/dashboard','/dashboard-user','/modules','/api/services','/ifess-control','/api/ifess','/api/query-gateway','/config-path']. CLAUDE.md:55-57 states DASHBOARD_PATHS "must NOT include a module's path"; /ifess-control and /api/ifess are now registered module routes (routes-config.json:123-141), so the rule is violated today.
+
+13. CONFIRMED — grep -c for execLocalQuery|isql returns 0 in both server_bun.js and Services/ifess-control-server/service.js. /api/query-gateway/* goes only through proxyFirebirdQueryService (server_bun.js:1247-1271) to FIREBIRD_QUERY_TARGET default http://localhost:8004 (:60); repo-wide search finds no in-repo listener on 8004 (only the constant, docs, and build artifacts). ifess-server's query-gateway endpoints (handler.js:247-290 validate/dispatch/batches/jobs/chunks) call svc.createQueryBatch which enqueues commandType 'EXECUTE_FIREBIRD_QUERY' (service.js:1572, cf. :1912) for desktop clients — no local SQL execution.
+
+14. CONFIRMED — wire.test.js:10 drives the real handleRequest against the real bridged service (zero mocks/isolation: greps for beforeAll/afterAll/rmSync/unlink/tmpdir/deleteClient/mock all 0). :71 creates CID `TEST-${Date.now().toString(36)}`; :73-141 registers TEST clients, heartbeats, module statuses, and command lifecycles persisted into the live repo-root data/ifess/*.json with no cleanup.

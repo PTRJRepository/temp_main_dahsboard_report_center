@@ -124,8 +124,8 @@
     "path": "/ifess-control",
     "servicePath": "/ifess-control/app",
     "serviceUrl": "http://localhost:3001/ifess-control/app",
-    "target": "http://localhost:8012",
-    "description": "Firebird query gateway + iFESS client management — served by the ifess-server module (:8012, unified frontend + API)",
+    "target": "http://127.0.0.1:8003",
+    "description": "Firebird query gateway + iFESS client management — served by the ifess-server module (:8003, unified frontend + API; legacy ControlServer port)",
     "enabled": true,
     "rewriteContent": false,
     "public": true
@@ -133,8 +133,8 @@
   {
     "id": "api-ifess",
     "path": "/api/ifess",
-    "target": "http://localhost:8012",
-    "description": "IFESS control-plane API → ifess-server module (:8012)",
+    "target": "http://127.0.0.1:8003",
+    "description": "IFESS control-plane API → ifess-server module (:8003)",
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": false

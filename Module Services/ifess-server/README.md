@@ -6,7 +6,10 @@ module status reporting, client groups, audit logs, and the query-gateway
 job pipeline. Serves the unified ifess-control frontend directly — one
 process for UI + API.
 
-- **Port:** `8012` (`PORT` env overrides)
+- **Port:** `8003` (`IFESS_PORT` env overrides; 8003 = the legacy iFESS
+  ControlServer port this module deliberately takes over — same migration
+  pattern as sql-gateway ← 8001). NOTE: 8012 is rjfm's private internal UI
+  port and must never be used by another module.
 - **Auth:** `X-API-Key` header — `IFESS_API_KEY` (or `IFESS_CLIENT_API_KEY`
   for the gateway-proxied flow)
 - **Storage:** shared `data/ifess/*.json` via the canonical
@@ -73,11 +76,11 @@ In each SuperApp's `appsettings.json`:
 
 ```jsonc
 "ControlServer": {
-  "BaseUrl": "http://<server-lan-ip>:8012",
+  "BaseUrl": "http://<server-lan-ip>:8003",
   "ApiKey": "ptrj-rebinmas-air-ruak-parit-gunung-darul"
 }
 ```
 
-Gateway proxy mode also works: keep `BaseUrl http://<dashboard>:3001/ifess`
-and register an `/ifess` route in `routes-config.json` targeting
-`http://localhost:8012`.
+Gateway proxy mode also works (already wired): `routes-config.json` routes
+`/ifess-control`, `/api/ifess`, and `/api/clients` to
+`http://127.0.0.1:8003` — the gateway proxies, the module serves.

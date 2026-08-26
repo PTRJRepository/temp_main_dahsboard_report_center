@@ -37,13 +37,16 @@
  */
 
 import { resolve as resolvePath } from 'node:path';
+import { createRequire } from 'node:module';
 import { validateApiKey, unauthorizedResponse } from './auth.js';
 import svc from './service.js';
 import { serveUi } from './static.js';
-import { resolveIdentity } from '../../../shared/authkit/index.js';
+import { resolveIdentity } from './lib/authkit/index.js';
 import { REPO_ROOT } from './config.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+const requireFn = createRequire(import.meta.url);
 
 function json(status, data) {
     return new Response(JSON.stringify(data), {
@@ -64,9 +67,10 @@ async function parseBody(req) {
 }
 
 /**
- * Browser-facing auth via shared/authkit: gateway-injected x-user-* headers
- * (SSO proxy mode) OR the portal RS256 cookie verified locally against
- * keys/public.pem. Returns the identity payload or null.
+ * Browser-facing auth via the module-local authkit copy (src/lib/authkit —
+ * copy-per-module rule): gateway-injected x-user-* headers (SSO proxy mode)
+ * OR the portal RS256 cookie verified locally against keys/public.pem.
+ * Returns the identity payload or null.
  */
 function resolvePortalIdentity(req) {
     const headers = {};
@@ -212,26 +216,45 @@ async function handleActionDispatcher(req) {
 /** Fire-and-forget FB_Migration subprocess for syncBootstrap (mirrors server_bun.js). */
 function spawnFbMigration(params, syncJobId) {
     try {
-        // Lazy import keeps Bun startup fast when sync is never used.
-        const { spawn } = require('node:child_process');
-        const { resolve } = require('node:path');
-        const migrate = resolve(import.meta.dir, '../../../FB_Migration/src/migrate.js');
+        // createRequire — bare require() breaks under plain Node ESM.
+        const { spawn } = requireFn('node:child_process');
+        const { resolve } = requireFn('node:path');
+        // FB_Migration lives OUTSIDE this repo as a SIBLING of Main Dashboard
+        // (`../FB_Migration` from repo root) — the gateway resolves it the
+        // same way (server_bun.js ROOT_DIR + '/../FB_Migration').
+        const migrate = resolve(REPO_ROOT, '../../FB_Migration/src/migrate.js');
         const args = [
             params.tables && params.tables.length ? 'selected' : 'full',
             '--divisions=' + params.divisionCode,
             ...(params.tables && params.tables.length ? ['--tables=' + params.tables.join(',')] : []),
             ...(params.from ? ['--from=' + params.from] : []),
         ];
-        const child = spawn(process.execPath, [migrate, ...args], { stdio: 'ignore', detached: false });
+        // FB_Migration reads DB credentials via dotenv; propagate them into the
+        // subprocess exactly like the gateway does (server_bun.js spawnFbMigration).
+        const env = {
+            ...process.env,
+            DB_NAME: process.env.MSSQL_MIGRATED_DB || 'rebinmas_ifess_migrated',
+            DB_SERVER: process.env.MSSQL_HOST || '10.0.0.110',
+            DB_PORT: process.env.MSSQL_PORT || '1433',
+            DB_USER: process.env.MSSQL_USER || 'sa',
+            DB_PASSWORD: process.env.MSSQL_PASSWORD || 'ptrj@123',
+        };
+        const child = spawn(process.execPath, [migrate, ...args], {
+            cwd: migrate.replace(/[/\\]src[/\\]migrate\.js$/, ''),
+            env, stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let tail = '';
+        if (child.stdout) child.stdout.on('data', c => { tail = (tail + c.toString()).slice(-2000); });
+        if (child.stderr) child.stderr.on('data', c => { tail = (tail + c.toString()).slice(-2000); });
         child.on('exit', (code) => {
             svc.updateSyncJob(syncJobId, {
-                status: code === 0 ? 'completed' : 'failed',
+                status: code === 0 ? 'success' : 'failed',
                 finishedAt: new Date().toISOString(),
-                exitCode: code,
+                errorMessage: code === 0 ? null : ('FB_Migration exit ' + code + ' | ' + tail.slice(-500)),
             });
         });
         child.on('error', (err) => {
-            svc.updateSyncJob(syncJobId, { status: 'failed', finishedAt: new Date().toISOString(), error: err.message });
+            svc.updateSyncJob(syncJobId, { status: 'failed', finishedAt: new Date().toISOString(), errorMessage: err.message });
         });
     } catch (e) {
         console.error('[IFESS-SVC] spawnFbMigration failed:', e.message);

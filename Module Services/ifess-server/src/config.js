@@ -35,7 +35,10 @@ const fileEnv = {
 
 // Dedicated variable on purpose: generic `PORT` in the repo .env files means
 // the main gateway (:3001) and must NOT leak into this module.
-export const PORT = parseInt(process.env.IFESS_PORT || '8012', 10);
+// 8003 = the historical iFESS ControlServer port (the old .NET server the
+// SuperApp clients were configured against); this module deliberately
+// takes it over (same migration pattern as sql-gateway ← 8001).
+export const PORT = parseInt(process.env.IFESS_PORT || '8003', 10);
 
 /** Key the control UI and .NET clients send (X-API-Key). */
 export const IFESS_API_KEY = process.env.IFESS_API_KEY || fileEnv.IFESS_API_KEY || 'ptrj-rebinmas-air-ruak-parit-gunung-darul';

@@ -169,10 +169,39 @@
     "rewritePath": false
   },
   {
+    "id": "ifess-control",
+    "path": "/ifess-control",
+    "servicePath": "/ifess-control/app",
+    "serviceUrl": "http://localhost:3001/ifess-control/app",
+    "target": "http://127.0.0.1:8003",
+    "description": "Firebird query gateway + iFESS client management — served by the ifess-server module (:8003, unified frontend + API; legacy ControlServer port)",
+    "enabled": true,
+    "rewriteContent": false,
+    "public": true
+  },
+  {
+    "id": "api-ifess",
+    "path": "/api/ifess",
+    "target": "http://127.0.0.1:8003",
+    "description": "IFESS control-plane API → ifess-server module (:8003)",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false
+  },
+  {
+    "id": "api-clients",
+    "path": "/api/clients",
+    "target": "http://127.0.0.1:8003",
+    "description": "SuperApp bare wire protocol (Kerani clients hardcode /api/clients/*) → ifess-server module (:8003)",
+    "enabled": true,
+    "rewriteContent": false,
+    "rewritePath": false
+  },
+  {
     "id": "ifess",
     "path": "/ifess",
-    "target": "http://localhost:8003",
-    "description": "IFESS Client Gateway",
+    "target": "http://127.0.0.1:8003",
+    "description": "IFESS Client Gateway (legacy alias, same ifess-server module)",
     "enabled": true,
     "rewriteContent": false,
     "rewritePath": true,

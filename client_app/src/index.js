@@ -8,7 +8,8 @@
  * Port Node.js dari IFESS.SuperApp (.NET):
  *   - register + heartbeat dengan retry/backoff+jitter
  *   - polling command (PING, START/STOP/RESTART_MODULE, EXECUTE_AUTO_TASK_KILL,
- *     EXECUTE_FIREBIRD_QUERY) dengan bounded concurrency
+ *     EXECUTE_FIREBIRD_QUERY, EXECUTE_SHOW_NOTIFICATION) dengan bounded concurrency
+ *   - push notification satu arah: Windows Toast korporat tanpa UI tambahan
  *   - Firebird Query Gateway via isql.exe: validasi read-only ulang di client,
  *     materialisasi parameter, result inline/chunked, durable outbox
  *
@@ -26,6 +27,7 @@ import { ControlServerClient } from './control-client.js';
 import { ModuleRegistry } from './modules/registry.js';
 import { AutoTaskKillModule } from './modules/auto-task-kill.js';
 import { QueryGatewayModule } from './modules/query-gateway.js';
+import { PushNotificationModule } from './modules/push-notification.js';
 import { ModuleControlHandler } from './modules/module-control.js';
 import { CommandExecutor } from './modules/command-executor.js';
 import { HeartbeatReporterService } from './modules/heartbeat.js';
@@ -81,6 +83,8 @@ async function main() {
       worker = new AutoTaskKillModule(baseDirectory, logger.forModule(code));
     } else if (code === 'IFESS_QUERY_GATEWAY') {
       worker = new QueryGatewayModule(baseDirectory, logger.forModule(code), controlClient, config.controlServer);
+    } else if (code === 'IFESS_PUSH_NOTIFICATION') {
+      worker = new PushNotificationModule(baseDirectory, logger.forModule(code));
     } else {
       logger.warning(`Unknown module '${moduleOptions.code}' in config skipped.`);
       continue;

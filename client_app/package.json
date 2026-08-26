@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test tests/",
+    "test": "node --test tests/validator.test.mjs tests/materializer.test.mjs tests/isql-parser.test.mjs tests/auto-task-schedule.test.mjs tests/retry.test.mjs tests/toast-xml.test.mjs tests/notification-payload.test.mjs tests/push-notification-module.test.mjs",
     "test:e2e": "node scripts/e2e-test.mjs",
     "mock:server": "node scripts/mock-control-server.mjs"
   }
